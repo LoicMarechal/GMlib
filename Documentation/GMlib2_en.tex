@@ -1,0 +1,1269 @@
+\documentclass[a4paper,12pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[francais]{babel}
+\usepackage{multirow,array}
+\usepackage{graphicx}
+\usepackage{a4wide}
+\newcommand{\HRule}{\rule{\linewidth}{1mm}}
+
+\begin{document}
+
+
+%
+%  TITLE
+%
+
+\begin{titlepage}
+
+\begin{center}
+\huge Porting meshing tools and solvers that deal with unstructured meshes on GPUs
+\HRule \\
+\medskip
+{\Huge \bfseries The GMlib library} \\
+\HRule
+\end{center}
+
+\vspace*{\stretch{3}}
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[height=10cm]{gpu.pdf}
+\end{center}
+\end{figure}
+
+\vspace*{\stretch{1}}
+
+\begin{flushright}
+\Large Lo\"ic MAR\'ECHAL / INRIA, Gamma Project\\
+\Large April 2016 \\
+\normalsize Document v1.2
+\end{flushright}
+
+\end{titlepage}
+
+\clearpage
+
+\setcounter{tocdepth}{2}
+\tableofcontents
+\vfill
+
+\footnotesize{Cover picture: various OpenCL compatible graphic cards and accelerators.}
+\normalsize
+
+\clearpage
+
+
+%
+%  1 / INTRODUCTION
+%
+
+\section{Introduction}
+Today's world of HPC offers many different kinds of architectures like clusters, monolithic supercomputers, GPUs, FPGAs or shared memory machines to name a few. All of them suffer from the same limitation: how to efficiently connect huge amount of computing power on one side, to an equally huge amount of memory on the other side ?
+
+Up to the 1990s the main problem was to increase both memory and computing capabilities. Now, those two resources are aplenty and their sole limitation are the bus or network that connect them together. Consequently, a fast High Performance Computer is no more one that offers the most Terra-Bytes or Terra-Flops, but one with the highest memory and network bandwidth and the shortest latency.
+
+Increasing this memory bandwidth has become increasingly difficult because of the necessity for any processor to access any location in memory. Such arbitrary access, called random access, requires to go through an interconnection matrix, known as crossbar or switch, whose complexity grows with the square of the number of connected elements, like chips and memory busses.
+
+It is to circumvent this difficulty that the first vector supercomputers, like the IBM 3090 or Cray 1, where invented in the 1970s. Each of their compute unit could efficiently access to a limited part of memory and suffered a big time penalty when accessing data outside these bounds. Practically speaking, if such a machine possesses 64 adding units and has to add two vectors {\tt u[ 1->256 ]} and {\tt v[ 1->256 ]}, the unit $n^\circ1$ could only access efficiently the memory location that contain {\tt u[1]}, {\tt u[65]}, {\tt u[129]} and {\tt u[193]}, conversely unit $n^\circ2$ would access quickly {\tt u[2]}, {\tt u[66]}, {\tt u[130]} and {\tt u[194]} ({\tt u[ 2 + i MODULO 64 ]}). This imposes a heavy constrain to the programer but also greatly simplifies the hardware design: indeed, its complexity grows linearly with the number of compute units.
+
+Today's GPUs borrow some vector characteristics from their predecessors, but the way they are implemented makes them much more convenient from the programer's point of view. GPU programing is based on simple loops, called kernels, that are run in parallel by the numerous compute units. This way, porting software on GPU is more akin to multithreading than to old time vectorization. Nevertheless, the vector nature of GPUs shows through this apparent simplicity in two different ways:
+
+\paragraph{Macroscopic level:} maximum performance is obtained when memory is accessed via the main loop index, that is, when the code swipes linearly through memory. This introduces the most important concept in GPU computing: memory access predictability. These processors are much more efficient when the location where data is to be read or written at each step of the loop is known beforehand. Thus, the following loop is foreseeable: $\forall_{i} ~u(i)=v(i)*w(i)$, while this one is not:$\forall_{i} ~u(i)=v(w(i))$. Even if we know that $w(i)$ will go through memory linearly, $v(w(i))$ will access it depending on the value stored in $w(i)$ which is unknown before execution. Such access is non-linear and unpredictable, and consequently will run an order of magnitude slower.
+
+\paragraph{Microscopic level:} many GPUs are made of single compute units that are working on small size vectors, typically 4 elements wide, that are very useful when performing geometric calculations. It is more efficient to define a set of 3D coordinates as a three floating points vector ({\tt float3 coord} in OpenCL) than a table of three scalar values ({\tt float coord[3]}). In the first case, adding two set of coordinates would take one processor cycle while it would take three in the second one.
+
+
+\subsection{Motivation}
+The two main motivations to programing on GPUs are their performance / price ratio that is much higher than that of traditional CPUs, and their room for evolution that is also greater than CPUs whose number of cores is now reaching some plateau.
+
+Nonetheless, one should remain realistic when it comes to price, as high-end HPC dedicated GPU cards often cost as much as a server. And when it comes to performance, the numbers advertised by manufacturers or published in many scientific papers that surf on the GPU trend are only theoretical.
+The ``cheating'' comes in two ways:
+
+First, they compare a GPU implementation to a sequential CPU one, which is unfair as all CPUs have now many cores.
+
+Second, in order to best demonstrate the GPU's computing power, they run the academic codes on simplified data that are not representative of real industrial codes and test cases.
+
+In real life, when porting an industrial code that is well multithreaded to a 4000 compute units GPU, the performance increase may not be higher than two to four compared with a good 32 cores server. Anyway, such a limited speed increase is interesting in terms of price, electric consumption and space (an extension card takes less space the a rack unit).
+
+Since the expected practical speedup is not so great, it is critical not to waste too much time trying to port any code to GPUs. And that is precisely the GPU programing's drawback, it is very tedious and time consuming !
+
+It comes out that two aspects are very important to achieve a successful porting:
+
+-shaping your data so that they're accessed efficiently by the GPU and it minimizes their transfer to the graphic card.
+
+-optimizing and debugging the code on the GPU, which is cumbersome because of the lack of interactions between kernel launches (there are no such things as``printf'') and the absence of memory protection.
+
+Henceforth, it appeared to me that providing developers with a library that could help dealing with unstructured meshes data in a transparent way could lighten tho programer's burden. The GPU Meshing Library, \emph{GMlib}, offers meshing data structures that are very easy to setup and transfer, as well as sample codes that deal efficiently with them.
+
+The operating mode is the following:
+
+-choose the right data type among the proposed list and copy your data to the \emph{GMlib}'s own structures.
+-start from one of the sample codes whose data access matches yours and fill your code inside the template kernel.
+
+This leads to talking about the way to connect your code with the library through its API.
+
+
+\subsection{API}
+
+\subsubsection*{Data Types}
+The foundation of the \emph{GMlib} are its data types, either predefined ones like GmlVertices, GmlEdges, GmlTriangles, GmlQuadrialerals, GmlTetrahedra and GmlHexahedra, or the free user defined GmlRawData. Allocation, storage and transfer of those data are taken care of by the library. The programer interacts with the \emph{GMlib} via simple GmlGet and GmlSet commands. As an example is more telling than a long explanation, here is a basic code that sets up the coordinates of a 100 vertices.
+
+\begin{tt}
+\begin{verbatim}
+VerIdx = GmlNewData(GmlVertices, 100, 0, GmlInput);
+for(i=0;i<100;i++)
+  GmlSetVertex(VerIdx, i, coords[i][0], coords[i][1], coords[i][2]);
+GmlUploadData(VerIdx);
+\end{verbatim}
+\end{tt}
+\normalfont
+
+The procedure {\tt GmlNewData} allocates a hundred vertices and returns a unique identifier that should be provided to other \emph{GMlib}'s commands that will work on this vertex table. Internally, two tables are allocated, one in main memory accessible by the CPU only and the other one on the GPU card's dedicated memory. None of those buffers being directly accessible by the programer.
+
+Instead, filling the table is be done by looping over the 100 vertices and calling the {\tt GmlSetVertex} command that writes a single vertex set of coordinates into the library's internal buffer in main memory.
+
+At this stage, the library owns a copy of user's data in its own internal buffer, but this data is still located in main memory and thus is inaccessible from the GPU. Transferring the whole table from the main memory buffer to the GPU buffer is done in one step with the {\tt GmlUploadData} command. The section \ref{util} will present every single API commands.
+
+\subsubsection*{Kernels}
+The other key entity is the kernel, it is a procedure written in OpenCL language that will be executed by the GPU. Integration between a C program and an OpenCL procedure goes the following way:
+
+\begin{enumerate}
+\item transform the source file my\_code.cl into a C header file my\_code.h with the help of the command cl2h provided by the library.
+\item simply include this header file from the C file that is responsible for launching the GPU procedure with a simple
+ {\tt \#include "my\_code.h";}
+\item compile the OpenCL kernel at the start of the execution of the C code with the \emph{GMlib} command {\tt KrnIdx = GmlNewKernel(my\_code, "my\_procedure");}. This command will compile the code, send it to the graphic card and return a unique index that will be used to launch this kernel afterward.
+\item launch the kernel on the GPU, for example to do some work on the previously allocate vertex coordinates, with the {\tt LaunchKernel(KrnIdx, 100, 1, VerIdx)} command. The four arguments being: the index of the kernel to execute, the number of loop iterations (here the number of vertices), the number of different data types this kernel should access to (only one in this case) and finally comes the list of the data type indices (here only the vertex data type is given).
+\end{enumerate}
+
+Programing in OpenCL and doing those back and forth transfer between the CPU and the GPU is bewildering in the beginning. That is why a collection of 10 template kernels covering direct and indirect memory writes for each of the five kind of elements are provided to start from. The easiest way to make your first steps in the GPU world is to start from a sample code and modify it to suits your needs.
+
+\subsection{Kernel types}
+\subsubsection*{Two memory access patterns}
+When it comes to writing data in memory, most codes dealing with meshes fall into two distinct categories:
+\begin{itemize}
+\item Direct memory write loops, which means that every time a data is stored to a table in memory, this table is indexed through the main loop index. Consequently, when several iterations of the loop will be processed concurrently, they will write at separate memory location.
+\item Indirect memory write loops. This happens when we are looping over a certain kind of mesh entity and writing data to another kind of related entity. For example, a code may loop over triangles and write data associated to those triangles' vertices. In such situation, if two different triangles are processed at the same time, they may share a common vertex and write concurrently at the same memory location, leading to a calculation error. One of the compute units may write its result right after the over, overriding the first value, or both may write at the same time producing the much dreaded ``Nan'' (Not a Number) error !
+\end{itemize}
+
+Sections \ref{ex1} and \ref{ex2} illustrate those two situations.
+
+\subsubsection*{Direct access kernels}
+Complete code are provided (both C and OpenCL parts) for each of the five kind of elements supported by the library.
+
+Each sample code reads a mesh made of vertices and a particular kind of element, initializes the \emph{GMlib}, allocates and transfers the mesh on the GPU and compiles and launches an OpenCL kernel that computes each element's barycenter. The result is then written into a table that is retrieved from the GPU to the main system's memory to be further processed by the C code.
+
+These kind of loops that read memory indirectly (it loops over elements but accesses their vertices data), and write memory directly (it stores the barycenter element wise), are very common in finite elements analysis.
+
+The given examples cover all five type of elements: edges, triangles, quadrilaterals, tetrahedra and hexahedra.
+
+\subsubsection*{Indirect access kernels}
+Handling concurrent memory writes is more complex and requires to split the loop into a scatter/gather pair as will be explained in section \ref{ex2}.
+
+Each code does the same as the direct access kernels but instead of computing the element's barycenter, it tries to optimize the element's geometrical shape by smoothing the vertices positions. Doing so, two triangles processed concurrently may write to the same vertex coordinates. The sample codes deal with these problem by splitting the loop into three independent ones.
+
+Similarly the examples cover all five type of elements.
+
+
+\subsection{OpenCL programing}
+This document does not aim at giving a full course on OpenCL programing. The reference document in this matter is the official specification from the Khronos Group \cite{khronos}, a gathering of manufacturers and software editors that champion this open development platform.
+
+It may also be of interest to read some OpenCL optimization guides, (\cite{nvidia} or \cite{apple}), or experience report on porting existing software to GPU (\cite{lohner}).
+
+
+%
+%  2 / USAGE
+%
+
+\section{Usage}
+\label{util}
+\subsection{Installation and compilation}
+The library being very compact, it is made of a single .c file and two header .h files, the easiest way is to include a copy of the \emph{GMlib} and recompile it altogether with your own project.
+
+All you need to add to any software using the \emph{GMlib} is an include to \emph{gmlib2.h} and to provide the path to your system's OpenCL installation at compile time. During linking, you also need to provide the path to the OpenCL runtime library.
+
+Under Linux and Windows you need to install the OpenCL development kit provided by the graphic card's manufacturer. Then you need to tell the compiler where to find the includes ("-I /usr/local/SDK\_CUDA" with an NVIDIA card) and add \emph{-lOpenCL} at compile time.
+
+Under MacOs X you only need to add \emph{--framework=OpenCL} when compiling, this will add the correct paths to includes and libraries as OpenCL is part of the system since version 10.6.
+
+
+\subsection{Initialization}
+The library is initialized with the command {\tt GmlInit( DeviceIndex )} whose single argument is the index of any OpenCL capable device available on your system. The list of such devices can be obtained with the command {\tt GmlListGPU()} that  prints them on the screen.
+
+As for now, only one device can be used at the same time and the \emph{GMlib} is not thread safe and reentrant. This will change over time and multithreading and hybrid computing capabilities will be added to the next version.
+
+Note that you can run an OpenCL code on the CPU itself if your system does not have any GPU, which is very useful for portability purpose.
+
+\subsection{Example 1: computing a mean value for each triangle of a mesh}
+\label{ex1}
+\subsubsection{Problem}
+We are provided with a mesh made of $NV$ vertices, $NT$ triangles and we would like to compute the barycenter of each triangle on the GPU and get the result back in a main memory table.
+
+The process unfolds this way:
+\begin{enumerate}
+\item initialize the library
+\item allocate a vertex data type
+\item fill the vertex coordinates to the data type's table
+\item transfer the coordinates to the GPU's memory
+\item allocate a triangle data type
+\item fill the triangles vertices indices in the data type's table
+\item transfer the triangles' data to the GPU memory
+\item allocate a raw data type to store the barycenter coordinates
+\item compile the kernel source code at runtime
+\item launch the kernel on the GPU giving as argument the indices of the three allocated data types
+\item wait for completion and transfer back the barycenters table from the GPU
+\item finally, loop over the barycenter to retrieve the coordinates from the internal library's buffer
+\end{enumerate}
+
+\subsubsection{CPU part of the code}
+We suppose that the mesh was previously read from a file and that the vertices and triangles are numbered from 0 to $n-1$.
+
+\begin{tt}
+\begin{verbatim}
+#include "CalMidKernel.h"
+int triangles[nt][3];
+float coords[nv][3], centers[nt][3];
+
+GmlInit(GmlGpu);
+
+VerIdx = GmlNewData(GmlVertices, nv, 0, GmlInput);
+for(i=0;i<nv;i++)
+  GmlSetVertex(VerIdx, i, coords[i][0], coords[i][1], coords[i][2]);
+GmlUploadData(VerIdx);
+
+TriIdx = GmlNewData(GmlTriangles, nt, 0, GmlInput);
+for(i=0;i<nt;i++)
+  GmlSetTriangle(TriIdx, i, triangles[i][0], triangles[i][1], triangles[i][2]);
+GmlUploadData(TriIdx);
+
+MidIdx = GmlNewData(GmlRawData, nt, sizeof(cl_float3), GmlOutput);
+CalMid = GmlNewKernel(calmidkernel, "CalMid");
+GmlLaunchKernel(CalMid, nt, 3, VerIdx, TriIdx, MidIdx);
+
+DownloadData(MidIdx);
+for(i=0;i<nt;i++)
+  GetRawData(MidIdx, i, &centers[i][0], &centers[i][1], &centers[i][2]);
+\end{verbatim}
+\end{tt}
+\normalfont
+
+
+\subsubsection{GPU part of the code}
+We start by getting the loop iterarion we are processing with the {\tt get\_global\_id} command. Remember that we are only focusing of loop's kernel and that increasing the loop counter is taken care of by the OpenCL library.
+Then we read the triangle's three vertex indices that are stored in a 3D integer vector. Since the variable {\tt idx} is declared as a {\tt int3}, a vector of three integers, the indices are read from the table in one vectorial instruction. Each separate index can be accessed by adding suffixes to the vector variable: {\tt idx.s0}, {\tt idx.s1} and {\tt idx.s2}.
+
+Likewise, the vertex coordinates are stored in 3D floating point vectors ({\tt float3}) and will be retrieved and computed on vectorially. Accessing to {\tt coords[ idx.s0 ]} reads the x,y,z coordinates from the first triangle's vertex and adding 
+({\tt + coords[ idx.s1 ]}) will add the second vertex coordinates element wise with one single instruction.
+
+\begin{tt}
+\begin{verbatim}
+CalMid(float3 *coords, int3 *triangles, float3 *centers)
+{
+  int i = get_global_id(0);
+  int3 idx = triangles[i];
+  centers[i] = (coords[ idx.s0 ] + coords[ idx.s1 ] + coords[ idx.s2 ]) / 3;
+}
+\end{verbatim}
+\end{tt}
+\normalfont
+
+
+\subsection{Example 2: indirect memory access loop with memory dependency issues}
+\label{ex2}
+\subsubsection{Problem}
+We are provided with a mesh made of $NV$ vertices, $NT$ triangles and we would like to loop over the triangles and modify their vertices coordinates in order to improve their geometrical shape. In such a loop, to different triangles may be processed at the same time and may share a common vertex. Consequently they may write to the same vertex coordinates which will lead to the wrong result due to memory write inconsistency.
+
+To avoid such problem, an indirect memory write loop can be split into two direct write loops, one that writes an intermediary result in a triangle based buffer (also called a scatter loop), and the other one that will loop over vertices and compute the mean value of each vertex' surrounding triangles (called a gather loop).
+
+This way, the first one loops over and write data to triangles and the second one loops over and write data to vertices, avoiding any memory race.
+
+The process unfolds this way:
+\begin{enumerate}
+\item initialize the library
+\item allocate a vertex data type
+\item fill the vertex coordinates to the data type's table
+\item transfer the coordinates to the GPU's memory
+\item allocate a triangle data type
+\item fill the triangles vertices indices in the data type's table
+\item transfer the triangles' data to the GPU memory
+\item allocate a raw data type to store the temporary coordinates for each triangle's three vertices
+\item build the ball of triangles sharing a common vertex
+\item upload the ball to the GPU's memory
+\item compile the first scatter kernel that loops over triangles
+\item launch this kernel with the triangles, vertices and temporary coordinates as arguments
+\item compile the first vector part of the gather kernel
+\item compile the second extension part of the gather kernel
+\item launch the gather kernel with the triangles, vertices and temporary coordinates and the ball as arguments
+\item wait for completion and transfer back the optimal coordinates table from the GPU
+\item finally, loop over the vertices to update their coordinates with the new ones from the library's buffer
+\end{enumerate}
+
+\subsubsection{Vectorized vertex balls}
+This example differs from the first one in two main aspects:
+
+The first one is the splitting of the loop into a pair of scatter/gather loops.
+Indeed, memory accesses can be categorized as reading or writing and direct or indirect, which leads to four different combinations:
+
+\begin{itemize}
+\item direct read: (s = u[i]), are fast because the table is accessed through the loop index and safe because no writing occurs,
+\item indirect read: (s = u[v[i]]) are slow because table u[] is accessed through an unpredictable index but safe because no writing occurs,
+\item direct write: (u[i] = s), are fast because the table is accessed through the loop index and safe because two different iterations of the loop cannot write at the same memory location,
+\item indirect write: (u[v[i]] = s), are slow because table u[] is accessed through an unpredictable index and unsafe because two different iterations of the loop could write at the same memory location.
+\end{itemize}
+
+That is why the original CPU loop that presents indirect reads and writes had to be split into two loops that read indirectly but write directly. There are still slow because of the memory indirection, but safe thanks to direct memory writes.
+
+The second aspect is the vertex ball, that is the list of elements (triangles in our case) that share a common vertex. The problem with this kind of data is that its size is different for each vertex because of the unstructured nature of the mesh. The average value being six, but it may go up sharply in case of a vertex connected to many triangles. 
+And such a case frequently occurs with adapted or anisotropic meshes.
+
+In order to store this kind of information, two tables are needed: one called the ball table that is the concatenation of the lists of all triangles sharing the same vertex, and the other one called the registry that gives for each vertex the position of its own list of triangles in the first table and how many there are (known as the vertex degree). Getting the ball of a vertex consists in accessing the second table to get the position and then jumping to the first table at this given position to read the list of triangles.
+
+Such data structure and algorithm is very compact and efficient on a CPU but has poor performance on a GPU because of the double indirect memory read. Indeed, we first need to read a position in a table, then indirectly access to the list of triangles, before indirectly accessing the triangle's data itself ! Ideally, we should have constant vertex degrees so that we may directly store the ball of each vertex in a fixed size vector. This is the case with structured grids where the vertex degree is always four for 2D quadrilateral meshes and eight for 3D hexahedral ones. That is why such kind of meshes are very often used to demonstrate the high performance of GPUs. Reaching those performances with unstructured meshes is much more challenging and that is the purpose of this library.
+
+It is indeed possible to get close to the theoretical performance with unstructured data using ball vectorization. The trick is to consider every vertices as having a fixed degree, let's say eight for a triangulated mesh, store the first eight triangles in a vector table and save the eventual remaining ones in an overflow table. If a vertex has a degree lesser than eight, the empty slots are set with -1. One the other side, if the degree is greater than eight, those extra triangles are stored in a ``classical'' ball table as used by CPU algorithms. But this indirect, and slow, overflow table would contain only a very limited number of extra elements if the base table's vector size is carefully chosen.
+
+The following table gives some statistics about how many elements fall in the direct access table and the overflow indirect table as well as the wasted space.
+
+\medskip
+
+\begin{tabular}{|l|c|r|r|r|}
+\hline
+element kind   & vector & direct table & overflow table & extra memory \\
+\hline
+edges          &      16 &      98,72 \% &           1,28 \% & 34,60 \% \\
+triangles      &       8 &      99,98 \% &           0,02 \% & 33,35 \% \\
+quadrilaterals &       4 &      99,99 \% &           0,01 \% &  0,02 \% \\
+tetrahedra     &      32 &      99,71 \% &           0,29 \% & 46,75 \% \\
+hexahedra      &       8 &      96,87 \% &           3,13 \% &  9,79 \% \\
+\hline
+\end{tabular}
+
+Consequently, the speed penalty for using an unstructured mesh versus a structured one is always less than 50\%.
+
+\subsubsection{CPU part of the code}
+We suppose that the mesh was previously read from a file and that the vertices and triangles are numbered from 0 to $n-1$.
+
+\begin{tt}
+\begin{verbatim}
+#include "sources_opencl.h"
+int triangles[nt][3];
+float coords[nv][3], optimal[nt][3][3];
+
+GmlInit(GmlGpu);
+
+VerIdx = GmlNewData(GmlVertices, nv, 0, GmlInout);
+for(i=0;i<nv;i++)
+  GmlSetVertex(VerIdx, i, coords[i][0], coords[i][1], coords[i][2]);
+GmlUploadData(VerIdx);
+
+TriIdx = GmlNewData(GmlTriangles, nt, 0, GmlInput);
+for(i=0;i<nt;i++)
+  GmlSetTriangle(TriIdx, i, triangles[i][0], triangles[i][1], triangles[i][2]);
+GmlUploadData(TriIdx);
+
+OptIdx = GmlNewData(GmlRawData, nt, 3 * sizeof(cl_float3), GmlInternal);
+BalIdx = GmlNewBall(VerIdx, TriIdx);
+PosTri = GmlNewKernel(sources_opencl, "scatter_tri");
+VerBal1 = GmlNewKernel(sources_opencl, "gather1");
+VerBal2 = GmlNewKernel(sources_opencl, "gather2");
+GmlLaunchKernel(PosTri, nt, 3, VerIdx, TriIdx, OptIdx);
+GmlLaunchBallKernel(VerBal1, VerBal2, BalIdx, 3, VerIdx, OptIdx);
+
+DownloadData(MidVerIdx);
+for(i=0;i<nv;i++)
+  GmlSetVertex(VerIdx, i, &coords[i][0], &coords[i][1], &coords[i][2]);
+\end{verbatim}
+\end{tt}
+\normalfont
+
+
+\subsubsection{GPU part of the code}
+This process could have been done in one single loop on a CPU but requires three on a GPU !
+
+Indeed, a first split into a pair of scatter/gather loop is required to get rid of the memory indirect write. And this second gather loop that needs to access to the vertices balls requires also to be split into two loops, one to deal with the first eight triangles of each vertex ball and a second one to deal with de remaining overflow triangles.
+
+Here is the first kernel that loops over the triangles, computes the optimal positions of their three vertices and store those positions in a temporary table associated with each triangle.
+
+
+\begin{tt}
+\begin{verbatim}
+scatter_tri(float3 *coords, int3 *triangles, float3 (*optimal)[3])
+{
+  int i = get_global_id(0);
+  int3 idx = triangles[i];
+  float3 v0, v1, v2;
+
+  v0 = coords[ idx.s0 ];
+  v1 = coords[ idx.s1 ];
+  v2 = coords[ idx.s2 ];
+
+  optimal[i][0] = (2*v0 + v1 + v2) / 4;
+  optimal[i][1] = (2*v1 + v0 + v2) / 4;
+  optimal[i][2] = (2*v2 + v1 + v0) / 4;
+}
+\end{verbatim}
+\end{tt}
+\normalfont
+
+The second kernel loops over vertices, reads the number of incident triangles and adds all their optimal positions, and finally computes the average value that will replace the original vertex coordinates. Note that in this example the ball table provides an encoded value that corresponds to the triangle index multiplied by eight plus the local vertex position in this triangle. To separate back the two numbers from the code we need to perform a logical AND with a mask to get the vertex index and divide the code by eight, or shift it to right by three bits, to get the triangle number. Such tricks are very common and powerful on GPUs.
+
+\begin{tt}
+\begin{verbatim}
+gather1(char *degrees, int *balls, float3 *coords, float3 (*optim)[3])
+{
+  int i, deg;
+  int8 code, TriIdx, VerIdx;
+  float4 NewCrd = (float4){0,0,0,0}, NulCrd = (float4){0,0,0,0};
+
+  deg = degrees[i];
+  code = balle[i];
+  TriIdx = code >> 3;
+  VerIdx = code & (int8){7,7,7,7,7,7,7,7};
+
+  NewCrd += (deg >  0) ? optim[ TriIdx.s0 ][ VerIdx.s0 ] : NulCrd;
+  NewCrd += (deg >  1) ? optim[ TriIdx.s1 ][ VerIdx.s1 ] : NulCrd;
+  NewCrd += (deg >  2) ? optim[ TriIdx.s2 ][ VerIdx.s2 ] : NulCrd;
+  NewCrd += (deg >  3) ? optim[ TriIdx.s3 ][ VerIdx.s3 ] : NulCrd;
+  NewCrd += (deg >  4) ? optim[ TriIdx.s4 ][ VerIdx.s4 ] : NulCrd;
+  NewCrd += (deg >  5) ? optim[ TriIdx.s5 ][ VerIdx.s5 ] : NulCrd;
+  NewCrd += (deg >  6) ? optim[ TriIdx.s6 ][ VerIdx.s6 ] : NulCrd;
+  NewCrd += (deg >  7) ? optim[ TriIdx.s7 ][ VerIdx.s7 ] : NulCrd;
+
+  coords[i] = NewCrd / (float)deg;
+}
+\end{verbatim}
+\end{tt}
+\normalfont
+
+Finally, the third and most complicated kernel, will loop over some vertices whose degree is greater than eight and complete the rest of the calculation. It continues the calculation where it was left by the previous loop, add contributions from the remaining triangles and finally computes the final average value. Caution: the loop index is not the total number of vertices but the number of vertices whose degree is greater than eight ! Hence, we need to retrieve the global vertex index from the registry table.
+
+\begin{tt}
+\begin{verbatim}
+gather2(int3 *infos, int *balls, float3 *coords, float3 (*optim)[3])
+{
+  int i, j, deg, VerIdx, code, BalAdr;
+  float4 NewCrd;
+
+  VerIdx = infos[i].s0;
+  BalAdr = infos[i].s1;
+  deg = infos[i].s2;
+  NewCrd = VerCrd[ VerIdx ] * (float4){8,8,8,0};
+
+  for(j=BalAdr; j<BalAdr + deg; j++)
+  {
+    code = balls[j];
+    NewCrd += optim[ code >> 3 ][ code & 7 ];
+  }
+
+  coords[ VerIdx ] = NewCrd / (float)(8 + deg);
+}
+\end{verbatim}
+\end{tt}
+\normalfont
+
+
+
+%
+%  3 / COMMANDS
+%
+
+\section{List of commands}
+
+
+\subsection{GmlDownloadData}
+\subsubsection*{Syntax}
+{\tt error = GmlDownloadData(data);}
+\subsubsection*{Notes}
+See GmlUploadData, but on the other way.
+
+
+\subsection{GmlFreeBall}
+\subsubsection*{Syntax}
+{\tt error = GmlFreeBall(ball);}
+\subsubsection*{Notes}
+Free a ball data type as well as its four internal tables.
+
+
+\subsection{GmlFreeData}
+\subsubsection*{Syntax}
+{\tt error = GmlFreeData(IndexOfData);}
+\subsubsection*{Notes}
+Free this data type's information as well as the two buffers in main's and device's memories. Note the the number IndexOfData could be reused by any further call to NewData.
+
+
+\subsection{GmlGetArguments}
+\subsubsection*{Syntax}
+{\tt arguments = GmlGetArguments();}
+\subsubsection*{Notes}
+Return a pointer on the \emph{GMlib}'s parameters structure that was returned when the library was first initialized.
+
+
+\subsection{GmlGetEdge}
+\subsubsection*{Syntax}
+{\tt error = GmlGetEdge(data, line, pi1, pi2);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlEdge data type to read from \\
+\hline
+line       & int    & index of the edge to read \\
+\hline
+pi1,pi2    & int    & pointers on integers that will be filled with the two edge's vertex indices \\
+\hline
+\end{tabular}
+
+
+\subsection{GmlGetHexahedron}
+\subsubsection*{Syntax}
+{\tt error = GmlGetHexahedron(data, line, pi1, pi2, pi3, pi4, pi5, pi6, pi7, pi8);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlHexahedron data type to read from \\
+\hline
+line       & int    & index of the hexahedron to read \\
+\hline
+pi1...pi8  & int    & pointers on integers that will be filled with the eight hexahedron's vertex indices \\
+\hline
+\end{tabular}
+
+
+\subsection{GmlGetMemoryTransfer}
+\subsubsection*{Syntax}
+{\tt size = GmlGetMemoryTransfer();}
+\subsubsection*{Notes}
+Return the number of bytes transferred to and from the GPU since initialization of the \emph{GMlib}.
+
+
+\subsection{GmlGetQuadrilateral}
+\subsubsection*{Syntax}
+{\tt error = GmlGetQuadrilateral(data, line, pi1, pi2, pi3, pi4);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlQuadrilateral data type to read from \\
+\hline
+line       & int    & index of the quadrilateral to read \\
+\hline
+pi1...pi4  & int    & pointers on integers that will be filled with the four quadrilateral's vertex indices \\
+\hline
+\end{tabular}
+
+
+\subsection{GmlGetMemoryUsage}
+\subsubsection*{Syntax}
+{\tt size = GmlGetMemoryUsage();}
+\subsubsection*{Notes}
+Return the total size in bytes of allocated data type's internal buffers on the GPU memory.
+
+
+\subsection{GmlGetRawData}
+\subsubsection*{Syntax}
+{\tt error = GmlGetRawData(data, LineNumber, buffer);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the data type to fetch from the library's internal buffer \\
+\hline
+line       & int    & index of the line of data to copy to the user's local buffer \\
+\hline
+buffer     & void * & pointer to a buffer to which the line of data will be copied from the library's buffer \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Return     & type   & description \\
+\hline
+error     & int    & 0 for success, 1 otherwise \\
+\hline
+\end{tabular}
+\subsubsection*{Notes}
+See GmlSetRawData.
+
+
+\subsection{GmlGetTetrahedron}
+\subsubsection*{Syntax}
+{\tt error = GmlGetTetrahedron(data, line, pi1, pi2, pi3, pi4);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlTetrahedron data type to read from \\
+\hline
+line       & int    & index of the tetrahedron to read \\
+\hline
+pi1...pi4  & int    & pointers on integers that will be filled with the four tetrahedron's vertex indices \\
+\hline
+\end{tabular}
+
+
+\subsection{GmlGetTriangle}
+\subsubsection*{Syntax}
+{\tt error = GmlGetTriangle(data, line, pi1, pi2, pi3);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlTriangle data type to read from \\
+\hline
+line       & int    & index of the triangle to read \\
+\hline
+pi1...pi3  & int    & pointers on integers that will be filled with the three triangle's vertex indices \\
+\hline
+\end{tabular}
+
+
+\subsection{GmlGetVertex}
+\subsubsection*{Syntax}
+{\tt error = GmlGetVertex(data, line, px, py, pz);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlVertex data type to read from \\
+\hline
+line       & int    & index of the vertex to read \\
+\hline
+px,py,pz   & float* & pointers to three floating points values that will be filled with this vertex' coordinates \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+error     & int    & 0 for success, 1 otherwise \\
+\hline
+\end{tabular}
+\subsubsection*{Notes}
+Make sure the values pointed to are of single precision floating point type as the library does not yet supports double precision numbers.
+
+
+\subsection{GmlInit}
+\subsubsection*{Syntax}
+{\tt LibIndex = GmlInit(DeviceIndex);}
+
+\subsubsection*{Description}
+
+Initializing the library is mandatory before launching any other \emph{GMlib}'s commands.
+
+It takes a single parameter that is the index of the compute device that will execute all OpenCL kernels. The list of such compute capable devices is provided by the {\tt GmlListGPU} command. Those can be any kind of CPUs, in which case all the cores will be used and data will stay in central memory, or GPUs, is which case the data will automatically be transferred to the graphic card's dedicated memory before executing the code.
+
+The command returns a pointer on a C structure that contains various arguments that will be copied to and from the GPU before and after each kernel execution. This structure is user modifiable and is very useful to transfer small quantities of data without explicitly creating a dedicated data type. It is mainly used for debugging purposes.
+
+\subsection{GmlLaunchBallKernel}
+\subsubsection*{Syntax}
+{\tt time GmlLaunchBallKernel(kernel1, kernel2, ball, arguments, ...);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+kernel1    & int   & index of the first kernel called the ``base kernel'' to launch on the GPU \\
+\hline
+kernel2    & int   & index of the second kernel called the ``extension kernel'' to launch on the GPU \\
+\hline
+ball       & int   & index of a ball data type on which the two kernels will loop over \\
+\hline
+arguments  & int   & number of entities to pass on to the kernels \\
+\hline
+...        & int   & list of comma separated data type indices \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+time       & double & kernel execution time in seconds or an error code if the value is negative \\
+\hline
+\end{tabular}
+ 
+\subsubsection*{Notes}
+A ball data type type can only be passed as the first special argument to a {\tt GmlLaunchBallKernel} command and cannot be part of the other arguments list. Likewise, it cannot be passed as a regular {\tt GmlLaunchKernel} command.
+
+
+\subsection{GmlLaunchKernel}
+\subsubsection*{Syntax}
+{\tt time = GmlLaunchKernel(kernel, count, arguments, ...);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type  & description \\
+\hline
+kernel     & int   & index of the OpenCL kernel to launch on the GPU \\
+\hline
+count      & int   & ending loop counter, the kernel will loop from 0 to count-1. On the OpenCL side this is the value returned by the call to {\tt get\_global\_index(0)} \\
+\hline
+arguments  & int   & number of subsequent arguments to pass to the kernel \\
+\hline
+...        & int   & list of comma separated data type indices \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return    & type   & description \\
+\hline
+time      & double & kernel execution time in seconds or an error code if the  value is negative \\
+\hline
+\end{tabular}
+
+\subsubsection*{Notes}
+The order of arguments as seen by the kernel procedure will the same as the indices given as arguments. Two additional arguments will be added at the end: the whole GmlParameters structure, to easily transfer small data, and an integer that contains the number of loop iterations to perform.
+
+
+\subsection{GmlListGPU}
+\subsubsection*{Syntax}
+
+{\tt GmlListGPU();}
+
+\subsubsection*{Description}
+
+Prints on the screen the list of OpenCL compatible hardware available on the system.
+Each line prints the peripheral's index number, to provide when initializing the library, followed by a short description.
+Here is a sample output on a 2013 Apple MacBook pro:
+
+\begin{tt}
+\begin{verbatim}
+      0      : Intel(R) Core(TM) i7-3740QM CPU @ 2.70GHz
+      1      : GeForce GT 650M
+      2      : HD Graphics 4000
+\end{verbatim}
+\end{tt}
+\normalfont
+
+The first device is the quad-core Intel CPU itself which can access the global 16 GB of main memory. The second one is the discrete Nvidia GeForce with 384 compute units and 1 GB of dedicated memory. Finally comes the Intel integrated GPU with 64 compute units that share up to 1.75 GB with the CPU's main memory.
+
+
+\subsection{GmlNewBall}
+\subsubsection*{Syntax}
+{\tt ball = GmlNewBall(VertexType, ElementType);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument    & type   & description \\
+\hline
+VertexType  & int    & index of the GmlVertex data type whose ball of elements is to be built \\
+\hline
+ElementType & int    & index of an element type that points to the vertex data type above \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+ball       & int    & index of a ball data type built by the library \\
+\hline
+\end{tabular}
+\subsubsection*{Notes}
+
+It automatically creates each vertex' ball stored in a vectorial way.
+
+The ball of a vertex is the list of elements that share this vertex. Contrary to the list of vertices for an element which has a constant size (four for a tetrahedron or eight for a hexahedron), there is an arbitrary number of elements sharing the same vertex in an unstructured mesh.
+
+As GPUs are efficient only when dealing with regularly spaced data types and preferably whose size is a power of 2, one has to find a way to store the ball of a vertex in an OpenCL vector.
+
+This is done via two different tables: a base table whose size is constant and that stores the first $2^n$ elements of each vertex, and a second irregular, and slow, one that stores the remaining elements for the vertices that have a degree greater than $2^n$.
+
+The width of each ball table is calculated depending on the element's type so that the base table is big enough to hold more than 90\% of the balls, but not too big since it would spoil the scarce GPU's memory and require additional transfer. The width is 4 four quadrilaterals, 8 for triangles and hexahedra, 16 for 3D edges and 32 for tetrahedra.
+
+\medskip
+
+Under the hood, a ball data type hides four different tables:
+
+\begin{itemize}
+\item  MainDegree[ iVertex ]: s table that stores the partial degree of each vertex, that is $max(d_i, 2^n)$, where $d_i$ is the real vertex degree and $2^n$ is the vector size of the main ball table.
+\item MainBall[ iVertex ][ iElement ]: a table that stores the $2^n$ first elements of each vertex ball.
+\item ExtraDegree[ xVertex ][3]: this table has and entry only for each vertex whose real degree is greater than $2^n$. For each of those extra vertices it stores three values: the vertex index in the main table, the address of the list of extra elements in the ExtraBall table and the number of those extra elements ($ = d_i - 2^n$).
+\item ExtraBall\_ext[ xElement ]: a concatenation of all consecutive extra balls of elements. This table should not be accessed directly but via the previous table's information.
+\end{itemize}
+
+
+\subsection{GmlNewData}
+\subsubsection*{Syntax}
+
+{\tt index = GmlNewData(type, NumberOfEntities, SizeInBytes, AccessMode);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+type       & int    & tag that specify whether it is a predefined \emph{GMlib}'s data type (GmlVertices, GmlEdges, GmlTriangles, GmlQuads, GmlTetrahedra or GmlHexahedra) or an arbitrary user defined data (GmlRawData) \\
+\hline
+Number     & int    & how many entities of this kind should be allocated \\
+\hline
+Size       & int    & size to allocate in byte is to be provided only for raw data (GmlRawData) \\
+\hline
+Access     & int    & indicate in which way the data memory could de moved between the CPU's memory and the device's memory.
+
+GmlInput: enable only copy from CPU to GPU.
+GmlOutput: enable only copy from GPU to CPU.
+GmlInout: both ways are allowed.
+GmlInternal: no transfer allowed, this data is used as an internal temporary buffer on the GPU.\\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Return  & type & description \\
+\hline
+index   & int  & a unique index that should be provided to any kernel that needs to access this data type's memory.\\
+\hline
+\end{tabular}
+
+\subsubsection*{Notes}
+
+This function allocates two same sized buffers: one in the main CPU's memory and the other one in the GPU's memory. The first one is to be initialized with successive calls to the command {\tt GmlSet} and the whole table should be copied to its GPU counterpart afterward with the help of the {\tt GmlUploadData} command.
+
+After performing some calculations, the reverse process can be used: {\tt GmlDownloadData} to copy the whole table from the GPU's memory to the CPU's image in main memory. Afterwards, the data can be accessed sequentially by the CPU with the {\tt GmlGet} command.
+
+
+\subsection{GmlNewKernel}
+\subsubsection*{Syntax}
+{\tt kernel = GmlNewKernel(source, procedure);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+source     & char * & pointer to a character string that holds the OpenCL source code to compile \\
+\hline
+procedure  & char * & pointer to the position of the procedure to compile in the source code since it may contain several procedures \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+kernel     & int    & index of the compiled kernel \\
+\hline
+\end{tabular}
+
+\subsubsection*{Notes}
+The command line utility \emph{cl2h} is provided with the library to help integrate OpenCL sources within your C code without resorting to opening and reading external files at runtime. These command reads a source file \emph{foo.cl} and converts it into a C header file, \emph{foo.h}, that contains a single string initialized with the whole OpenCL source code.
+
+
+\subsection{GmlReduceVector}
+\subsubsection*{Syntax}
+{\tt time = GmlReduceVector(data, operation, residual);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type    & description \\
+\hline
+data       & int     & index of a raw data type made of one single floating point value per line \\
+\hline
+operation  & int     & GmlMin = search for the minimum value, GmlSum = compute the sum, GmlMax = search for the maximum value \\
+\hline
+residual   & double* & pointer to a double precision scalar that will receive the residual value \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+time       & double & kernel execution time in seconds or an error code if the value is negative \\
+\hline
+\end{tabular}
+\subsubsection*{Notes}
+If the data you would like to reduce is more complex than a simple vector, like a 2D table or a table of structures for example, then you need an additional step before calling the reduction. Create a kernel that reads your complex data set, apply a normalizing function that reduces each data into a scalar value and finally writes it as a scalar in simple reduction vector. Afterward, you may reduce this final vector with {\tt GmlReduceVector}.
+
+\subsubsection*{Example}
+We would like to compute the residual of a table of 3D vectors ($tab[n][3]$) as the smallest L2 norm of the $n$ vectors. We first allocate a temporary raw data type table, $res[n]$. Then we launch a kernel that loops over each 3D vectors, computes its L2 norm and stores it in the $res[n]$ table. Finally a call to {\tt GmlReduceVector} on this table with GmlMin as operation computes the global residual value.
+
+C part of the code:
+
+\begin{tt}
+\begin{verbatim}
+VecIdx = NewData(GmlRawData, n, sizeof(float3), GmlInternal);
+ResIdx = NewData(GmlRawData, n, sizeof(float), GmlOutput);
+LaunchKernel(ComputeNorm, n, 2, VecIdx, ResIdx);
+GmlReduceVector(ResIdx, GmlMin, &MinNorm);
+\end{verbatim}
+\end{tt}
+\normalfont
+
+OpenCL kernel:
+
+\begin{tt}
+\begin{verbatim}
+__kernel void ComputeNorm(__global float3 *vec, __global float *res)
+{
+  int i = get_global_id(0);
+  res[i] = length(vec[i]);
+}
+\end{verbatim}
+\end{tt}
+\normalfont
+
+
+\subsection{GmlSetEdge}
+\subsubsection*{Syntax}
+{\tt error = GmlSetEdge(data, line, i1, i2);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlEdge data type to modify \\
+\hline
+line       & int    & index of the edge to modify \\
+\hline
+i1,i2      & int    & index of the two vertices this edge is made of \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+error      & int    & 0 for success, 1 otherwise \\
+\hline
+\end{tabular}
+\subsubsection*{Notes}
+Do not forget that vertex indices range from 0 to n-1 not from 1 to n.
+
+
+\subsection{GmlSetHexahedron}
+\subsubsection*{Syntax}
+{\tt error = GmlSetHexahedron(data, line, i1, i2, i3, i4, i5, i6, i7, i8);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlHexahedron data type to modify \\
+\hline
+line       & int    & index of the hexahedron to modify \\
+\hline
+i1,...,i8  & int    & index of the eight vertices this hexahedron is made of \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+error      & int    & 0 for success, 1 otherwise \\
+\hline
+\end{tabular}
+\subsubsection*{Notes}
+Do not forget that vertex indices range from 0 to n-1 not from 1 to n.
+
+
+\subsection{GmlSetQuadrilateral}
+\subsubsection*{Syntax}
+{\tt error GmlSetQuadrilateral(data, line, i1, i2, i3, i4);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlQuadrilateral data type to modify \\
+\hline
+line       & int    & index of the quadrilateral to modify \\
+\hline
+i1,...,i4  & int    & index of the four vertices this quadrilateral is made of \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+error      & int    & 0 for success, 1 otherwise \\
+\hline
+\end{tabular}
+\subsubsection*{Notes}
+Do not forget that vertex indices range from 0 to n-1 not from 1 to n.
+
+
+\subsection{GmlSetRawData}
+\subsubsection*{Syntax}
+
+{\tt error = GmlSetRawData(data, LineNumber, buffer);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the data type to modify \\
+\hline
+line       & int    & index of the line of data to modify \\
+\hline
+buffer     & void * & pointer to a table containing the whole line of data that is to be copied to the main memory's buffer \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Return    & type   & description \\
+\hline
+error     & int     & 0 for success, 1 otherwise \\
+\hline
+\end{tabular}
+\subsubsection*{Comment}
+When filling a table of RawData kind, the easiest way is to use a small local table that contains only one line of data and to reuse it on each call to GmlSetRawData as is illustrated in the following example:
+
+\begin{tt}
+\begin{verbatim}
+struct
+{
+  int type;
+  float quality;
+  float normal[3];
+}my_data;
+
+for(i=0;i<NmbTriangles;i++)
+{
+  my_data.type = 1;
+  my_data.qualite = qualities[i];
+  my_data.normal[0] = normals[i][0];
+  my_data.normal[1] = normals[i][1];
+  my_data.normal[2] = normals[i][2];
+  GmlSetRawData(IdxData, i, &my_data, sizeof(my_data));
+}
+\end{verbatim}
+\end{tt}
+\normalfont
+
+
+\subsection{GmlSetTetrahedron}
+\subsubsection*{Syntax}
+{\tt error = GmlSetTetrahedron(data, line, i1, i2, i3, i4);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlTetrahedron data type to modify \\
+\hline
+line       & int    & index of the tetrahedron to modify \\
+\hline
+i1,...,i4  & int    & index of the four vertices this tetrahedron is made of \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+error      & int    & 0 for success, 1 otherwise \\
+\hline
+\end{tabular}
+\subsubsection*{Notes}
+Do not forget that vertex indices range from 0 to n-1 not from 1 to n.
+
+
+\subsection{GmlSetTriangle}
+\subsubsection*{Syntax}
+{\tt error GmlSetTriangle(data, line, i1, i2, i3);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the GmlTriangle data type to modify \\
+\hline
+line       & int    & index of the triangle to modify \\
+\hline
+i1,i2,i3   & int    & index of the three vertices this triangle is made of \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+error      & int    & 0 for success, 1 otherwise \\
+\hline
+\end{tabular}
+\subsubsection*{Notes}
+Do not forget that vertex indices range from 0 to n-1 not from 1 to n.
+
+
+\subsection{GmlSetVertex}
+\subsubsection*{Syntax}
+{\tt error GmlSetVertex(data, line, x, y, z);}
+\subsubsection*{Arguments}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Argument   & type   & description \\
+\hline
+data       & int    & index of the vertex data type to modify \\
+\hline
+line       & int    & index of the vertex to modify \\
+\hline
+x,y,z      & float  & set the vertex with these coordinates \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+return     & type   & description \\
+\hline
+error     & int    & 0 for success, 1 otherwise \\
+\hline
+\end{tabular}
+\subsubsection*{Notes}
+As for now, the \emph{GMlib} only supports single precision floating points values.
+
+
+\subsection{GmlStop}
+\subsubsection*{Syntax}
+
+{\tt GmlStop();}
+\subsubsection*{Description}
+
+Free all allocated data types and kernels and close the OpenCL session.
+
+
+\subsection{GmlUploadBall}
+\subsubsection*{Syntax}
+{\tt error = GmlUploadBall(ball);}
+\subsubsection*{Notes}
+Upload the four internal tables associated to a ball to the GPU's memory.
+
+
+\subsection{GmlUploadData}
+\subsubsection*{Syntax}
+{\tt error GmlUploadData(data);}
+\subsubsection*{Notes}
+Triggers the copy from the main memory to graphic card's one. This operation is extremely slow as it goes through the PCI Express bus whose practical speed is around 2 to 6 GB/s while discrete GPUs with dedicated memory range from 50 to 300 GB/s. That is why those memory transfers should be limited to the strict minimum, otherwise they may spoil the whole GPU speed-up.
+
+
+%
+%  4 / GLOSSARY
+%
+
+
+\section{Glossary}
+
+\subsection{API}
+Application programming interface, it is the list arguments to provide to each procedure of a program or a library.
+
+\subsection{Compute Unit}
+A GPU chip contains a great number of so called ``compute units'' that work in parallel pretty much in the same way as CPU  cores. Manufacturers tend to overstate their compute power by multiplying the number of compute units by the size of the vector each unit can handle. to put things in perspective, a four cores Intel Core i7-3770, as each core is capable of handling 8 element-wide vectors in one single cycle should be considered as a $4*8 = 32$ compute units device in GPU marketing language.
+
+It is also important to note that GPU cores are much simpler than their CPU counterparts and the number of instructions they can execute per cycle (IPC) is typically three or four times lower than that of CPUs. Hence the brute comparison of core-gigahertz (a chip's total number of compute units multiplied by its frequency) between CPU and GPU is unrealistic.
+
+As an example, my laptop's CPU with it four core, handling 8-wide vectors running at 3 GHz ($4*8*3=96$ GHz-Core), is almost as fast as its GPU with 384 compute units running at 1.15 GHz ($384*1.15=441$ GHz-Core).
+
+\subsection{GPU}
+Graphic Processing Unit, also called GPGPU (for General Purpose), is a kind of processor well suited for geometric and vector calculations. As its name does not imply, it is far from being ``general purpose'' ! This kind of chip can be found in all common discrete graphic cards from AMD and NVIDIA, but a lot of GPU are now embedded inside CPU chips for cost, size and power reduction, like in all smartphones and tablets (ARM Mali and Imagination Technologies SGX) or gaming consoles (the Sony PS4 is made of a single AMD chip that contains 8 x86 CPU cores and 1152 Radeon GPU compute units).
+
+\subsection{Kernel}
+Name given to a loop executed in parallel by a GPU. It is called kernel because the programer does not write the loop controlling part of the code, as it is handled by the GPU itself, but only the part that lies inside the DO/LOOP statements, hence the name kernel.
+
+\subsection{OpenCL}
+Open Compute Language, it is a language derived from ANSI C with some borrowings from C++. It has been conceived to be independent from any underlying hardware so that an OpenCL code can be executed efficiently on any kind of architecture, either CPU, GPU, FPGA or any concurrent computing device. Its objective is to expose clearly the inherent concurrency of calculation and data in order to better distribute them across all compute units.
+
+\subsection{Workgroup}
+It is a subset of a loop's range that will really be processed concurrently by several GPU compute units. That is why one should never assume that iteration $i$ of a loop will be executed before iteration $i+1$ since they may belong to the same workgroup (typically 64 entries) and thus, will be executed exactly at the same time.
+
+
+%
+% BIBLIO
+%
+
+%\addcontentsline{toc}{section}{Bibliographie}
+
+\begin{thebibliography}{99}
+\small
+
+\bibitem{peano_hilbert}
+	SAGAN,
+	Space-Filling Curves,
+	\emph{Springer Verlag, New York, 1994}.
+
+\bibitem{khronos}
+	Aaftab Munshi,
+	The OpenCL Specification,
+	\emph{Khronos Group, http://www.khronos.org/opencl/, 2012}.
+
+\bibitem{nvidia}
+	NVIDIA Corporation,
+	OpenCL Optimization,
+	\emph{NVIDIA Corporation, NVIDIA\_GPU\_Computing\_Webinars\_Best\_Practices\_For\_OpenCL\_Programming.pdf, 2009}.
+
+\bibitem{lohner}
+	Andrew Corrigan \& Rainald Löhner,
+	Porting of FEFLO to Multi-GPU Clusters,
+	\emph{49th AIAA Aerospace Sciences Meeting, Orlando, January 2011}.
+
+\bibitem{apple}
+	Apple Corp,
+	OpenCL Programming Guide for Mac,
+	\emph{http://developer.apple.com, 2012}.
+
+
+
+\end{thebibliography}
+
+\end{document}
