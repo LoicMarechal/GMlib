@@ -1,3 +1,0 @@
-HexahedraDependenciesLoop: HexahedraDependenciesLoop.c HexahedraDependenciesLoop.cl
-	../../utils/cl2h HexahedraDependenciesLoop.cl HexahedraDependenciesLoop.h HexahedraDependenciesLoop
-	$(CC) -O HexahedraDependenciesLoop.c ../libmesh5/libmesh5.c ../../sources/gmlib2.c -I ../libmesh5 -I ../../sources -o $@ -lm  -framework OPENCL
