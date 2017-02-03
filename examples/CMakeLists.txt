@@ -1,31 +1,34 @@
 
+###############################################################
+# MACRO TO CREATE INTERMEDIARY HEADER FILES FROM OPENCL SOURCES
+# BEFORE COMPILING THE EXECUTABLE
+###############################################################
+
+macro(compile_cl_example basename)
+
+include_directories ("${CMAKE_CURRENT_BINARY_DIR}")
+add_custom_command(
+   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h
+   COMMAND cl2h ${CMAKE_CURRENT_SOURCE_DIR}/${basename}.cl ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h ${basename}
+   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${basename}.cl)
+add_executable(${basename} ${basename}.c ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h)
+target_link_libraries(${basename} GM.2 ${MESHB_LIB} ${OPENCL_LIB})
+install (TARGETS ${basename} DESTINATION share/GMlib/examples COMPONENT examples)
+
+endmacro(compile_cl_example)
+
+
 ##################
 # BUILD C EXAMPLES
 ##################
 
-add_executable(basic_test basic_test.c)
-target_link_libraries(basic_test LP.3 ${MESHB_LIB})
-install (TARGETS basic_test DESTINATION share/LPlib/examples COMPONENT examples)
-
-add_executable(tetrahedra_neighbours tetrahedra_neighbours.c)
-target_link_libraries(tetrahedra_neighbours LP.3 ${MESHB_LIB})
-install (TARGETS tetrahedra_neighbours DESTINATION share/LPlib/examples COMPONENT examples)
-
-add_executable(indirect_writes indirect_writes.c)
-target_link_libraries(indirect_writes LP.3 ${MESHB_LIB})
-install (TARGETS indirect_writes DESTINATION share/LPlib/examples COMPONENT examples)
-
-
-########################
-# BUILD FORTRAN EXAMPLES
-########################
-
-enable_language (Fortran)
-
-add_executable(basic_test_f77 basic_test.f)
-target_link_libraries(basic_test_f77 LP.3 ${MESHBF_LIB})
-install (TARGETS basic_test_f77 DESTINATION share/LPlib/examples COMPONENT examples)
-
-add_executable(indirect_writes_f77 indirect_writes.f)
-target_link_libraries(indirect_writes_f77 LP.3 ${MESHBF_LIB})
-install (TARGETS indirect_writes_f77 DESTINATION share/LPlib/examples COMPONENT examples)
+compile_cl_example(EdgesBasicLoop)
+compile_cl_example(EdgesDependenciesLoop)
+compile_cl_example(TrianglesBasicLoop)
+compile_cl_example(TrianglesDependenciesLoop)
+compile_cl_example(QuadsBasicLoop)
+compile_cl_example(QuadsDependenciesLoop)
+compile_cl_example(TetrahedraBasicLoop)
+compile_cl_example(TetrahedraDependenciesLoop)
+compile_cl_example(HexahedraBasicLoop)
+compile_cl_example(HexahedraDependenciesLoop)
