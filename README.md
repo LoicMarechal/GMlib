@@ -10,7 +10,16 @@ Automaticaly vectorizes unstructured data like the ball of points or the edge sh
 It requires some knowledge on OpenCL programing, which akin to C and C++.  
 Handles transparently the transfer and vectorization of mesh data structures.
 
-# Build and use
+
+# Build
+Simply follow these steps:
+- unarchive the ZIP file
+- cd GMlib-master
+- cmake .
+- make
+- make install
+
+# Usage
 The GMlib is written in ANSI C with some parts in OpenCL.  
 It is made of a single C file and a header file to be compiled and linked alongside the calling program.  
 It may be used in C and C++ programs (Fortran 77 and 90 APIs are under way).  
