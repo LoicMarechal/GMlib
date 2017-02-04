@@ -1,22 +1,22 @@
 
 
-/*----------------------------------------------------------*/
-/*															*/
-/*					GPU Meshing Library 2.01				*/
-/*															*/
-/*----------------------------------------------------------*/
-/*															*/
-/*	Description:		Easy mesh programing with OpenCl	*/
-/*	Author:				Loic MARECHAL						*/
-/*	Creation date:		jul 02 2010							*/
-/*	Last modification:	oct 31 2013							*/
-/*															*/
-/*----------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/*                                                                            */
+/*                      GPU Meshing Library 2.01                              */
+/*                                                                            */
+/*----------------------------------------------------------------------------*/
+/*                                                                            */
+/*   Description:       Easy mesh programing with OpenCl                      */
+/*   Author:            Loic MARECHAL                                         */
+/*   Creation date:     jul 02 2010                                           */
+/*   Last modification: feb 04 2017                                           */
+/*                                                                            */
+/*----------------------------------------------------------------------------*/
 
 
-/*----------------------------------------------------------*/
-/* Includes													*/
-/*----------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/* Includes                                                                   */
+/*----------------------------------------------------------------------------*/
 
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
@@ -25,9 +25,9 @@
 #endif
 
 
-/*----------------------------------------------------------*/
-/* Set max user data										*/
-/*----------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/* Set max user data                                                          */
+/*----------------------------------------------------------------------------*/
 
 #define GmlMaxDat 100
 #define GmlMaxBal 100
@@ -42,24 +42,25 @@
 
 enum memory_types {GmlInternal, GmlInput, GmlOutput, GmlInout};
 enum reduction_opperations {GmlMin, GmlSum, GmlMax};
-enum meshing_type {GmlRawData, GmlVertices, GmlEdges, GmlTriangles, GmlQuadrilaterals, GmlTetrahedra, GmlHexahedra};
+enum meshing_type {GmlRawData, GmlVertices, GmlEdges, GmlTriangles, \
+      GmlQuadrilaterals, GmlTetrahedra, GmlHexahedra};
 
 
-/*----------------------------------------------------------*/
-/* GML public parameters structure:							*/
-/* feel free to add any fields to your convenience			*/
-/*----------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/* GML public parameters structure:                                           */
+/* feel free to add any fields to your convenience                            */
+/*----------------------------------------------------------------------------*/
 
 typedef struct
 {
-	int wei;
-	float MinQal, rlx;
+   int wei;
+   float MinQal, rlx;
 }GmlParSct;
 
 
-/*----------------------------------------------------------*/
-/* User available procedures								*/
-/*----------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/* User available procedures                                                  */
+/*----------------------------------------------------------------------------*/
 
 GmlParSct *GmlInit(int);
 void       GmlStop();
