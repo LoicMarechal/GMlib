@@ -33,8 +33,9 @@
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int i, NmbVer, NmbEdg, InpMsh, ver=0, dim=0, ref, (*EdgTab)[2]=NULL;
-    int VerIdx, EdgIdx, MidIdx, CalMid, GpuIdx=0;
+   int i, NmbVer, NmbEdg, ver=0, dim=0, ref, (*EdgTab)[2]=NULL;
+   int VerIdx, EdgIdx, MidIdx, CalMid, GpuIdx=0;
+   int64_t InpMsh;
    float (*VerTab)[3]=NULL, (*MidTab)[4], dummy, chk=0.;
    double GpuTim;
 
