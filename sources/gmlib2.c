@@ -200,12 +200,18 @@ void GmlListGPU()
    if(clGetPlatformIDs(10, platforms, &num_platforms) != CL_SUCCESS)
       return;
 
-   if(clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, MaxGpu, device_id, &num_devices) != CL_SUCCESS)
+   if(clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, MaxGpu, \
+                     device_id, &num_devices) != CL_SUCCESS)
+   {
       return;
+   }
 
    for(i=0;i<num_devices;i++)
-      if(clGetDeviceInfo(device_id[i], CL_DEVICE_NAME, 100, GpuNam, &GpuNamSiz) == CL_SUCCESS)
+      if(clGetDeviceInfo(  device_id[i], CL_DEVICE_NAME, 100, GpuNam, \
+                           &GpuNamSiz) == CL_SUCCESS )
+      {
          printf("      %d      : %s\n", i, GpuNam);
+      }
 }
 
 
@@ -218,8 +224,11 @@ int GmlNewData(int MshTyp, int NmbLin, int LinSiz, int MemTyp)
    int idx;
    GmlDatSct *dat;
 
-   if( (MshTyp < GmlRawData) || (MshTyp > GmlHexahedra) || (MemTyp < GmlInternal) || (MemTyp > GmlInout) )
+   if( (MshTyp < GmlRawData) || (MshTyp > GmlHexahedra) \
+   || (MemTyp < GmlInternal) || (MemTyp > GmlInout) )
+   {
       return(0);
+   }
 
    // Look for a free data socket
    for(idx=1;idx<=GmlMaxDat;idx++)
@@ -245,11 +254,20 @@ int GmlNewData(int MshTyp, int NmbLin, int LinSiz, int MemTyp)
    /* Allocate the requested memory size on the GPU */
 
    if(MemTyp == GmlInput)
-      dat->GpuMem = clCreateBuffer(gml.context, CL_MEM_READ_ONLY, dat->siz, NULL, NULL);
+   {
+      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_READ_ONLY, \
+                                    dat->siz, NULL, NULL );
+   }
    else if(MemTyp == GmlOutput)
-      dat->GpuMem = clCreateBuffer(gml.context, CL_MEM_WRITE_ONLY, dat->siz, NULL, NULL);
+   {
+      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_WRITE_ONLY, \
+                                    dat->siz, NULL, NULL );
+   }
    else if((MemTyp == GmlInout) || (MemTyp == GmlInternal))
-      dat->GpuMem = clCreateBuffer(gml.context, CL_MEM_READ_WRITE, dat->siz, NULL, NULL);
+   {
+      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_READ_WRITE, \
+                                    dat->siz, NULL, NULL );
+   }
 
    if(!dat->GpuMem)
    {
@@ -465,7 +483,8 @@ int GmlSetTetrahedron(int idx, int lin, int v1, int v2, int v3, int v4)
    return(1);
 }
 
-int GmlSetHexahedron(int idx, int lin, int v1, int v2, int v3, int v4, int v5, int v6, int v7, int v8)
+int GmlSetHexahedron(int idx, int lin, int v1, int v2, int v3, \
+                     int v4, int v5, int v6, int v7, int v8)
 {
    int (*hex)[8];
    GmlDatSct *dat = &gml.dat[ idx ];
@@ -554,7 +573,8 @@ int GmlDownloadData(int idx)
 
 int GmlNewBall(int typ1, int typ2)
 {
-   int i, j, PriIdx, SecIdx, ExtIdx, (*DegTab)[2], BalIdx, *SecTab, *PriVec, (*PriExt)[3], *ExtDat;
+   int i, j, PriIdx, SecIdx, ExtIdx, (*DegTab)[2], BalIdx;
+   int *SecTab, *PriVec, (*PriExt)[3], *ExtDat;
    unsigned char *PriDeg;
    GmlBalSct *bal;
    GmlDatSct *PriDat = &gml.dat[ typ1 ], *SecDat = &gml.dat[ typ2 ];
