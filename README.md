@@ -6,7 +6,7 @@ The purpose of the GMlib is to provide programmers of solvers or automated meshe
 This library is based on the OpenCL language standard, thus taking advantage of almost every architectures supported by most platforms (Linux, Mac OS X, Windows).  
 It is a simple loop parallelization scheme (known as kernels in the realm of GPU computing).  
 Provides the programer with pre defined mesh data structures.  
-Automaticaly vectorizes unstructured data like the ball of points or the edge shells.  
+Automatically vectorizes unstructured data like the ball of points or the edge shells.  
 It requires some knowledge on OpenCL programing, which akin to C and C++.  
 Handles transparently the transfer and vectorization of mesh data structures.
 
@@ -14,10 +14,16 @@ Handles transparently the transfer and vectorization of mesh data structures.
 # Build
 Simply follow these steps:
 - unarchive the ZIP file
-- cd GMlib-master
-- cmake .
-- make
-- make install
+- `cd GMlib-master`
+- `cmake .`
+- `make`
+- `make install`
+
+Optionally, you may download some sample meshes to run the examples:
+- [edges.meshb.lz] https://github.com/LoicMarechal/GMlib/raw/master/sample_meshes/edges.meshb.lz
+- `lzip -d edges.meshb.lz`
+- [hexahedra.meshb.lz] https://github.com/LoicMarechal/GMlib/raw/master/sample_meshes/ehexahedra.meshb.lz
+- `lzip -d hexahedra.meshb.lz`
 
 # Usage
 The GMlib is written in ANSI C with some parts in OpenCL.  
