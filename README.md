@@ -20,7 +20,7 @@ Simply follow these steps:
 - `make install`
 
 Optionally, you may download some sample meshes to run the examples:
-- manually download files from the *Git LFS* repository: [sample files](https://github.com/LoicMarechal/GMlib/tree/master/sample_meshes)
+- manually download files from the *Git LFS* repository: [sample files](sample_meshes/)
 - move them into /opt/GMlib/sample_meshes/
 - uncompress them `lzip -d *.meshb.lz`
 - you may now enter /opt/GMlib/examples directory and run the various examples
