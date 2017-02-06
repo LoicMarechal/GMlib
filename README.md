@@ -20,10 +20,12 @@ Simply follow these steps:
 - `make install`
 
 Optionally, you may download some sample meshes to run the examples:
-- [edges.meshb.lz] https://github.com/LoicMarechal/GMlib/raw/master/sample_meshes/edges.meshb.lz
-- `lzip -d edges.meshb.lz`
-- [hexahedra.meshb.lz] https://github.com/LoicMarechal/GMlib/raw/master/sample_meshes/ehexahedra.meshb.lz
-- `lzip -d hexahedra.meshb.lz`
+- [edges.meshb.lz](https://github.com/LoicMarechal/GMlib/raw/master/sample_meshes/edges.meshb.lz)
+- [hexahedra.meshb.lz](https://github.com/LoicMarechal/GMlib/raw/master/sample_meshes/hexahedra.meshb.lz)
+- [quads.meshb.lz](https://github.com/LoicMarechal/GMlib/raw/master/sample_meshes/quads.meshb.lz)
+- [tetrahedra.meshb.lz](https://github.com/LoicMarechal/GMlib/raw/master/sample_meshes/tetrahedra.meshb.lz)
+- [triangles.meshb.lz](https://github.com/LoicMarechal/GMlib/raw/master/sample_meshes/triangles.meshb.lz)
+- `lzip -d *.meshb.lz`
 
 # Usage
 The GMlib is written in ANSI C with some parts in OpenCL.  
