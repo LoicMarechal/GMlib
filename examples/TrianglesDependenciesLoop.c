@@ -61,6 +61,8 @@ int main(int ArgCnt, char **ArgVec)
    if( !(InpMsh = GmfOpenMesh("triangles.meshb", GmfRead, &ver, &dim)) \
    || (ver != GmfFloat) || (dim != 3) )
    {
+      puts("Could not open triangles.meshb");
+      puts("Please run the command in the same directory this mesh is located");
       return(1);
    }
 
