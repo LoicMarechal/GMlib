@@ -25,6 +25,7 @@ if (OPENCL_LIB)
    include_directories ( ${OPENCL_INCLUDE_DIR} )
 else()
    message (FATAL_ERROR "OpenCL libary could not be found.")
+   message (FATAL_ERROR "Please set path like this: cmake -DOPENCL_LIB=/cm/shared/apps/cuda70/toolkit/current/lib64/libOpenCL.so")
 endif()
 
 find_library (MESHB_LIB Meshb.7 PATHS /opt/libMeshb/lib)

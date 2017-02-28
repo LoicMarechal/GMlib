@@ -60,6 +60,8 @@ int main(int ArgCnt, char **ArgVec)
    if( !(InpMsh = GmfOpenMesh("edges.meshb", GmfRead, &ver, &dim)) \
    || (ver != GmfFloat) || (dim != 3) )
    {
+      puts("Could not open edges.meshb");
+      puts("Please run the command in the same directory this mesh is located");
       return(1);
    }
 
