@@ -15,7 +15,9 @@ Handles transparently the transfer and vectorization of mesh data structures.
 Simply follow these steps:
 - unarchive the ZIP file
 - `cd GMlib-master`
-- `cmake .`
+- `mkdir build`
+- `cd build`
+- `cmake -DCMAKE_INSTALL_PREFIX=$HOME/local ../`
 - `make`
 - `make install`
 
