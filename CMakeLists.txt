@@ -26,14 +26,12 @@ else()
    message (FATAL_ERROR "OpenCL libary could not be found.")
 endif()
 
-find_library (MESHB_LIB Meshb.7 PATHS ${LIBMESHB}/lib)
-find_library (MESHBF_LIB Meshbf.7 PATHS ${LIBMESHB}/lib)
-find_path (MESHB_INC libmeshb7.h PATHS ${LIBMESHB}/include)
 find_package(Threads)
+find_package(libMeshb 7)
 
-if(MESHB_LIB AND MESHBF_LIB AND MESHB_INC)
+if(libMeshb_INCLUDE_DIR)
+   include_directories ("${libMeshb_INCLUDE_DIR}")
    include_directories ("${PROJECT_SOURCE_DIR}/examples")
-   include_directories ("${MESHB_INC}")
    add_subdirectory (utilities)
    add_subdirectory (examples)
 else()
@@ -58,3 +56,22 @@ set (CPACK_PACKAGE_VERSION_MAJOR "${GMlib_VERSION_MAJOR}")
 set (CPACK_PACKAGE_VERSION_MINOR "${GMlib_VERSION_MINOR}")
 set(CPACK_COMPONENTS_ALL applications examples libraries headers)
 include (CPack)
+
+
+######################################
+# EXPORT CMAKE PACKAGE INFORMATION
+######################################
+
+include(CMakePackageConfigHelpers)
+file(WRITE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
+"set(GMlib_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/include)
+set(GMlib_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/GMlib.${GMlib_VERSION_MAJOR}.a)
+")
+write_basic_package_version_file(
+   "${PROJECT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+   VERSION ${PROJECT_VERSION}
+   COMPATIBILITY SameMajorVersion)
+install(FILES
+   "${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+   "${PROJECT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+   DESTINATION lib/cmake/${PROJECT_NAME})
