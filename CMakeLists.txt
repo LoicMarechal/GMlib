@@ -8,9 +8,6 @@ set (GMlib_VERSION_MAJOR 2)
 set (GMlib_VERSION_MINOR 0)
 project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C)
 set (CMAKE_C_FLAGS "-O3")
-if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-   set (CMAKE_INSTALL_PREFIX "/opt/GMlib" CACHE PATH "Default GMlib install path" FORCE)
-endif()
 
 
 #######################################
@@ -29,9 +26,10 @@ else()
    message (FATAL_ERROR "OpenCL libary could not be found.")
 endif()
 
-find_library (MESHB_LIB Meshb.7 PATHS /opt/libMeshb/lib)
-find_library (MESHBF_LIB Meshbf.7 PATHS /opt/libMeshb/lib)
-find_path (MESHB_INC libmeshb7.h PATHS /opt/libMeshb/include)
+find_library (MESHB_LIB Meshb.7 PATHS ${LIBMESHB}/lib)
+find_library (MESHBF_LIB Meshbf.7 PATHS ${LIBMESHB}/lib)
+find_path (MESHB_INC libmeshb7.h PATHS ${LIBMESHB}/include)
+find_package(Threads)
 
 if(MESHB_LIB AND MESHBF_LIB AND MESHB_INC)
    include_directories ("${PROJECT_SOURCE_DIR}/examples")

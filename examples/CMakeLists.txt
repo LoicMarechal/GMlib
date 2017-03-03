@@ -12,7 +12,7 @@ add_custom_command(
    COMMAND cl2h ${CMAKE_CURRENT_SOURCE_DIR}/${basename}.cl ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h ${basename}
    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${basename}.cl)
 add_executable(${basename} ${basename}.c ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h)
-target_link_libraries(${basename} GM.2 ${MESHB_LIB} ${OPENCL_LIB})
+target_link_libraries(${basename} GM.2 ${MESHB_LIB} ${OPENCL_LIB} ${LINK_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 install (TARGETS ${basename} DESTINATION share/GMlib/examples COMPONENT examples)
 
 endmacro(compile_cl_example)
