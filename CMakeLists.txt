@@ -14,24 +14,24 @@ set (CMAKE_C_FLAGS "-O3")
 # SET FILES AND DIRECTORIES TO BE BUILT
 #######################################
 
-include_directories ("${PROJECT_SOURCE_DIR}/sources")
+include_directories (${PROJECT_SOURCE_DIR}/sources)
 add_subdirectory (sources)
 
-find_library(OPENCL_LIB OpenCL)
-if (OPENCL_LIB)
-   include_directories ( ${OPENCL_INCLUDE_DIR} )
+find_package(OpenCL)
+
+if (OpenCL_FOUND)
+   include_directories (${OPENCL_INCLUDE_DIRS})
 else()
    message ("Please set OpenCL library path like this:")
    message ("cmake -DOPENCL_LIB=/cm/shared/apps/cuda70/toolkit/current/lib64/libOpenCL.so")
    message (FATAL_ERROR "OpenCL libary could not be found.")
 endif()
 
-find_package(Threads)
 find_package(libMeshb 7)
 
-if(libMeshb_INCLUDE_DIR)
-   include_directories ("${libMeshb_INCLUDE_DIR}")
-   include_directories ("${PROJECT_SOURCE_DIR}/examples")
+if(libMeshb_FOUND)
+   include_directories (${libMeshb_INCLUDE_DIRS})
+   include_directories (${PROJECT_SOURCE_DIR}/examples)
    add_subdirectory (utilities)
    add_subdirectory (examples)
 else()
@@ -50,10 +50,10 @@ install (DIRECTORY sample_meshes DESTINATION share/GMlib)
 ######################################
 
 include (InstallRequiredSystemLibraries)
-set (CPACK_GENERATOR "TGZ")
-set (CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/copyright.txt")
-set (CPACK_PACKAGE_VERSION_MAJOR "${GMlib_VERSION_MAJOR}")
-set (CPACK_PACKAGE_VERSION_MINOR "${GMlib_VERSION_MINOR}")
+set (CPACK_GENERATOR TXZ)
+set (CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/copyright.txt)
+set (CPACK_PACKAGE_VERSION_MAJOR ${GMlib_VERSION_MAJOR})
+set (CPACK_PACKAGE_VERSION_MINOR ${GMlib_VERSION_MINOR})
 set(CPACK_COMPONENTS_ALL applications examples libraries headers)
 include (CPack)
 
@@ -64,8 +64,11 @@ include (CPack)
 
 include(CMakePackageConfigHelpers)
 file(WRITE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
-"set(GMlib_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/include)
-set(GMlib_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/GMlib.${GMlib_VERSION_MAJOR}.a)
+"include(\${CMAKE_CURRENT_LIST_DIR}/GMlib-target.cmake)
+find_package(OpenCL)
+set(GMlib_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/include)
+set(GMlib_LIBRARIES GM.2 ${OpenCL_LIBRARIES})
+set(GMlib_FOUND TRUE)
 ")
 write_basic_package_version_file(
    "${PROJECT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
