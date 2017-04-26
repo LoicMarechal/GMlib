@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCl                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 04 2017                                           */
+/*   Last modification: apr 26 2017                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -248,11 +248,10 @@ int GmlNewData(int MshTyp, int NmbLin, int LinSiz, int MemTyp)
    else
       dat->LinSiz = gml.MshSiz[ MshTyp ];
 
-   dat->siz = dat->NmbLin * dat->LinSiz;
+   dat->siz = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
    dat->GpuMem = dat->CpuMem = NULL;
 
-   /* Allocate the requested memory size on the GPU */
-
+   // Allocate the requested memory size on the GPU
    if(MemTyp == GmlInput)
    {
       dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_READ_ONLY, \
@@ -853,8 +852,7 @@ double GmlLaunchKernel(int idx, int TruSiz, int NmbDat, ...)
    if(clSetKernelArg(krn->kernel, NmbDat+1, sizeof(int), &TruSiz) != CL_SUCCESS)
       return(-5);
 
-   /* Fit data loop size to the GPU kernel size */
-
+   // Fit data loop size to the GPU kernel size
    if(clGetKernelWorkGroupInfo(  krn->kernel, gml.device_id[ gml.CurDev ], \
                                  CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), \
                                  &LocSiz, &RetSiz) != CL_SUCCESS )
