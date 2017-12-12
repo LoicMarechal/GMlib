@@ -53,7 +53,7 @@ enum meshing_type {GmlRawData, GmlVertices, GmlEdges, GmlTriangles, \
 
 typedef struct
 {
-   int wei;
+   int   wei;
    float MinQal, rlx;
 }GmlParSct;
 
@@ -62,29 +62,29 @@ typedef struct
 /* User available procedures                                                  */
 /*----------------------------------------------------------------------------*/
 
-GmlParSct *GmlInit(int);
-void       GmlStop();
-void       GmlListGPU();
-int        GmlNewData(int, int, int, int);
-int        GmlFreeData(int);
-int        GmlSetRawData(int, int, void *);
-int        GmlGetRawData(int, int, void *);
-int        GmlSetVertex(int, int, float, float, float);
-int        GmlGetVertex(int, int, float *, float *, float *);
-int        GmlSetEdge(int, int, int, int);
-int        GmlSetTriangle(int, int, int, int, int);
-int        GmlSetQuadrilateral(int, int, int, int, int, int);
-int        GmlSetTetrahedron(int, int, int, int, int, int);
-int        GmlSetHexahedron(int, int, int, int, int, int, int, int, int, int);
-int        GmlUploadData(int);
-int        GmlDownloadData(int);
-int        GmlNewBall(int, int);
-int        GmlFreeBall(int);
-int        GmlUploadBall(int);
-int        GmlNewKernel(char *, char *);
-double     GmlLaunchKernel(int, int ,int, ...);
-double     GmlLaunchBallKernel(int, int, int ,int, ...);
-double     GmlReduceVector(int, int, double *);
-size_t     GmlGetMemoryUsage();
-size_t     GmlGetMemoryTransfer();
-GmlParSct *GmlGetParameters();
+GmlParSct *GmlInit               (int);
+void       GmlStop               ();
+void       GmlListGPU            ();
+int        GmlNewData            (int, int, int, int);
+int        GmlFreeData           (int);
+int        GmlSetRawData         (int, int, void *);
+int        GmlGetRawData         (int, int, void *);
+int        GmlSetVertex          (int, int, float, float, float);
+int        GmlGetVertex          (int, int, float *, float *, float *);
+int        GmlSetEdge            (int, int, int, int);
+int        GmlSetTriangle        (int, int, int, int, int);
+int        GmlSetQuadrilateral   (int, int, int, int, int, int);
+int        GmlSetTetrahedron     (int, int, int, int, int, int);
+int        GmlSetHexahedron      (int, int, int, int, int, int, int, int, int, int);
+int        GmlUploadData         (int);
+int        GmlDownloadData       (int);
+int        GmlNewBall            (int, int);
+int        GmlFreeBall           (int);
+int        GmlUploadBall         (int);
+int        GmlNewKernel          (char *, char *);
+double     GmlLaunchKernel       (int, int ,int, ...);
+double     GmlLaunchBallKernel   (int, int, int ,int, ...);
+double     GmlReduceVector       (int, int, double *);
+size_t     GmlGetMemoryUsage     ();
+size_t     GmlGetMemoryTransfer  ();
+GmlParSct *GmlGetParameters      ();
