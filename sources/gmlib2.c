@@ -44,35 +44,36 @@
 
 typedef struct
 {
-   int MshTyp, MemTyp, NmbLin, LinSiz, RedVecIdx;
-   size_t siz;
-   cl_mem GpuMem;
-   void *CpuMem;
+   int      MshTyp, MemTyp, NmbLin, LinSiz, RedVecIdx;
+   size_t   siz;
+   cl_mem   GpuMem;
+   void    *CpuMem;
 }GmlDatSct;
 
 typedef struct
 {
-   int NmbPri, NmbSec, SecSiz, SecPadSiz, VecSiz, NmbExtPri, NmbExtDat;
-   int PriVecIdx, PriExtIdx, ExtDatIdx, PriDegIdx;
+   int   NmbPri, NmbSec, SecSiz, SecPadSiz, VecSiz, NmbExtPri, NmbExtDat;
+   int   PriVecIdx, PriExtIdx, ExtDatIdx, PriDegIdx;
 }GmlBalSct;
 
 typedef struct
 {
-   int idx, siz, DatTab[ GmlMaxDat ];
-   cl_kernel kernel;
-   cl_program program; 
+   int         idx, siz, DatTab[ GmlMaxDat ];
+   cl_kernel   kernel;
+   cl_program  program; 
 }GmlKrnSct;
 
 typedef struct
 {
-   int NmbKrn, CurDev, RedKrnIdx[10], ParIdx, NmbVer[ GmlHexahedra+1 ];
-   cl_uint NmbDev;
-   size_t MemSiz, CurLocSiz, MovSiz, MshSiz[ GmlHexahedra+1 ];
-   GmlDatSct dat[ GmlMaxDat+1 ];
-   GmlBalSct bal[ GmlMaxBal+1 ];
-   GmlKrnSct krn[ GmlMaxKrn+1 ];
-   cl_device_id device_id[ MaxGpu ];
-   cl_context context;
+   int            NmbKrn, CurDev, RedKrnIdx[10], ParIdx;
+   int            NmbVer[ GmlHexahedra + 1 ];
+   cl_uint        NmbDev;
+   size_t         MemSiz, CurLocSiz, MovSiz, MshSiz[ GmlHexahedra+1 ];
+   GmlDatSct      dat[ GmlMaxDat + 1 ];
+   GmlBalSct      bal[ GmlMaxBal + 1 ];
+   GmlKrnSct      krn[ GmlMaxKrn + 1 ];
+   cl_device_id   device_id[ MaxGpu ];
+   cl_context     context;
    cl_command_queue queue;
 }GmlSct;
 
@@ -121,7 +122,7 @@ GmlParSct *GmlInit(int mod)
    if(clGetPlatformIDs(10, platforms, &num_platforms) != CL_SUCCESS)
       return(NULL);
 
-   if(clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, MaxGpu, \
+   if(clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, MaxGpu,
                      gml.device_id, &gml.NmbDev) != CL_SUCCESS)
    {
       return(NULL);
@@ -130,13 +131,13 @@ GmlParSct *GmlInit(int mod)
    if( (mod < 0) || (mod >= gml.NmbDev) )
       return(NULL);
 
-   if(!(gml.context = clCreateContext( 0, 1, &gml.device_id[ gml.CurDev ], \
+   if(!(gml.context = clCreateContext( 0, 1, &gml.device_id[ gml.CurDev ],
                                        NULL, NULL, &err)))
    {
       return(NULL);
    }
 
-   if(!(gml.queue = clCreateCommandQueue( gml.context, gml.device_id[ gml.CurDev ],\
+   if(!(gml.queue = clCreateCommandQueue( gml.context, gml.device_id[ gml.CurDev ],
                                           CL_QUEUE_PROFILING_ENABLE, &err)))
    {
       return(NULL);
@@ -200,14 +201,14 @@ void GmlListGPU()
    if(clGetPlatformIDs(10, platforms, &num_platforms) != CL_SUCCESS)
       return;
 
-   if(clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, MaxGpu, \
+   if(clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, MaxGpu,
                      device_id, &num_devices) != CL_SUCCESS)
    {
       return;
    }
 
    for(i=0;i<num_devices;i++)
-      if(clGetDeviceInfo(  device_id[i], CL_DEVICE_NAME, 100, GpuNam, \
+      if(clGetDeviceInfo(  device_id[i], CL_DEVICE_NAME, 100, GpuNam,
                            &GpuNamSiz) == CL_SUCCESS )
       {
          printf("      %d      : %s\n", i, GpuNam);
@@ -224,7 +225,7 @@ int GmlNewData(int MshTyp, int NmbLin, int LinSiz, int MemTyp)
    int idx;
    GmlDatSct *dat;
 
-   if( (MshTyp < GmlRawData) || (MshTyp > GmlHexahedra) \
+   if( (MshTyp < GmlRawData) || (MshTyp > GmlHexahedra)
    || (MemTyp < GmlInternal) || (MemTyp > GmlInout) )
    {
       return(0);
@@ -254,23 +255,23 @@ int GmlNewData(int MshTyp, int NmbLin, int LinSiz, int MemTyp)
    // Allocate the requested memory size on the GPU
    if(MemTyp == GmlInput)
    {
-      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_READ_ONLY, \
+      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_READ_ONLY,
                                     dat->siz, NULL, NULL );
    }
    else if(MemTyp == GmlOutput)
    {
-      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_WRITE_ONLY, \
+      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_WRITE_ONLY,
                                     dat->siz, NULL, NULL );
    }
    else if((MemTyp == GmlInout) || (MemTyp == GmlInternal))
    {
-      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_READ_WRITE, \
+      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_READ_WRITE,
                                     dat->siz, NULL, NULL );
    }
 
    if(!dat->GpuMem)
    {
-      printf("Cannot allocate %ld MB on the GPU (%ld MB already used)\n", \
+      printf("Cannot allocate %ld MB on the GPU (%ld MB already used)\n",
                dat->siz/MB, GmlGetMemoryUsage()/MB);
       return(0);
    }
@@ -329,7 +330,7 @@ int GmlSetRawData(int idx, int lin, void *raw)
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlRawData) \
+   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlRawData)
    || (lin < 0) || (lin >= dat->NmbLin) )
    {
       return(0);
@@ -347,7 +348,7 @@ int GmlGetRawData(int idx, int lin, void *raw)
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlRawData) \
+   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlRawData)
    || (lin < 0) || (lin >= dat->NmbLin) )
    {
       return(0);
@@ -365,7 +366,7 @@ int GmlSetVertex(int idx, int lin, float x, float y, float z)
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlVertices) \
+   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlVertices)
    || (lin < 0) || (lin >= dat->NmbLin) )
    {
       return(0);
@@ -386,7 +387,7 @@ int GmlGetVertex(int idx, int lin, float *x, float *y, float *z)
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlVertices) \
+   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlVertices)
    || (lin < 0) || (lin >= dat->NmbLin) )
    {
       return(0);
@@ -406,7 +407,7 @@ int GmlSetEdge(int idx, int lin, int v1, int v2)
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlEdges) \
+   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlEdges)
    || (lin < 0) || (lin >= dat->NmbLin) )
    {
       return(0);
@@ -425,7 +426,7 @@ int GmlSetTriangle(int idx, int lin, int v1, int v2, int v3)
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlTriangles) \
+   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlTriangles)
    || (lin < 0) || (lin >= dat->NmbLin) )
    {
       return(0);
@@ -446,7 +447,7 @@ int GmlSetQuadrilateral(int idx, int lin, int v1, int v2, int v3, int v4)
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlQuadrilaterals) \
+   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlQuadrilaterals)
    || (lin < 0) || (lin >= dat->NmbLin) )
    {
       return(0);
@@ -467,7 +468,7 @@ int GmlSetTetrahedron(int idx, int lin, int v1, int v2, int v3, int v4)
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlTetrahedra) \
+   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlTetrahedra)
    || (lin < 0) || (lin >= dat->NmbLin) )
    {
       return(0);
@@ -482,14 +483,14 @@ int GmlSetTetrahedron(int idx, int lin, int v1, int v2, int v3, int v4)
    return(1);
 }
 
-int GmlSetHexahedron(int idx, int lin, int v1, int v2, int v3, \
+int GmlSetHexahedron(int idx, int lin, int v1, int v2, int v3,
                      int v4, int v5, int v6, int v7, int v8)
 {
    int (*hex)[8];
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlHexahedra) \
+   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlHexahedra)
    || (lin < 0) || (lin >= dat->NmbLin) )
    {
       return(0);
@@ -518,7 +519,7 @@ int GmlUploadData(int idx)
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || !dat->GpuMem \
+   if( (idx < 1) || (idx > GmlMaxDat) || !dat->GpuMem
    || !dat->CpuMem || (dat->MemTyp == GmlOutput) )
    {
       return(0);
@@ -526,7 +527,7 @@ int GmlUploadData(int idx)
 
    // Upload buffer from CPU ram to GPU ram
    // and keep track of the amount of uploaded data
-   if(clEnqueueWriteBuffer(gml.queue, dat->GpuMem, CL_FALSE, 0, dat->siz, \
+   if(clEnqueueWriteBuffer(gml.queue, dat->GpuMem, CL_FALSE, 0, dat->siz,
                            dat->CpuMem, 0, NULL,NULL) != CL_SUCCESS)
    {
       return(0);
@@ -553,7 +554,7 @@ int GmlDownloadData(int idx)
 
    // Download buffer from GPU ram to CPU ram
    // and keep track of the amount of downloaded data
-   if(clEnqueueReadBuffer( gml.queue, dat->GpuMem, CL_TRUE, 0, \
+   if(clEnqueueReadBuffer( gml.queue, dat->GpuMem, CL_TRUE, 0,
                            dat->siz, dat->CpuMem, 0, NULL, NULL ) != CL_SUCCESS)
    {
       return(0);
@@ -582,7 +583,7 @@ int GmlNewBall(int typ1, int typ2)
    if( (typ1 < 0) || (typ1 > GmlMaxDat) || (PriDat->MshTyp != GmlVertices) )
       return(0);
 
-   if( (typ2 < 0) || (typ2 > GmlMaxDat) || (SecDat->MshTyp < GmlEdges) \
+   if( (typ2 < 0) || (typ2 > GmlMaxDat) || (SecDat->MshTyp < GmlEdges)
    || (SecDat->MshTyp > GmlHexahedra) )
    {
       return(0);
@@ -627,9 +628,9 @@ int GmlNewBall(int typ1, int typ2)
    else
       bal->SecPadSiz = 32;
 
-   bal->PriDegIdx = GmlNewData(  GmlRawData, bal->NmbPri, \
+   bal->PriDegIdx = GmlNewData(  GmlRawData, bal->NmbPri,
                                  sizeof(cl_char), GmlInput);
-   bal->PriVecIdx = GmlNewData(  GmlRawData, bal->NmbPri, \
+   bal->PriVecIdx = GmlNewData(  GmlRawData, bal->NmbPri,
                                  bal->VecSiz * sizeof(cl_int), GmlInput);
    PriDeg = gml.dat[ bal->PriDegIdx ].CpuMem;
    PriVec = gml.dat[ bal->PriVecIdx ].CpuMem;
@@ -651,9 +652,9 @@ int GmlNewBall(int typ1, int typ2)
       }
 
    // Allocate both tables
-   bal->PriExtIdx = GmlNewData(  GmlRawData, bal->NmbExtPri, \
+   bal->PriExtIdx = GmlNewData(  GmlRawData, bal->NmbExtPri,
                                  3 * sizeof(cl_int), GmlInput);
-   bal->ExtDatIdx = GmlNewData(  GmlRawData, bal->NmbExtDat, \
+   bal->ExtDatIdx = GmlNewData(  GmlRawData, bal->NmbExtDat,
                                  sizeof(cl_int), GmlInput);
    PriExt = gml.dat[ bal->PriExtIdx ].CpuMem;
    ExtDat = gml.dat[ bal->ExtDatIdx ].CpuMem;
@@ -767,29 +768,29 @@ int GmlNewKernel(char *KernelSource, char *PrcNam)
    LenTab[0] = strlen(KernelSource)-1;
 
    // Compile source code
-   if(!(krn->program = clCreateProgramWithSource(gml.context, 1, (const char **)StrTab, \
+   if(!(krn->program = clCreateProgramWithSource(gml.context, 1, (const char **)StrTab,
                                                 (const size_t *)LenTab, &err)))
    {
       return(0);
    }
 
-   if(clBuildProgram(krn->program, 0, NULL, \
+   if(clBuildProgram(krn->program, 0, NULL,
       "-cl-single-precision-constant -cl-mad-enable", NULL, NULL) != CL_SUCCESS)
    {
-      clGetProgramBuildInfo(  krn->program, gml.device_id[ gml.CurDev ], \
+      clGetProgramBuildInfo(  krn->program, gml.device_id[ gml.CurDev ],
                               CL_PROGRAM_BUILD_LOG, 0, NULL, &len);
 
       if(!(buffer = malloc(len)))
          return(0);
 
-      clGetProgramBuildInfo(  krn->program, gml.device_id[ gml.CurDev ], \
+      clGetProgramBuildInfo(  krn->program, gml.device_id[ gml.CurDev ],
                               CL_PROGRAM_BUILD_LOG, len, buffer, &len);
       printf("%s\n", buffer);
       free(buffer);
       return(0);
    }
 
-   if(!(krn->kernel = clCreateKernel(krn->program, PrcNam, &err)) \
+   if(!(krn->kernel = clCreateKernel(krn->program, PrcNam, &err))
    || (err != CL_SUCCESS))
    {
       return(0);
@@ -835,7 +836,7 @@ double GmlLaunchKernel(int idx, int TruSiz, int NmbDat, ...)
    {
       dat = &gml.dat[ DatTab[i] ];
 
-      if( (DatTab[i] < 1) || (DatTab[i] > GmlMaxDat) || !dat->GpuMem \
+      if( (DatTab[i] < 1) || (DatTab[i] > GmlMaxDat) || !dat->GpuMem
       || (clSetKernelArg(krn->kernel, i, sizeof(cl_mem), &dat->GpuMem) != CL_SUCCESS) )
       {
          printf("i=%d, DatTab[i]=%d, GpuMem=%p\n",i,DatTab[i],dat->GpuMem);
@@ -843,7 +844,7 @@ double GmlLaunchKernel(int idx, int TruSiz, int NmbDat, ...)
       }
    }
 
-   if(clSetKernelArg(krn->kernel, NmbDat, sizeof(cl_mem), \
+   if(clSetKernelArg(krn->kernel, NmbDat, sizeof(cl_mem),
                      &gml.dat[ gml.ParIdx ].GpuMem) != CL_SUCCESS)
    {
       return(-4);
@@ -853,8 +854,8 @@ double GmlLaunchKernel(int idx, int TruSiz, int NmbDat, ...)
       return(-5);
 
    // Fit data loop size to the GPU kernel size
-   if(clGetKernelWorkGroupInfo(  krn->kernel, gml.device_id[ gml.CurDev ], \
-                                 CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), \
+   if(clGetKernelWorkGroupInfo(  krn->kernel, gml.device_id[ gml.CurDev ],
+                                 CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t),
                                  &LocSiz, &RetSiz) != CL_SUCCESS )
    {
       return(-6);
@@ -870,7 +871,7 @@ double GmlLaunchKernel(int idx, int TruSiz, int NmbDat, ...)
    // Launch GPU code
    clFinish(gml.queue);
 
-   if(clEnqueueNDRangeKernel( gml.queue, krn->kernel, 1, NULL, \
+   if(clEnqueueNDRangeKernel( gml.queue, krn->kernel, 1, NULL,
                               &GloSiz, &LocSiz, 0, NULL, &event) )
    {
       return(-7);
@@ -878,13 +879,13 @@ double GmlLaunchKernel(int idx, int TruSiz, int NmbDat, ...)
 
    clFinish(gml.queue);
 
-   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, \
+   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START,
                               sizeof(start), &start, NULL) != CL_SUCCESS)
    {
       return(-8);
    }
 
-   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, \
+   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END,
                               sizeof(end), &end, NULL) != CL_SUCCESS)
    {
       return(-9);
@@ -929,7 +930,7 @@ double GmlLaunchBallKernel(int KrnIdx1, int KrnIdx2, int BalIdx, int NmbDat, ...
 
    va_end(VarArg);
 
-   if( (KrnIdx1 < 1) || (KrnIdx1 > gml.NmbKrn) || !krn1->kernel \
+   if( (KrnIdx1 < 1) || (KrnIdx1 > gml.NmbKrn) || !krn1->kernel
    ||   (KrnIdx2 < 1) || (KrnIdx2 > gml.NmbKrn) || !krn2->kernel )
    {
       return(-1);
@@ -951,36 +952,36 @@ double GmlLaunchBallKernel(int KrnIdx1, int KrnIdx2, int BalIdx, int NmbDat, ...
    /* Build first kernel arguments list */
    /*-----------------------------------*/
 
-   if((clSetKernelArg(  krn1->kernel, 0, sizeof(cl_mem), \
-                        &gml.dat[ bal->PriDegIdx ].GpuMem) != CL_SUCCESS) \
-   || (clSetKernelArg(  krn1->kernel, 1, sizeof(cl_mem), \
+   if((clSetKernelArg(  krn1->kernel, 0, sizeof(cl_mem),
+                        &gml.dat[ bal->PriDegIdx ].GpuMem) != CL_SUCCESS)
+   || (clSetKernelArg(  krn1->kernel, 1, sizeof(cl_mem),
                         &gml.dat[ bal->PriVecIdx ].GpuMem) != CL_SUCCESS) )
    {
       return(-5);
    }
 
    for(i=0;i<NmbDat;i++)
-      if(clSetKernelArg(krn1->kernel, i+2, sizeof(cl_mem), \
+      if(clSetKernelArg(krn1->kernel, i+2, sizeof(cl_mem),
                         &DatTab[i]->GpuMem) != CL_SUCCESS)
       {
          return(-6);
       }
 
-   if(clSetKernelArg(krn1->kernel, NmbDat+2, sizeof(cl_mem), \
+   if(clSetKernelArg(krn1->kernel, NmbDat+2, sizeof(cl_mem),
                      &gml.dat[ gml.ParIdx ].GpuMem) != CL_SUCCESS)
    {
       return(-7);
    }
 
-   if(clSetKernelArg(krn1->kernel, NmbDat+3, sizeof(int), \
+   if(clSetKernelArg(krn1->kernel, NmbDat+3, sizeof(int),
       &bal->NmbPri) != CL_SUCCESS)
    {
       return(-8);
    }
 
    // Fit data loop size to the GPU kernel size
-   if(clGetKernelWorkGroupInfo(  krn1->kernel, gml.device_id[ gml.CurDev ], \
-                                 CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), \
+   if(clGetKernelWorkGroupInfo(  krn1->kernel, gml.device_id[ gml.CurDev ],
+                                 CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t),
                                  &LocSiz, &RetSiz) != CL_SUCCESS )
    {
       return(-9);
@@ -995,7 +996,7 @@ double GmlLaunchBallKernel(int KrnIdx1, int KrnIdx2, int BalIdx, int NmbDat, ...
    // Launch GPU code
    clFinish(gml.queue);
 
-   if(clEnqueueNDRangeKernel( gml.queue, krn1->kernel, 1, NULL, \
+   if(clEnqueueNDRangeKernel( gml.queue, krn1->kernel, 1, NULL,
                               &GloSiz, &LocSiz, 0, NULL, &event) )
    {
       return(-10);
@@ -1003,13 +1004,13 @@ double GmlLaunchBallKernel(int KrnIdx1, int KrnIdx2, int BalIdx, int NmbDat, ...
 
    clFinish(gml.queue);
 
-   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, \
+   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START,
                               sizeof(start), &start, NULL) != CL_SUCCESS)
    {
       return(-11);
    }
 
-   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, \
+   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END,
                               sizeof(end), &end, NULL) != CL_SUCCESS)
    {
       return(-12);
@@ -1025,36 +1026,36 @@ double GmlLaunchBallKernel(int KrnIdx1, int KrnIdx2, int BalIdx, int NmbDat, ...
    /* Build second kernel arguments list */
    /*------------------------------------*/
 
-   if((clSetKernelArg(  krn2->kernel, 0, sizeof(cl_mem), \
-                        &gml.dat[ bal->PriExtIdx ].GpuMem) != CL_SUCCESS) \
-   || (clSetKernelArg(  krn2->kernel, 1, sizeof(cl_mem), \
+   if((clSetKernelArg(  krn2->kernel, 0, sizeof(cl_mem),
+                        &gml.dat[ bal->PriExtIdx ].GpuMem) != CL_SUCCESS)
+   || (clSetKernelArg(  krn2->kernel, 1, sizeof(cl_mem),
                         &gml.dat[ bal->ExtDatIdx ].GpuMem) != CL_SUCCESS) )
    {
       return(-13);
    }
 
    for(i=0;i<NmbDat;i++)
-      if(clSetKernelArg(krn2->kernel, i+2, sizeof(cl_mem), \
+      if(clSetKernelArg(krn2->kernel, i+2, sizeof(cl_mem),
                         &DatTab[i]->GpuMem) != CL_SUCCESS)
       {
          return(-14);
       }
 
-   if(clSetKernelArg(krn2->kernel, NmbDat+2, sizeof(cl_mem), \
+   if(clSetKernelArg(krn2->kernel, NmbDat+2, sizeof(cl_mem),
                      &gml.dat[ gml.ParIdx ].GpuMem) != CL_SUCCESS)
    {
       return(-15);
    }
 
-   if(clSetKernelArg(krn2->kernel, NmbDat+3, sizeof(int), \
+   if(clSetKernelArg(krn2->kernel, NmbDat+3, sizeof(int),
                      &bal->NmbExtPri) != CL_SUCCESS)
    {
       return(-16);
    }
 
    // Fit data loop size to the GPU kernel size
-   if(clGetKernelWorkGroupInfo(  krn2->kernel, gml.device_id[ gml.CurDev ], \
-                                 CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), \
+   if(clGetKernelWorkGroupInfo(  krn2->kernel, gml.device_id[ gml.CurDev ],
+                                 CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t),
                                  &LocSiz, &RetSiz) != CL_SUCCESS )
    {
       return(-17);
@@ -1069,7 +1070,7 @@ double GmlLaunchBallKernel(int KrnIdx1, int KrnIdx2, int BalIdx, int NmbDat, ...
    // Launch GPU code
    clFinish(gml.queue);
 
-   if(clEnqueueNDRangeKernel( gml.queue, krn2->kernel, 1, NULL, \
+   if(clEnqueueNDRangeKernel( gml.queue, krn2->kernel, 1, NULL,
                               &GloSiz, &LocSiz, 0, NULL, &event) )
    {
       return(-18);
@@ -1077,13 +1078,13 @@ double GmlLaunchBallKernel(int KrnIdx1, int KrnIdx2, int BalIdx, int NmbDat, ...
 
    clFinish(gml.queue);
 
-   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, \
+   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START,
                               sizeof(start), &start, NULL) != CL_SUCCESS)
    {
       return(-19);
    }
 
-   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, \
+   if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END,
                               sizeof(end), &end, NULL) != CL_SUCCESS)
    {
       return(-20);
@@ -1111,7 +1112,7 @@ double GmlReduceVector(int DatIdx, int opp, double *res)
    GmlDatSct *dat = &gml.dat[ DatIdx ], *dat2;
 
    // Check indices
-   if( (DatIdx < 1) || (DatIdx > GmlMaxDat) || !dat->GpuMem \
+   if( (DatIdx < 1) || (DatIdx > GmlMaxDat) || !dat->GpuMem
    || (opp < GmlMin) || (opp > GmlMax) )
    {
       return(-1);
@@ -1123,7 +1124,7 @@ double GmlReduceVector(int DatIdx, int opp, double *res)
          return(-2);
          
    // Launch the right reduction kernel according to the requested opperation
-   tim = GmlLaunchKernel(  gml.RedKrnIdx[ opp ], dat->siz/sizeof(float), \
+   tim = GmlLaunchKernel(  gml.RedKrnIdx[ opp ], dat->siz/sizeof(float),
                            2, DatIdx, dat->RedVecIdx );
 
    if(tim < 0)   
@@ -1131,7 +1132,6 @@ double GmlReduceVector(int DatIdx, int opp, double *res)
 
    // Trim the size of the output vector down to the number of OpenCL groups
    // used by the kernel and download this amount of data
-
    dat2 = &gml.dat[ dat->RedVecIdx ];
    dat2->siz = dat->siz / gml.CurLocSiz;
    GmlDownloadData(dat->RedVecIdx);
