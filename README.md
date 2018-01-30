@@ -11,7 +11,7 @@ It requires some knowledge on OpenCL programing, which akin to C and C++.
 Handles transparently the transfer and vectorization of mesh data structures.
 
 
-# Build
+# Build for *Linux* or *macOS*
 Simply follow these steps:
 - unarchive the ZIP file
 - `cd GMlib-master`
