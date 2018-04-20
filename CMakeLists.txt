@@ -41,7 +41,7 @@ else()
    You can download it from GitHUB at https://github.com/LoicMarechal/libMeshb")
 endif()
 
-install (FILES LICENSE copyright.txt DESTINATION share/GMlib)
+install (FILES LICENSE.txt copyright.txt DESTINATION share/GMlib)
 install (DIRECTORY sample_meshes DESTINATION share/GMlib)
 
 
