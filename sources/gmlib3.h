@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                      GPU Meshing Library 2.01                              */
+/*                      GPU Meshing Library 3.00                              */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCl                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 04 2017                                           */
+/*   Last modification: jun 14 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
