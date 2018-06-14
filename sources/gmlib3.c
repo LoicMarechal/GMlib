@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 2.01                           */
+/*                         GPU Meshing Library 3.00                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCl                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: apr 26 2017                                           */
+/*   Last modification: jun 14 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -25,7 +25,7 @@
 #include <math.h> 
 #include <limits.h> 
 #include <stdarg.h>
-#include "gmlib2.h"
+#include "gmlib3.h"
 #include "reduce.h"
 
 
