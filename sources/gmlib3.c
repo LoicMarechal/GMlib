@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCl                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 14 2018                                           */
+/*   Last modification: jun 28 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -44,7 +44,7 @@
 
 typedef struct
 {
-   int      MshTyp, MemTyp, NmbLin, LinSiz, RedVecIdx;
+   int      MshTyp, RefTyp, NmbLin, LinSiz, RedVecIdx, UplFlg, DwlFlg;
    size_t   siz;
    cl_mem   GpuMem;
    void    *CpuMem;
@@ -76,6 +76,13 @@ typedef struct
    cl_context     context;
    cl_command_queue queue;
 }GmlSct;
+
+
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+
+static int GmlUploadData  (int);
+static int GmlDownloadData(int);
 
 
 /*----------------------------------------------------------------------------*/
@@ -154,7 +161,7 @@ GmlParSct *GmlInit(int mod)
       return(NULL);
 
    // Allocate and return a public user customizable parameter structure
-   if(!(gml.ParIdx = GmlNewData(GmlRawData, 1, sizeof(GmlParSct), GmlInout)))
+   if(!(gml.ParIdx = GmlNewData(GmlRawData, 1, 0, sizeof(GmlParSct))))
       return(NULL);
 
    return(gml.dat[ gml.ParIdx ].CpuMem);
@@ -220,16 +227,13 @@ void GmlListGPU()
 /* Allocate an OpenCL buffer plus 10% more for resizing                       */
 /*----------------------------------------------------------------------------*/
 
-int GmlNewData(int MshTyp, int NmbLin, int LinSiz, int MemTyp)
+int GmlNewData(int MshTyp, int NmbLin, int RefTyp, int LinSiz)
 {
    int idx;
    GmlDatSct *dat;
 
-   if( (MshTyp < GmlRawData) || (MshTyp > GmlHexahedra)
-   || (MemTyp < GmlInternal) || (MemTyp > GmlInout) )
-   {
+   if( (MshTyp < GmlRawData) || (MshTyp > GmlHexahedra) || (NmbLin <= 0) )
       return(0);
-   }
 
    // Look for a free data socket
    for(idx=1;idx<=GmlMaxDat;idx++)
@@ -241,33 +245,28 @@ int GmlNewData(int MshTyp, int NmbLin, int LinSiz, int MemTyp)
 
    dat = &gml.dat[ idx ];
    dat->MshTyp = MshTyp;
-   dat->MemTyp = MemTyp;
    dat->NmbLin = NmbLin;
 
    if(MshTyp == GmlRawData)
+   {
+      if( (RefTyp < GmlRawData) || (RefTyp > GmlHexahedra) || (LinSiz <= 0) )
+         return(0);
+
+      dat->RefTyp = RefTyp;
       dat->LinSiz = LinSiz;
+   }
    else
+   {
+      dat->RefTyp = MshTyp;
       dat->LinSiz = gml.MshSiz[ MshTyp ];
+   }
 
    dat->siz = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
    dat->GpuMem = dat->CpuMem = NULL;
 
    // Allocate the requested memory size on the GPU
-   if(MemTyp == GmlInput)
-   {
-      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_READ_ONLY,
-                                    dat->siz, NULL, NULL );
-   }
-   else if(MemTyp == GmlOutput)
-   {
-      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_WRITE_ONLY,
-                                    dat->siz, NULL, NULL );
-   }
-   else if((MemTyp == GmlInout) || (MemTyp == GmlInternal))
-   {
-      dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_READ_WRITE,
-                                    dat->siz, NULL, NULL );
-   }
+   dat->GpuMem = clCreateBuffer( gml.context, CL_MEM_READ_WRITE,
+                                 dat->siz, NULL, NULL );
 
    if(!dat->GpuMem)
    {
@@ -277,7 +276,7 @@ int GmlNewData(int MshTyp, int NmbLin, int LinSiz, int MemTyp)
    }
 
    // Allocate the requested memory size on the CPU side
-   if( (MemTyp != GmlInternal) && !(dat->CpuMem = calloc(1, dat->siz)) )
+   if(!(dat->CpuMem = calloc(1, dat->siz)))
       return(0);
 
    // Keep track of allocated memory
@@ -324,187 +323,107 @@ int GmlFreeData(int idx)
 /* Set a procedures to set or get lines of data                               */
 /*----------------------------------------------------------------------------*/
 
-int GmlSetRawData(int idx, int lin, void *raw)
+int GmlSetDataLine(int idx, int lin, void *UsrDat)
 {
    char *adr;
-   GmlDatSct *dat = &gml.dat[ idx ];
+   GmlDatSct *dat;
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlRawData)
-   || (lin < 0) || (lin >= dat->NmbLin) )
-   {
+   if( (idx < 1) || (idx > GmlMaxDat) )
       return(0);
-   }
 
-   adr = (void *)dat->CpuMem;
-   memcpy(&adr[ lin*dat->LinSiz ], raw, dat->LinSiz);
+   dat = &gml.dat[ idx ];
+
+   if( (lin < 0) || (lin >= dat->NmbLin) )
+      return(0);
+
+   dat->UplFlg = 0;
+   adr = (char *)dat->CpuMem + lin * dat->LinSiz;
+   memcpy(adr, UsrDat, dat->LinSiz);
 
    return(1);
 }
 
-int GmlGetRawData(int idx, int lin, void *raw)
+int GmlGetDataLine(int idx, int lin, void *UsrDat)
 {
    char *adr;
-   GmlDatSct *dat = &gml.dat[ idx ];
+   GmlDatSct *dat;
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlRawData)
-   || (lin < 0) || (lin >= dat->NmbLin) )
-   {
+   if( (idx < 1) || (idx > GmlMaxDat) )
       return(0);
+
+   dat = &gml.dat[ idx ];
+
+   if( (lin < 0) || (lin >= dat->NmbLin) )
+      return(0);
+
+   if(!dat->DwlFlg)
+   {
+      GmlDownloadData(idx);
+      dat->DwlFlg = 1;
    }
 
-   adr = (void *)dat->CpuMem;
-   memcpy(raw, &adr[ lin*dat->LinSiz ], dat->LinSiz);
+   adr = (char *)dat->CpuMem + lin * dat->LinSiz;
+   memcpy(UsrDat, adr, dat->LinSiz);
 
    return(1);
 }
 
-int GmlSetVertex(int idx, int lin, float x, float y, float z)
+int GmlSetDataBlock(int idx, void *UsrBeg, void *UsrEnd)
 {
-   float (*crd)[4];
-   GmlDatSct *dat = &gml.dat[ idx ];
+   char *DstAdr, *SrcAdr;
+   size_t UsrSiz;
+   GmlDatSct *dat;
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlVertices)
-   || (lin < 0) || (lin >= dat->NmbLin) )
-   {
+   if( (idx < 1) || (idx > GmlMaxDat) )
       return(0);
-   }
 
-   crd = (void *)dat->CpuMem;
-   crd[ lin ][0] = x;
-   crd[ lin ][1] = y;
-   crd[ lin ][2] = z;
-   crd[ lin ][3] = 0;
+   dat = &gml.dat[ idx ];
+   dat->UplFlg = 0;
+   DstAdr = (char *)dat->CpuMem;
+   SrcAdr = (char *)UsrBeg;
+   UsrSiz = ((char *)UsrEnd - (char *)UsrBeg) / (dat->NmbLin - 1);
+
+   while(SrcAdr < (char *)UsrEnd)
+   {
+      memcpy(DstAdr, SrcAdr, dat->LinSiz);
+      DstAdr += dat->LinSiz;
+      SrcAdr += UsrSiz;
+   }
 
    return(1);
 }
 
-int GmlGetVertex(int idx, int lin, float *x, float *y, float *z)
+int GmlGetDataBlock(int idx, void *UsrBeg, void *UsrEnd)
 {
-   float (*crd)[4];
-   GmlDatSct *dat = &gml.dat[ idx ];
+   char *DstAdr, *SrcAdr;
+   size_t UsrSiz;
+   GmlDatSct *dat;
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlVertices)
-   || (lin < 0) || (lin >= dat->NmbLin) )
-   {
+   if( (idx < 1) || (idx > GmlMaxDat) )
       return(0);
+
+   dat = &gml.dat[ idx ];
+
+   if(!dat->DwlFlg)
+   {
+      GmlDownloadData(idx);
+      dat->DwlFlg = 1;
    }
 
-   crd = (void *)dat->CpuMem;
-   *x = crd[ lin ][0];
-   *y = crd[ lin ][1];
-   *z = crd[ lin ][2];
+   DstAdr = (char *)dat->CpuMem;
+   SrcAdr = (char *)UsrBeg;
+   UsrSiz = ((char *)UsrEnd - (char *)UsrBeg) / (dat->NmbLin - 1);
 
-   return(1);
-}
-
-int GmlSetEdge(int idx, int lin, int v1, int v2)
-{
-   int (*edg)[2];
-   GmlDatSct *dat = &gml.dat[ idx ];
-
-   // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlEdges)
-   || (lin < 0) || (lin >= dat->NmbLin) )
+   while(SrcAdr < (char *)UsrEnd)
    {
-      return(0);
+      memcpy(SrcAdr, DstAdr, dat->LinSiz);
+      DstAdr += dat->LinSiz;
+      SrcAdr += UsrSiz;
    }
-
-   edg = (void *)dat->CpuMem;
-   edg[ lin ][0] = v1;
-   edg[ lin ][1] = v2;
-
-   return(1);
-}
-
-int GmlSetTriangle(int idx, int lin, int v1, int v2, int v3)
-{
-   int (*tri)[4];
-   GmlDatSct *dat = &gml.dat[ idx ];
-
-   // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlTriangles)
-   || (lin < 0) || (lin >= dat->NmbLin) )
-   {
-      return(0);
-   }
-
-   tri = (void *)dat->CpuMem;
-   tri[ lin ][0] = v1;
-   tri[ lin ][1] = v2;
-   tri[ lin ][2] = v3;
-   tri[ lin ][3] = -1;
-
-   return(1);
-}
-
-int GmlSetQuadrilateral(int idx, int lin, int v1, int v2, int v3, int v4)
-{
-   int (*qad)[4];
-   GmlDatSct *dat = &gml.dat[ idx ];
-
-   // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlQuadrilaterals)
-   || (lin < 0) || (lin >= dat->NmbLin) )
-   {
-      return(0);
-   }
-
-   qad = (void *)dat->CpuMem;
-   qad[ lin ][0] = v1;
-   qad[ lin ][1] = v2;
-   qad[ lin ][2] = v3;
-   qad[ lin ][3] = v4;
-
-   return(1);
-}
-
-int GmlSetTetrahedron(int idx, int lin, int v1, int v2, int v3, int v4)
-{
-   int (*tet)[4];
-   GmlDatSct *dat = &gml.dat[ idx ];
-
-   // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlTetrahedra)
-   || (lin < 0) || (lin >= dat->NmbLin) )
-   {
-      return(0);
-   }
-
-   tet = (void *)dat->CpuMem;
-   tet[ lin ][0] = v1;
-   tet[ lin ][1] = v2;
-   tet[ lin ][2] = v3;
-   tet[ lin ][3] = v4;
-
-   return(1);
-}
-
-int GmlSetHexahedron(int idx, int lin, int v1, int v2, int v3,
-                     int v4, int v5, int v6, int v7, int v8)
-{
-   int (*hex)[8];
-   GmlDatSct *dat = &gml.dat[ idx ];
-
-   // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || (dat->MshTyp != GmlHexahedra)
-   || (lin < 0) || (lin >= dat->NmbLin) )
-   {
-      return(0);
-   }
-
-   hex = (void *)dat->CpuMem;
-   hex[ lin ][0] = v1;
-   hex[ lin ][1] = v2;
-   hex[ lin ][2] = v3;
-   hex[ lin ][3] = v4;
-   hex[ lin ][4] = v5;
-   hex[ lin ][5] = v6;
-   hex[ lin ][6] = v7;
-   hex[ lin ][7] = v8;
 
    return(1);
 }
@@ -514,13 +433,12 @@ int GmlSetHexahedron(int idx, int lin, int v1, int v2, int v3,
 /* Copy user's data into an OpenCL buffer                                     */
 /*----------------------------------------------------------------------------*/
 
-int GmlUploadData(int idx)
+static int GmlUploadData(int idx)
 {
    GmlDatSct *dat = &gml.dat[ idx ];
 
    // Check indices
-   if( (idx < 1) || (idx > GmlMaxDat) || !dat->GpuMem
-   || !dat->CpuMem || (dat->MemTyp == GmlOutput) )
+   if( (idx < 1) || (idx > GmlMaxDat) || !dat->GpuMem || !dat->CpuMem )
    {
       return(0);
    }
@@ -544,7 +462,7 @@ int GmlUploadData(int idx)
 /* Copy an OpenCL buffer into user's data                                     */
 /*----------------------------------------------------------------------------*/
 
-int GmlDownloadData(int idx)
+static int GmlDownloadData(int idx)
 {
    GmlDatSct *dat = &gml.dat[ idx ];
 
@@ -628,10 +546,8 @@ int GmlNewBall(int typ1, int typ2)
    else
       bal->SecPadSiz = 32;
 
-   bal->PriDegIdx = GmlNewData(  GmlRawData, bal->NmbPri,
-                                 sizeof(cl_char), GmlInput);
-   bal->PriVecIdx = GmlNewData(  GmlRawData, bal->NmbPri,
-                                 bal->VecSiz * sizeof(cl_int), GmlInput);
+   bal->PriDegIdx = GmlNewData(GmlRawData, bal->NmbPri, GmlVertices, sizeof(cl_char));
+   bal->PriVecIdx = GmlNewData(GmlRawData, bal->NmbPri, GmlVertices, bal->VecSiz * sizeof(cl_int));
    PriDeg = gml.dat[ bal->PriDegIdx ].CpuMem;
    PriVec = gml.dat[ bal->PriVecIdx ].CpuMem;
 
@@ -652,10 +568,8 @@ int GmlNewBall(int typ1, int typ2)
       }
 
    // Allocate both tables
-   bal->PriExtIdx = GmlNewData(  GmlRawData, bal->NmbExtPri,
-                                 3 * sizeof(cl_int), GmlInput);
-   bal->ExtDatIdx = GmlNewData(  GmlRawData, bal->NmbExtDat,
-                                 sizeof(cl_int), GmlInput);
+   bal->PriExtIdx = GmlNewData(GmlRawData, bal->NmbExtPri, 0, 3 * sizeof(cl_int));
+   bal->ExtDatIdx = GmlNewData(GmlRawData, bal->NmbExtDat, 0,     sizeof(cl_int));
    PriExt = gml.dat[ bal->PriExtIdx ].CpuMem;
    ExtDat = gml.dat[ bal->ExtDatIdx ].CpuMem;
    bal->NmbExtPri = bal->NmbExtDat = 0;
@@ -807,9 +721,9 @@ int GmlNewKernel(char *KernelSource, char *PrcNam)
 /* Select arguments and launch an OpenCL kernel                               */
 /*----------------------------------------------------------------------------*/
 
-double GmlLaunchKernel(int idx, int TruSiz, int NmbDat, ...)
+double GmlLaunchKernel(int idx, int TruSiz, ...)
 {
-   int i, DatTab[ GmlMaxDat ];
+   int i, typ, NmbDat, DatTab[ GmlMaxDat ], MemTyp[ GmlMaxDat ];
    size_t GloSiz, LocSiz, RetSiz = 0;
    va_list VarArg;
    GmlDatSct *dat;
@@ -825,16 +739,26 @@ double GmlLaunchKernel(int idx, int TruSiz, int NmbDat, ...)
       return(-2);
 
    // Build arguments list
-   va_start(VarArg, NmbDat);
+   va_start(VarArg, TruSiz);
+   i = 0;
 
-   for(i=0;i<NmbDat;i++)
+   do
+   {
+      typ = va_arg(VarArg, int);
+
+      if(typ == GmlEnd)
+         break;
+
+      MemTyp[i] = typ;
       DatTab[i] = va_arg(VarArg, int);
 
-   va_end(VarArg);
-
-   for(i=0;i<NmbDat;i++)
-   {
       dat = &gml.dat[ DatTab[i] ];
+
+      if( ((MemTyp[i] == GmlRead) || (MemTyp[i] == GmlReadWrite)) && !dat->UplFlg)
+      {
+         GmlUploadData(DatTab[i]);
+         dat->UplFlg = 1;
+      }
 
       if( (DatTab[i] < 1) || (DatTab[i] > GmlMaxDat) || !dat->GpuMem
       || (clSetKernelArg(krn->kernel, i, sizeof(cl_mem), &dat->GpuMem) != CL_SUCCESS) )
@@ -842,7 +766,10 @@ double GmlLaunchKernel(int idx, int TruSiz, int NmbDat, ...)
          printf("i=%d, DatTab[i]=%d, GpuMem=%p\n",i,DatTab[i],dat->GpuMem);
          return(-3);
       }
-   }
+   }while(i++ < GmlMaxDat);
+
+   NmbDat = i;
+   va_end(VarArg);
 
    if(clSetKernelArg(krn->kernel, NmbDat, sizeof(cl_mem),
                      &gml.dat[ gml.ParIdx ].GpuMem) != CL_SUCCESS)
@@ -890,6 +817,10 @@ double GmlLaunchKernel(int idx, int TruSiz, int NmbDat, ...)
    {
       return(-9);
    }
+
+   for(i=0;i<NmbDat;i++)
+      if( (MemTyp[i] == GmlWrite) || (MemTyp[i] == GmlReadWrite) )
+         gml.dat[ DatTab[i] ].DwlFlg = 0;
 
    // Finaly, get back the parameters from the GPU memmory
    if(!GmlDownloadData(gml.ParIdx))
@@ -1120,12 +1051,12 @@ double GmlReduceVector(int DatIdx, int opp, double *res)
 
    // Allocate an output vector the size of the input vector
    if(!dat->RedVecIdx)
-       if(!(dat->RedVecIdx = GmlNewData(GmlRawData, 1, dat->siz, GmlOutput)))
+       if(!(dat->RedVecIdx = GmlNewData(GmlRawData, 1, 0, dat->siz)))
          return(-2);
          
    // Launch the right reduction kernel according to the requested opperation
    tim = GmlLaunchKernel(  gml.RedKrnIdx[ opp ], dat->siz/sizeof(float),
-                           2, DatIdx, dat->RedVecIdx );
+                           GmlRead, DatIdx, GmlWrite, dat->RedVecIdx , GmlEnd);
 
    if(tim < 0)   
       return(tim);
