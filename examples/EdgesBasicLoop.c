@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                      GPU Meshing Library 2.00                              */
+/*                      GPU Meshing Library 3.00                              */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Basic loop on elements                                */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     dec 03 2012                                           */
-/*   Last modification: feb 03 2017                                           */
+/*   Last modification: jun 27 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <libmeshb7.h>
-#include <gmlib2.h>
+#include <gmlib3.h>
 #include "EdgesBasicLoop.h"
 
 
@@ -86,7 +86,11 @@ int main(int ArgCnt, char **ArgVec)
    // Read the elements
    GmfGotoKwd(InpMsh, GmfEdges);
    for(i=1;i<=NmbEdg;i++)
+   {
       GmfGetLin(InpMsh, GmfEdges, &EdgTab[i][0], &EdgTab[i][1], &ref);
+      EdgTab[i][0]--;
+      EdgTab[i][1]--;
+   }
 
    // And close the mesh
    GmfCloseMesh(InpMsh);
@@ -104,45 +108,37 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Create a vertices data type and transfer the data to the GPU
-   if(!(VerIdx = GmlNewData(GmlVertices, NmbVer, 0, GmlInput)))
+   if(!(VerIdx = GmlNewData(GmlVertices, NmbVer, 0, 0)))
       return(1);
 
-   for(i=1;i<=NmbVer;i++)
-      GmlSetVertex(VerIdx, i-1, VerTab[i][0], VerTab[i][1], VerTab[i][2]);
-
-   GmlUploadData(VerIdx);
+   GmlSetDataBlock(VerIdx, VerTab[1], VerTab[ NmbVer ]);
 
    /* Do the same with the elements */
-   if(!(EdgIdx = GmlNewData(GmlEdges, NmbEdg, 0, GmlInput)))
+   if(!(EdgIdx = GmlNewData(GmlEdges, NmbEdg, 0, 0)))
       return(1);
 
-   for(i=1;i<=NmbEdg;i++)
-      GmlSetEdge(EdgIdx, i-1, EdgTab[i][0]-1, EdgTab[i][1]-1);
-
-   GmlUploadData(EdgIdx);
+   GmlSetDataBlock(EdgIdx, EdgTab[1], EdgTab[ NmbEdg ]);
 
    // Create a raw datatype to store the element middles
-    // It does not need to be tranfered to the GPU
-   if(!(MidIdx = GmlNewData(GmlRawData, NmbEdg, sizeof(cl_float4), GmlOutput)))
+   // It does not need to be tranfered to the GPU
+   if(!(MidIdx = GmlNewData(GmlRawData, NmbEdg, GmlEdges, sizeof(cl_float4))))
       return(1);
 
-   if(!(MidTab = malloc((NmbEdg+1)*4*sizeof(float))))
+   if(!(MidTab = malloc( (NmbEdg+1) * 4 * sizeof(float))))
       return(1);
 
    // Launch the kernel on the GPU
-   GpuTim = GmlLaunchKernel(CalMid, NmbEdg, 3, EdgIdx, MidIdx, VerIdx);
+   GpuTim = GmlLaunchKernel(CalMid, NmbEdg, GmlRead, EdgIdx, GmlWrite, MidIdx, GmlRead, VerIdx, GmlEnd);
 
    if(GpuTim < 0)
       return(1);
 
-   // Get the results back and print some stats
-   GmlDownloadData(MidIdx);
+   GmlGetDataBlock(MidIdx, MidTab[1], MidTab[ NmbEdg ]);
 
    for(i=1;i<=NmbEdg;i++)
    {
-      GmlGetRawData(MidIdx, i-1, MidTab[i]);
-      chk += sqrt(   MidTab[i][0] * MidTab[i][0] \
-                  +  MidTab[i][1] * MidTab[i][1] \
+      chk += sqrt(   MidTab[i][0] * MidTab[i][0]
+                  +  MidTab[i][1] * MidTab[i][1]
                   +  MidTab[i][2] * MidTab[i][2]);
    }
 
