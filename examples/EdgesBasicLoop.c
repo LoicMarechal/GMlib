@@ -128,7 +128,7 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Launch the kernel on the GPU
-   GpuTim = GmlLaunchKernel(CalMid, NmbEdg, GmlRead, EdgIdx, GmlWrite, MidIdx, GmlRead, VerIdx, GmlEnd);
+   GpuTim = GmlLaunchKernel(CalMid, EdgIdx, GmlRead, EdgIdx, GmlWrite, MidIdx, GmlRead, VerIdx, GmlEnd);
 
    if(GpuTim < 0)
       return(1);
