@@ -108,20 +108,20 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Create a vertices data type and transfer the data to the GPU
-   if(!(VerIdx = GmlNewData(GmlVertices, NmbVer, 0, 0)))
+   if(!(VerIdx = GmlNewData(GmlVertices, "crd", NmbVer, 0, 0)))
       return(1);
 
    GmlSetDataBlock(VerIdx, VerTab[1], VerTab[ NmbVer ]);
 
    /* Do the same with the elements */
-   if(!(EdgIdx = GmlNewData(GmlEdges, NmbEdg, 0, 0)))
+   if(!(EdgIdx = GmlNewData(GmlEdges, "edg", NmbEdg, 0, 0)))
       return(1);
 
    GmlSetDataBlock(EdgIdx, EdgTab[1], EdgTab[ NmbEdg ]);
 
    // Create a raw datatype to store the element middles
    // It does not need to be tranfered to the GPU
-   if(!(MidIdx = GmlNewData(GmlRawData, NmbEdg, GmlEdges, sizeof(cl_float4))))
+   if(!(MidIdx = GmlNewData(GmlRawData, "mid", NmbEdg, GmlEdges, sizeof(cl_float4))))
       return(1);
 
    if(!(MidTab = malloc( (NmbEdg+1) * 4 * sizeof(float))))
