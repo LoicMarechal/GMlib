@@ -66,7 +66,7 @@ typedef struct
 GmlParSct *GmlInit               (int);
 void       GmlStop               ();
 void       GmlListGPU            ();
-int        GmlNewData            (int, int, int, int);
+int        GmlNewData            (int, char *, int, int, int);
 int        GmlFreeData           (int);
 int        GmlSetDataLine        (int, int, void *);
 int        GmlGetDataLine        (int, int, void *);
