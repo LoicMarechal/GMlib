@@ -742,12 +742,13 @@ static int GmlCompileKernel(int idx, char *KernelSource, char *PrcNam)
 /* Select arguments and launch an OpenCL kernel                               */
 /*----------------------------------------------------------------------------*/
 
-double GmlLaunchKernel(int idx, int TruSiz, ...)
+double GmlLaunchKernel(int idx, int DatIdx, ...)
 {
-   int i, typ, NmbDat, DatTab[ GmlMaxDat ], MemTyp[ GmlMaxDat ];
+   int i, j, typ, cpt, NmbDat, DatTab[ GmlMaxDat ], MemTyp[ GmlMaxDat ];
+   int TruSiz = gml.dat[ DatIdx ].NmbLin;
    size_t GloSiz, LocSiz, RetSiz = 0;
    va_list VarArg;
-   GmlDatSct *dat;
+   GmlDatSct *dat, *RefDat = &gml.dat[ DatIdx ];
    GmlKrnSct *krn = &gml.krn[ idx ];
    cl_event event;
    cl_ulong start, end;
@@ -758,7 +759,7 @@ double GmlLaunchKernel(int idx, int TruSiz, ...)
       {0,4,4,0,1,0,2},{0,4,6,4,0,1,0},{0,8,12,0,6,0,1} };
 
    // Get arguments list
-   va_start(VarArg, TruSiz);
+   va_start(VarArg, DatIdx);
    i = 0;
 
    do
@@ -795,19 +796,25 @@ double GmlLaunchKernel(int idx, int TruSiz, ...)
       for(i=0;i<NmbDat;i++)
       {
          dat = &gml.dat[ DatTab[i] ];
-         sprintf( TmpStr, "__global %s %sTab, ", TypStr[ dat->MshTyp ], dat->NamStr);
+         sprintf( TmpStr, "__global %s *%sTab, ", TypStr[ dat->MshTyp ], dat->NamStr);
          strcat(KrnSrc, TmpStr);
       }
 
       sprintf(TmpStr, "__global GmlParSct *par, const int count )\n");
       strcat(KrnSrc, TmpStr);
-      sprintf(TmpStr, "{\nint i = get_global_id(0);\nif(i >= count)\n   return;\n");
+      sprintf(TmpStr, "{\n   int i = get_global_id(0);\n   if(i >= count)\n      return;\n");
       strcat(KrnSrc, TmpStr);
 
       for(i=0;i<NmbDat;i++)
       {
          dat = &gml.dat[ DatTab[i] ];
-         sprintf( TmpStr, "%s %s;\n", TypStr[ dat->MshTyp ], dat->NamStr);
+         cpt = SizTab[ RefDat->MshTyp ][ dat->MshTyp ];
+
+         if(cpt > 1)
+            sprintf( TmpStr, "   %s %s%s[%d];\n", TypStr[ dat->MshTyp ], RefDat->NamStr, dat->NamStr, cpt);
+         else
+            sprintf( TmpStr, "   %s %s;\n", TypStr[ dat->MshTyp ], dat->NamStr);
+
          strcat(KrnSrc, TmpStr);
       }
 
@@ -817,12 +824,27 @@ double GmlLaunchKernel(int idx, int TruSiz, ...)
             continue;
 
          dat = &gml.dat[ DatTab[i] ];
-         sprintf( TmpStr, "%s = %sTab[i];\n", dat->NamStr, dat->NamStr);
-         strcat(KrnSrc, TmpStr);
+         cpt = SizTab[ RefDat->MshTyp ][ dat->MshTyp ];
+
+         if(!cpt)
+            continue;
+         else if(cpt == 1)
+         {
+            sprintf( TmpStr, "   %s = %sTab[i];\n", dat->NamStr, dat->NamStr);
+            strcat(KrnSrc, TmpStr);
+         }
+         else
+         {
+            for(j=0;j<cpt;j++)
+            {
+               sprintf( TmpStr, "   %s%s[%d] = %sTab[ %s.s%d ];\n",
+                        RefDat->NamStr, dat->NamStr, j, dat->NamStr, RefDat->NamStr, j);
+               strcat(KrnSrc, TmpStr);
+            }
+         }
       }
 
-      //strcat(KrnSrc, krn->KrnSrc);
-      strcat(KrnSrc, "mid = (crd[ edg.s0 ] + crd[ edg.s1 ]) * (float4){.5,.5,.5,0};\n");
+      strcat(KrnSrc, krn->KrnSrc);
 
       for(i=0;i<NmbDat;i++)
       {
@@ -830,7 +852,7 @@ double GmlLaunchKernel(int idx, int TruSiz, ...)
             continue;
 
          dat = &gml.dat[ DatTab[i] ];
-         sprintf( TmpStr, "%sTab[i] = %s;\n",dat->NamStr, dat->NamStr);
+         sprintf( TmpStr, "   %sTab[i] = %s;\n",dat->NamStr, dat->NamStr);
          strcat(KrnSrc, TmpStr);
       }
 
@@ -838,7 +860,7 @@ double GmlLaunchKernel(int idx, int TruSiz, ...)
       strcat(KrnSrc, TmpStr);
 
       puts(KrnSrc);
-
+      krn->KrnSrc = KrnSrc;
       GmlCompileKernel(idx, NULL, NULL);
    }
 
