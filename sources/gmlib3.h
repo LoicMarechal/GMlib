@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCl                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 28 2018                                           */
+/*   Last modification: jul 10 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -44,7 +44,7 @@ enum access_mode {GmlInternal, GmlRead, GmlWrite, GmlReadWrite};
 enum reduction_opperations {GmlMin, GmlSum, GmlMax};
 enum meshing_type {
    GmlRawData, GmlVertices, GmlEdges, GmlTriangles,
-   GmlQuadrilaterals, GmlTetrahedra, GmlHexahedra, GmlEnd};
+   GmlQuadrilaterals, GmlTetrahedra, GmlHexahedra, GmlEnd };
 
 
 /*----------------------------------------------------------------------------*/
@@ -66,7 +66,7 @@ typedef struct
 GmlParSct *GmlInit               (int);
 void       GmlStop               ();
 void       GmlListGPU            ();
-int        GmlNewData            (int, char *, int, int, int);
+int        GmlNewData            (int, char *, int, ...);
 int        GmlFreeData           (int);
 int        GmlSetDataLine        (int, int, void *);
 int        GmlGetDataLine        (int, int, void *);
