@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCl                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 28 2018                                           */
+/*   Last modification: jul 10 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -49,6 +49,7 @@ typedef struct
    size_t   siz;
    cl_mem   GpuMem;
    void     *CpuMem;
+   char     *TypStr;
 }GmlDatSct;
 
 typedef struct
@@ -70,7 +71,8 @@ typedef struct
    int            NmbKrn, CurDev, RedKrnIdx[10], ParIdx;
    int            NmbVer[ GmlHexahedra + 1 ];
    cl_uint        NmbDev;
-   size_t         MemSiz, CurLocSiz, MovSiz, MshSiz[ GmlHexahedra+1 ];
+   size_t         MemSiz, CurLocSiz, MovSiz;
+   size_t         MshSiz[ GmlHexahedra + 1 ];
    GmlDatSct      dat[ GmlMaxDat + 1 ];
    GmlBalSct      bal[ GmlMaxBal + 1 ];
    GmlKrnSct      krn[ GmlMaxKrn + 1 ];
@@ -96,6 +98,12 @@ GmlSct gml;
 
 
 /*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+
+char *MshStr[7]  = { "", "float4", "int2", "int4", "int4", "int4", "int8"};
+
+
+/*----------------------------------------------------------------------------*/
 /* Init device, context and queue                                             */
 /*----------------------------------------------------------------------------*/
 
@@ -111,22 +119,22 @@ GmlParSct *GmlInit(int mod)
    gml.CurDev = mod;
 
    // Set the mesh type size table
-   gml.MshSiz[ GmlRawData ]        = 1;
-   gml.MshSiz[ GmlVertices ]       = sizeof(cl_float4);
-   gml.MshSiz[ GmlEdges ]          = sizeof(cl_int2);
-   gml.MshSiz[ GmlTriangles ]      = sizeof(cl_int4);
-   gml.MshSiz[ GmlQuadrilaterals ] = sizeof(cl_int4);
-   gml.MshSiz[ GmlTetrahedra ]     = sizeof(cl_int4);
-   gml.MshSiz[ GmlHexahedra ]      = sizeof(cl_int8);
+   gml.MshSiz[ GmlRawData        ]  = 1;
+   gml.MshSiz[ GmlVertices       ]  = sizeof(cl_float4);
+   gml.MshSiz[ GmlEdges          ]  = sizeof(cl_int2);
+   gml.MshSiz[ GmlTriangles      ]  = sizeof(cl_int4);
+   gml.MshSiz[ GmlQuadrilaterals ]  = sizeof(cl_int4);
+   gml.MshSiz[ GmlTetrahedra     ]  = sizeof(cl_int4);
+   gml.MshSiz[ GmlHexahedra      ]  = sizeof(cl_int8);
 
    // Set the mesh type number of vertices table
-   gml.NmbVer[ GmlRawData ]        = 0;
-   gml.NmbVer[ GmlVertices ]       = 0;
-   gml.NmbVer[ GmlEdges ]          = 2;
-   gml.NmbVer[ GmlTriangles ]      = 3;
-   gml.NmbVer[ GmlQuadrilaterals ] = 4;
-   gml.NmbVer[ GmlTetrahedra ]     = 4;
-   gml.NmbVer[ GmlHexahedra ]      = 8;
+   gml.NmbVer[ GmlRawData        ]  = 0;
+   gml.NmbVer[ GmlVertices       ]  = 0;
+   gml.NmbVer[ GmlEdges          ]  = 2;
+   gml.NmbVer[ GmlTriangles      ]  = 3;
+   gml.NmbVer[ GmlQuadrilaterals ]  = 4;
+   gml.NmbVer[ GmlTetrahedra     ]  = 4;
+   gml.NmbVer[ GmlHexahedra      ]  = 8;
 
    // Init the GPU
    if(clGetPlatformIDs(10, platforms, &num_platforms) != CL_SUCCESS)
@@ -164,7 +172,7 @@ GmlParSct *GmlInit(int mod)
       return(NULL);
 
    // Allocate and return a public user customizable parameter structure
-   if(!(gml.ParIdx = GmlNewData(GmlRawData, NULL, 1, 0, sizeof(GmlParSct))))
+   if(!(gml.ParIdx = GmlNewData(GmlRawData, NULL, 1, 0, "GmlParSct", sizeof(GmlParSct))))
       return(NULL);
 
    return(gml.dat[ gml.ParIdx ].CpuMem);
@@ -230,10 +238,13 @@ void GmlListGPU()
 /* Allocate an OpenCL buffer plus 10% more for resizing                       */
 /*----------------------------------------------------------------------------*/
 
-int GmlNewData(int MshTyp, char *NamStr, int NmbLin, int RefTyp, int LinSiz)
+int GmlNewData(int MshTyp, char *NamStr, int NmbLin, ...)
 {
-   int idx;
+   int idx, RefTyp;
+   char *RawStr;
    GmlDatSct *dat;
+   size_t LinSiz;
+   va_list VarArg;
 
    if( (MshTyp < GmlRawData) || (MshTyp > GmlHexahedra) || (NmbLin <= 0) )
       return(0);
@@ -253,16 +264,27 @@ int GmlNewData(int MshTyp, char *NamStr, int NmbLin, int RefTyp, int LinSiz)
 
    if(MshTyp == GmlRawData)
    {
-      if( (RefTyp < GmlRawData) || (RefTyp > GmlHexahedra) || (LinSiz <= 0) )
+      va_start(VarArg, NmbLin);
+      RefTyp = va_arg(VarArg, int);
+      RawStr = va_arg(VarArg, char *);
+      LinSiz = va_arg(VarArg, size_t);
+      va_end(VarArg);
+
+      if( (RefTyp < GmlRawData) || (RefTyp > GmlHexahedra)
+      ||  !LinSiz || !RawStr )
+      {
          return(0);
+      }
 
       dat->RefTyp = RefTyp;
       dat->LinSiz = LinSiz;
+      dat->TypStr = RawStr;
    }
    else
    {
       dat->RefTyp = MshTyp;
       dat->LinSiz = gml.MshSiz[ MshTyp ];
+      dat->TypStr = MshStr[ MshTyp ];
    }
 
    dat->siz = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
@@ -550,8 +572,8 @@ int GmlNewBall(int typ1, int typ2)
    else
       bal->SecPadSiz = 32;
 
-   bal->PriDegIdx = GmlNewData(GmlRawData, NULL, bal->NmbPri, GmlVertices, sizeof(cl_char));
-   bal->PriVecIdx = GmlNewData(GmlRawData, NULL, bal->NmbPri, GmlVertices, bal->VecSiz * sizeof(cl_int));
+   bal->PriDegIdx = GmlNewData(GmlRawData, NULL, bal->NmbPri, GmlVertices, "char", sizeof(cl_char));
+   bal->PriVecIdx = GmlNewData(GmlRawData, NULL, bal->NmbPri, GmlVertices, "int", bal->VecSiz * sizeof(cl_int));
    PriDeg = gml.dat[ bal->PriDegIdx ].CpuMem;
    PriVec = gml.dat[ bal->PriVecIdx ].CpuMem;
 
@@ -572,8 +594,8 @@ int GmlNewBall(int typ1, int typ2)
       }
 
    // Allocate both tables
-   bal->PriExtIdx = GmlNewData(GmlRawData, NULL, bal->NmbExtPri, 0, 3 * sizeof(cl_int));
-   bal->ExtDatIdx = GmlNewData(GmlRawData, NULL, bal->NmbExtDat, 0,     sizeof(cl_int));
+   bal->PriExtIdx = GmlNewData(GmlRawData, NULL, bal->NmbExtPri, 0, "int", 3 * sizeof(cl_int));
+   bal->ExtDatIdx = GmlNewData(GmlRawData, NULL, bal->NmbExtDat, 0, "int",     sizeof(cl_int));
    PriExt = gml.dat[ bal->PriExtIdx ].CpuMem;
    ExtDat = gml.dat[ bal->ExtDatIdx ].CpuMem;
    bal->NmbExtPri = bal->NmbExtDat = 0;
@@ -752,7 +774,6 @@ double GmlLaunchKernel(int idx, int DatIdx, ...)
    GmlKrnSct *krn = &gml.krn[ idx ];
    cl_event event;
    cl_ulong start, end;
-   char *TypStr[ GmlEnd ] = {"float4", "float4", "int2", "int4", "int4", "int4", "int8"};
    char KrnSrc[10000], TmpStr[100];
    int SizTab[7][7] = { {0,0,0,0,0,0,0},
       {0,1,16,8,4,32,8}, {0,2,1,2,2,8,4},{0,3,3,1,0,2,0},
@@ -796,7 +817,7 @@ double GmlLaunchKernel(int idx, int DatIdx, ...)
       for(i=0;i<NmbDat;i++)
       {
          dat = &gml.dat[ DatTab[i] ];
-         sprintf( TmpStr, "__global %s *%sTab, ", TypStr[ dat->MshTyp ], dat->NamStr);
+         sprintf( TmpStr, "__global %s *%sTab, ", dat->TypStr, dat->NamStr);
          strcat(KrnSrc, TmpStr);
       }
 
@@ -811,9 +832,9 @@ double GmlLaunchKernel(int idx, int DatIdx, ...)
          cpt = SizTab[ RefDat->MshTyp ][ dat->MshTyp ];
 
          if(cpt > 1)
-            sprintf( TmpStr, "   %s %s%s[%d];\n", TypStr[ dat->MshTyp ], RefDat->NamStr, dat->NamStr, cpt);
+            sprintf( TmpStr, "   %s %s%s[%d];\n", dat->TypStr, RefDat->NamStr, dat->NamStr, cpt);
          else
-            sprintf( TmpStr, "   %s %s;\n", TypStr[ dat->MshTyp ], dat->NamStr);
+            sprintf( TmpStr, "   %s %s;\n", dat->TypStr, dat->NamStr);
 
          strcat(KrnSrc, TmpStr);
       }
@@ -1165,7 +1186,7 @@ double GmlReduceVector(int DatIdx, int opp, double *res)
 
    // Allocate an output vector the size of the input vector
    if(!dat->RedVecIdx)
-       if(!(dat->RedVecIdx = GmlNewData(GmlRawData, NULL, 1, 0, dat->siz)))
+       if(!(dat->RedVecIdx = GmlNewData(GmlRawData, NULL, 1, 0, "float", dat->siz)))
          return(-2);
          
    // Launch the right reduction kernel according to the requested opperation
