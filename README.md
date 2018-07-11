@@ -1,4 +1,4 @@
-# GMlib version 2.0
+# GMlib version 3.0
 Porting meshing tools and solvers that deal with unstructured meshes on GPUs
 
 # Overview
@@ -45,49 +45,30 @@ GmlInit(1);
 CalMid = GmlNewKernel(TrianglesBasicLoop, "ComputeCenters");
 
 // Create a vertices data type
-VerIdx = GmlNewData(GmlVertices, NmbVer, 0, GmlInput);
+VerIdx = GmlNewData(GmlVertices, "Crd", NmbVer);
 
 // Fill the datatype with your mesh coordinates
-for(i=0;i<NmbVer;i++)
-   GmlSetVertex(VerIdx, i, VerTab[i][0], VerTab[i][1], VerTab[i][2]);
-
-// Transfer the data to the GPU
-GmlUploadData(VerIdx);
+GmlSetDataBlock(VerIdx, VerTab[1], VerTab[ NmbVer ]);
 
 // Do the same with the elements
-TriIdx = GmlNewData(GmlTriangles, NmbTri, 0, GmlInput);
-for(i=0;i<NmbTri;i++)
-   GmlSetTriangle(TriIdx, i, TriTab[i][0], TriTab[i][1], TriTab[i][2]);
-GmlUploadData(TriIdx);
+TriIdx = GmlNewData(GmlTriangles, "Tri", NmbTri);
+GmlSetDataBlock(TriIdx, TriTab[1], TriTab[ NmbTri ]);
 
 // Create a raw datatype that will receive the elements' centers
-MidIdx = GmlNewData(GmlRawData, NmbTri, sizeof(cl_float4), GmlOutput);
+MidIdx = GmlNewData(GmlRawData, "Mid", NmbTri, GmlTriangles, "float4", sizeof(cl_float4));
 
 // Launch the kernel on the GPU passing three arguments to the OpenCL procedure:
 // the elements connectivity, the barycenter table and the vertices coordinates
-GmlLaunchKernel(CalMid, NmbTri, 3, TriIdx, MidIdx, VerIdx);
+GmlLaunchKernel(CalMid, TriIdx, GmlRead, TriIdx, GmlWrite, MidIdx, GmlRead, VerIdx, GmlEnd);
 
 // Get the results back from the GPU and print it
-GmlDownloadData(MidIdx);
+GmlGetDataBlock(MidIdx, MidTab[1], MidTab[ NmbTri ]);
 
 for(i=0;i<NmbTri;i++)
-{
-   GmlGetRawData(MidIdx, i, MidTab);
    printf("triangle %d center = %g %g %g\n", i, MidTab[0], MidTab[1], MidTab[2]);
-}
 ```
 
 Then the "OpenCL" part executed by the GPU device:
 ```C++
-__kernel void ComputeCenters(__global int4 *tri, __global float4 *mid, __global float4 *crd)
-{
-   int i = get_global_id(0);
-   int4 idx;
-
-   // Get the three triangle vertex indices stored in one integer vector
-   idx = tri[i];
-
-   // Get three vertices coordinates, compute and store the triangle's middle
-   mid[i] = (crd[ idx.s0 ] + crd[ idx.s1 ] + crd[ idx.s2 ]) * (float4){1/3,1/3,1/3,0};
-}
+Mid = (TriCrd[0] + TriCrd[1] + TriCrd[2]) * (float4){1/3,1/3,1/3,0};
 ```
