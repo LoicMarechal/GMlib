@@ -42,7 +42,7 @@ First the "C" part executed by the host CPU:
 GmlInit(1);
 
 // Compile the OpenCL source code
-CalMid = GmlNewKernel(TrianglesBasicLoop, "ComputeCenters");
+CalMid = GmlNewKernel(TrianglesBasicLoop);
 
 // Create a vertices data type
 VerIdx = GmlNewData(GmlVertices, "Crd", NmbVer);
@@ -65,7 +65,7 @@ GmlLaunchKernel(CalMid, TriIdx, GmlRead, TriIdx, GmlWrite, MidIdx, GmlRead, VerI
 GmlGetDataBlock(MidIdx, MidTab[1], MidTab[ NmbTri ]);
 
 for(i=0;i<NmbTri;i++)
-   printf("triangle %d center = %g %g %g\n", i, MidTab[0], MidTab[1], MidTab[2]);
+   printf("triangle %d center = %g %g %g\n", i, MidTab[i][0], MidTab[i][1], MidTab[i][2]);
 ```
 
 Then the "OpenCL" part executed by the GPU device:
