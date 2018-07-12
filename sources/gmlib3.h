@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCl                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jul 10 2018                                           */
+/*   Last modification: jul 12 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -75,7 +75,7 @@ int        GmlGetDataBlock       (int, void *, void *);
 int        GmlNewBall            (int, int);
 int        GmlFreeBall           (int);
 int        GmlUploadBall         (int);
-int        GmlNewKernel          (char *, char *);
+int        GmlNewKernel          (char *);
 double     GmlLaunchKernel       (int, int ,...);
 double     GmlLaunchBallKernel   (int, int, int ,int, ...);
 double     GmlReduceVector       (int, int, double *);

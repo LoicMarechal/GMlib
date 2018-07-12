@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCl                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jul 10 2018                                           */
+/*   Last modification: jul 12 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -61,7 +61,7 @@ typedef struct
 typedef struct
 {
    int         idx, siz, DatTab[ GmlMaxDat ];
-   char        *KrnSrc, *PrcNam;
+   char        *KrnSrc, PrcNam[10];
    cl_kernel   kernel;
    cl_program  program; 
 }GmlKrnSct;
@@ -162,7 +162,7 @@ GmlParSct *GmlInit(int mod)
    }
 
    // Load all internal reduction kernels
-   if(!(gml.RedKrnIdx[ GmlMin ] = GmlNewKernel(reduce, "reduce_min")))
+/*   if(!(gml.RedKrnIdx[ GmlMin ] = GmlNewKernel(reduce, "reduce_min")))
       return(NULL);
 
    if(!(gml.RedKrnIdx[ GmlSum ] = GmlNewKernel(reduce, "reduce_sum")))
@@ -170,7 +170,7 @@ GmlParSct *GmlInit(int mod)
 
    if(!(gml.RedKrnIdx[ GmlMax ] = GmlNewKernel(reduce, "reduce_max")))
       return(NULL);
-
+*/
    // Allocate and return a public user customizable parameter structure
    if(!(gml.ParIdx = GmlNewData(GmlRawData, NULL, 1, 0, "GmlParSct", sizeof(GmlParSct))))
       return(NULL);
@@ -694,7 +694,7 @@ int GmlUploadBall(int idx)
 /* Read and compile an OpenCL source code                                     */
 /*----------------------------------------------------------------------------*/
 
-int GmlNewKernel(char *KernelSource, char *PrcNam)
+int GmlNewKernel(char *KernelSource)
 {
    int idx = ++gml.NmbKrn;
    GmlKrnSct *krn = &gml.krn[ idx ];
@@ -704,7 +704,7 @@ int GmlNewKernel(char *KernelSource, char *PrcNam)
 
    krn->kernel = NULL;
    krn->KrnSrc = KernelSource;
-   krn->PrcNam = PrcNam;
+   sprintf(krn->PrcNam, "kernel%d", idx);
 
    return(idx);
 }

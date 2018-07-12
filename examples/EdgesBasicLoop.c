@@ -9,7 +9,7 @@
 /*   Description:       Basic loop on elements                                */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     dec 03 2012                                           */
-/*   Last modification: jun 27 2018                                           */
+/*   Last modification: jul 12 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -33,10 +33,10 @@
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int i, NmbVer, NmbEdg, ver=0, dim=0, ref, (*EdgTab)[2]=NULL;
+   int i, NmbVer, NmbEdg, ver=0, dim=0, ref, (*EdgTab)[2] = NULL;
    int VerIdx, EdgIdx, MidIdx, CalMid, GpuIdx=0;
    int64_t InpMsh;
-   float (*VerTab)[3]=NULL, (*MidTab)[4], dummy, chk=0.;
+   float (*VerTab)[4] = NULL, (*MidTab)[4], dummy, chk=0.;
    double GpuTim;
 
 
@@ -67,7 +67,7 @@ int main(int ArgCnt, char **ArgVec)
 
    // Read the number of vertices and elements and allocate the memory
    if( !(NmbVer = GmfStatKwd(InpMsh, GmfVertices)) \
-   || !(VerTab = malloc((NmbVer+1) * 3 * sizeof(float))) )
+   || !(VerTab = malloc((NmbVer+1) * 4 * sizeof(float))) )
    {
       return(1);
    }
@@ -104,7 +104,7 @@ int main(int ArgCnt, char **ArgVec)
    if(!GmlInit(GpuIdx))
       return(1);
 
-   if(!(CalMid = GmlNewKernel(EdgesBasicLoop, "EdgesBasic")))
+   if(!(CalMid = GmlNewKernel(EdgesBasicLoop)))
       return(1);
 
    // Create a vertices data type and transfer the data to the GPU
