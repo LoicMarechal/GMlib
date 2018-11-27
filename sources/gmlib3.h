@@ -45,6 +45,9 @@ enum reduction_opperations {GmlMin, GmlSum, GmlMax};
 enum meshing_type {
    GmlRawData, GmlVertices, GmlEdges, GmlTriangles,
    GmlQuadrilaterals, GmlTetrahedra, GmlHexahedra, GmlEnd };
+enum opencl_type {
+   GmlInt,   GmlInt2,   GmlInt4,   GmlInt8,   GmlInt16, GmlInt32,
+   GmlFloat, GmlFloat2, GmlFloat4, GmlFloat8, GmlFloat16 };
 
 
 /*----------------------------------------------------------------------------*/

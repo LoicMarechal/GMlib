@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 2.00                           */
+/*                         GPU Meshing Library 3.00                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       loop on elements with indirect writes to vertices     */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     dec 03 2012                                           */
-/*   Last modification: feb 04 2017                                           */
+/*   Last modification: jul 16 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -22,8 +22,9 @@
 #include <stdlib.h>
 #include <math.h>
 #include <libmeshb7.h>
-#include <gmlib2.h>
-#include "HexahedraDependenciesLoop.h"
+#include <gmlib3.h>
+#include "HexahedraDependenciesLoop1.h"
+#include "HexahedraDependenciesLoop2.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -34,10 +35,10 @@
 int main(int ArgCnt, char **ArgVec)
 {
    int iter, i, j, NmbVer, NmbHex, ver=0, dim=0, ref;
-   int (*HexTab)[8]=NULL, GpuIdx=0, VerIdx, HexIdx, CalPos;
-   int CalCrd1, CalCrd2, BalIdx, PosIdx, NmbItr=100;
+   int (*HexTab)[8] = NULL, GpuIdx=0, VerIdx, HexIdx, CalPos;
+   int CalCrd, BalIdx, PosIdx, NmbItr=100;
    int64_t InpMsh;
-   float (*VerTab)[3]=NULL, dummy, FltTab[8], chk=0.;
+   float (*VerTab)[4] = NULL, dummy, FltTab[8], chk=0.;
    double GpuTim, total=0;
 
 
@@ -87,9 +88,14 @@ int main(int ArgCnt, char **ArgVec)
    // Read the elements
    GmfGotoKwd(InpMsh, GmfHexahedra);
    for(i=1;i<=NmbHex;i++)
+   {
       GmfGetLin(  InpMsh, GmfHexahedra, \
                   &HexTab[i][0], &HexTab[i][1], &HexTab[i][2], &HexTab[i][3], \
                   &HexTab[i][4], &HexTab[i][5], &HexTab[i][6], &HexTab[i][7], &ref );
+
+      for(j=0;j<8;j++)
+         HexTab[i][j]--;
+   }
 
    // And close the mesh
    GmfCloseMesh(InpMsh);
@@ -103,42 +109,27 @@ int main(int ArgCnt, char **ArgVec)
    if(!GmlInit(GpuIdx))
       return(1);
 
-   if(!(CalPos = GmlNewKernel(HexahedraDependenciesLoop, "HexahedraScatter")))
+   if(!(CalPos = GmlNewKernel(HexahedraDependenciesLoop1)))
       return(1);
 
-   if(!(CalCrd1 = GmlNewKernel(HexahedraDependenciesLoop, "HexahedraGather1")))
-      return(1);
-
-   if(!(CalCrd2 = GmlNewKernel(HexahedraDependenciesLoop, "HexahedraGather2")))
+   if(!(CalCrd = GmlNewKernel(HexahedraDependenciesLoop2)))
       return(1);
 
    // Create a vertices data type and transfer the data to the GPU
-   if(!(VerIdx = GmlNewData(GmlVertices, NmbVer, 0, GmlInout)))
+   if(!(VerIdx = GmlNewData(GmlVertices, "crd", NmbVer)))
       return(1);
 
-   for(i=1;i<=NmbVer;i++)
-      GmlSetVertex(VerIdx, i-1, VerTab[i][0], VerTab[i][1], VerTab[i][2]);
-
-   GmlUploadData(VerIdx);
+   GmlSetDataBlock(VerIdx, VerTab[1], VerTab[ NmbVer ]);
 
    // Do the same with the elements
-   if(!(HexIdx = GmlNewData(GmlHexahedra, NmbHex, 0, GmlInput)))
+   if(!(HexIdx = GmlNewData(GmlHexahedra, "hex", NmbHex)))
       return(1);
 
-   for(i=1;i<=NmbHex;i++)
-      GmlSetHexahedron( HexIdx, i-1, \
-                        HexTab[i][0]-1, HexTab[i][1]-1, HexTab[i][2]-1, HexTab[i][3]-1, \
-                        HexTab[i][4]-1, HexTab[i][5]-1, HexTab[i][6]-1, HexTab[i][7]-1 );
-
-   GmlUploadData(HexIdx);
-
-   // Create a data type with the list of incident elements to each vertices
-   BalIdx = GmlNewBall(VerIdx, HexIdx);
-   GmlUploadBall(BalIdx);
+   GmlSetDataBlock(HexIdx, HexTab[1], HexTab[ NmbHex ]);
 
    // Create a raw datatype to store the elements scatter data.
    // It does not need to be tranfered to the GPU
-   if(!(PosIdx = GmlNewData(GmlRawData, NmbHex, 8*sizeof(cl_float4), GmlOutput)))
+   if(!(PosIdx = GmlNewData(GmlRawData, "pos", NmbHex, GmlHexahedra, 8, "float4", sizeof(cl_float4))))
       return(1);
 
    // Smooth the coordinates a 100 times
@@ -146,28 +137,27 @@ int main(int ArgCnt, char **ArgVec)
    {
       // SCATTER: Compute the new verties coordinates on the GPU
       // but store them in an element based local buffer
-      GpuTim = GmlLaunchKernel(CalPos, NmbHex, 3, HexIdx, PosIdx, VerIdx);
-    
+      GpuTim = GmlLaunchKernel(CalPos, HexIdx, GmlRead, HexIdx, GmlWrite, PosIdx, GmlRead, VerIdx, GmlEnd);
+
       if(GpuTim < 0)
          return(1);
-    
+
       total += GpuTim;
-    
+
       // GATHER: compute the average local element coordinates for each vertices
-      GpuTim = GmlLaunchBallKernel(CalCrd1, CalCrd2, BalIdx, 2, PosIdx, VerIdx);
-    
+      GpuTim = GmlLaunchKernel(CalCrd, VerIdx, GmlRead, PosIdx, GmlWrite, VerIdx, GmlEnd);
+
       if(GpuTim < 0)
          return(1);
-    
+
       total += GpuTim;
    }
 
    // Get back the results and print some stats
-   GmlDownloadData(VerIdx);
+   GmlGetDataBlock(VerIdx, VerTab[1], VerTab[ NmbVer ]);
 
    for(i=1;i<=NmbVer;i++)
    {
-      GmlGetVertex(VerIdx, i-1, &VerTab[i][0], &VerTab[i][1], &VerTab[i][2]);
       chk += sqrt(VerTab[i][0] * VerTab[i][0] \
                +  VerTab[i][1] * VerTab[i][1] \
                +  VerTab[i][2] * VerTab[i][2]);

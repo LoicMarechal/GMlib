@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 2.00                           */
+/*                         GPU Meshing Library 3.00                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Basic loop on elements                                */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     dec 03 2012                                           */
-/*   Last modification: feb 04 2017                                           */
+/*   Last modification: jul 16 2018                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <libmeshb7.h>
-#include <gmlib2.h>
+#include <gmlib3.h>
 #include "HexahedraBasicLoop.h"
 
 
@@ -33,10 +33,10 @@
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int i, NmbVer, NmbHex, ver=0, dim=0, ref, (*HexTab)[8]=NULL;
+   int i, j, NmbVer, NmbHex, ver=0, dim=0, ref, (*HexTab)[8] = NULL;
    int VerIdx, HexIdx, MidIdx, CalMid, GpuIdx=0;
    int64_t InpMsh;
-   float (*VerTab)[3]=NULL, (*MidTab)[4], dummy, chk=0.;
+   float (*VerTab)[4] = NULL, (*MidTab)[4], dummy, chk=0.;
    double GpuTim;
 
 
@@ -67,7 +67,7 @@ int main(int ArgCnt, char **ArgVec)
 
    // Read the number of vertices and elements and allocate the memory
    if( !(NmbVer = GmfStatKwd(InpMsh, GmfVertices)) \
-   || !(VerTab = malloc((NmbVer+1) * 3 * sizeof(float))) )
+   || !(VerTab = malloc((NmbVer+1) * 4 * sizeof(float))) )
    {
       return(1);
    }
@@ -86,9 +86,14 @@ int main(int ArgCnt, char **ArgVec)
    // Read the elements
    GmfGotoKwd(InpMsh, GmfHexahedra);
    for(i=1;i<=NmbHex;i++)
+   {
       GmfGetLin(  InpMsh, GmfHexahedra, \
                   &HexTab[i][0], &HexTab[i][1], &HexTab[i][2], &HexTab[i][3], \
                   &HexTab[i][4], &HexTab[i][5], &HexTab[i][6], &HexTab[i][7], &ref );
+
+      for(j=0;j<8;j++)
+         HexTab[i][j]--;
+   }
 
    // And close the mesh
    GmfCloseMesh(InpMsh);
@@ -102,49 +107,40 @@ int main(int ArgCnt, char **ArgVec)
    if(!GmlInit(GpuIdx))
       return(1);
 
-   if(!(CalMid = GmlNewKernel(HexahedraBasicLoop, "HexahedraBasic")))
+   if(!(CalMid = GmlNewKernel(HexahedraBasicLoop)))
       return(1);
 
    // Create a vertices data type and transfer the data to the GPU
-   if(!(VerIdx = GmlNewData(GmlVertices, NmbVer, 0, GmlInput)))
+   if(!(VerIdx = GmlNewData(GmlVertices, "crd", NmbVer)))
       return(1);
 
-   for(i=1;i<=NmbVer;i++)
-      GmlSetVertex(VerIdx, i-1, VerTab[i][0], VerTab[i][1], VerTab[i][2]);
-
-   GmlUploadData(VerIdx);
+   GmlSetDataBlock(VerIdx, VerTab[1], VerTab[ NmbVer ]);
 
    // Do the same with the elements
-   if(!(HexIdx = GmlNewData(GmlHexahedra, NmbHex, 0, GmlInput)))
+   if(!(HexIdx = GmlNewData(GmlHexahedra, "hex", NmbHex)))
       return(1);
 
-   for(i=1;i<=NmbHex;i++)
-      GmlSetHexahedron( HexIdx, i-1, \
-                        HexTab[i][0]-1, HexTab[i][1]-1, HexTab[i][2]-1, HexTab[i][3]-1, \
-                        HexTab[i][4]-1, HexTab[i][5]-1, HexTab[i][6]-1, HexTab[i][7]-1 );
-
-   GmlUploadData(HexIdx);
+   GmlSetDataBlock(HexIdx, HexTab[1], HexTab[ NmbHex ]);
 
    // Create a raw datatype to store the element middles.
    // It does not need to be tranfered to the GPU
-   if(!(MidIdx = GmlNewData(GmlRawData, NmbHex, sizeof(cl_float4), GmlOutput)))
+   if(!(MidIdx = GmlNewData(GmlRawData, "mid", NmbHex, GmlHexahedra, 1, "float4", sizeof(cl_float4))))
       return(1);
 
-   if(!(MidTab = malloc((NmbHex+1)*4*sizeof(float))))
+   if(!(MidTab = malloc( (NmbHex+1) * 4 * sizeof(float))))
       return(1);
 
    // Launch the kernel on the GPU
-   GpuTim = GmlLaunchKernel(CalMid, NmbHex, 3, HexIdx, MidIdx, VerIdx);
+   GpuTim = GmlLaunchKernel(CalMid, HexIdx, GmlRead, HexIdx, GmlWrite, MidIdx, GmlRead, VerIdx, GmlEnd);
 
    if(GpuTim < 0)
       return(1);
 
    // Get the results back and print some stats
-   GmlDownloadData(MidIdx);
+   GmlGetDataBlock(MidIdx, MidTab[1], MidTab[ NmbHex ]);
 
    for(i=1;i<=NmbHex;i++)
    {
-      GmlGetRawData(MidIdx, i-1, MidTab[i]);
       chk += sqrt(MidTab[i][0] * MidTab[i][0] \
                +  MidTab[i][1] * MidTab[i][1] \
                +  MidTab[i][2] * MidTab[i][2]);
