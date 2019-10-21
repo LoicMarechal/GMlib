@@ -6,7 +6,7 @@
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*   Description:       Easy mesh programing with OpenCl                      */
+/*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
 /*   Last modification: jul 12 2018                                           */
@@ -18,12 +18,12 @@
 /* Includes                                                                   */
 /*----------------------------------------------------------------------------*/
 
-#include <stdio.h> 
-#include <stdlib.h> 
-#include <string.h> 
-#include <unistd.h> 
-#include <math.h> 
-#include <limits.h> 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <math.h>
+#include <limits.h>
 #include <stdarg.h>
 #include "gmlib3.h"
 #include "reduce.h"
@@ -104,7 +104,7 @@ GmlSct gml;
 
 char *MshStr[7]   = { "", "float4", "int2", "int4", "int4", "int4", "int8"};
 
-char *TypStr[11]   = {  "int", "int2", "int4", "int8", "int16", "long16",
+char *TypStr[11]  = {   "int", "int2", "int4", "int8", "int16", "long16",
                         "float", "float2", "float4", "float8", "float16" };
 
 int  EleDeg[7]    = {0,0,2,3,4,4,8};

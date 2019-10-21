@@ -6,7 +6,7 @@
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*   Description:       Easy mesh programing with OpenCl                      */
+/*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
 /*   Last modification: jul 12 2018                                           */
