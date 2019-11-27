@@ -9,7 +9,7 @@
 /*   Description:       Basic loop on tetrahedra                              */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     nov 21 2019                                           */
-/*   Last modification: nov 22 2019                                           */
+/*   Last modification: nov 27 2019                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -23,11 +23,18 @@
 #include <math.h>
 #include "libmeshb7.h"
 #include "gmlib3.h"
+
+char *Arguments = "\
+   typedef struct {\n\
+      int   wei;\n\
+      float MinQal, rlx;\n\
+   }GmlParSct;\n";
+
 char *TetrahedraBasicLoop = "\
    float4 left, right;\n\
    left  = Sol[0][0] + Sol[1][0] + Sol[2][0] + Sol[3][0];\n\
    right = Sol[0][1] + Sol[1][1] + Sol[2][1] + Sol[3][1];\n\
-   Mid   = (Ver[0] + Ver[1] + Ver[2] + Ver[3]) * (left + right);\n";
+   Mid   = (Ver[0] + Ver[1] + Ver[2] + Ver[3]) * (left + right) * (float4)(.25, .25, .25, 0.);\n";
 
 
 /*----------------------------------------------------------------------------*/
@@ -109,17 +116,17 @@ int main(int ArgCnt, char **ArgVec)
    if(!(VerIdx = GmlNewMeshData(GmlVertices, NmbVer)))
       return(1);
 
-   //for(i=1;i<=NmbVer;i++)
-      //GmlSetDataLine(VerIdx, i-1, VerTab[i][0], VerTab[i][1], VerTab[i][2], 0);
+   for(i=1;i<=NmbVer;i++)
+      GmlSetDataLine(VerIdx, i-1, VerTab[i][0], VerTab[i][1], VerTab[i][2], 0);
 
    // Do the same with the elements
    if(!(TetIdx = GmlNewMeshData(GmlTetrahedra, NmbTet)))
       return(1);
 
-   /*for(i=1;i<=NmbTet;i++)
+   for(i=1;i<=NmbTet;i++)
       GmlSetDataLine(TetIdx, i-1,
                      TetTab[i][0]-1, TetTab[i][1]-1,
-                     TetTab[i][2]-1, TetTab[i][3]-1, 0);*/
+                     TetTab[i][2]-1, TetTab[i][3]-1, 0);
 
    // Create a raw datatype to store some value at vertices.
    if(!(SolIdx = GmlNewSolutionData(GmlVertices, 2, GmlFlt4, "Sol")))
@@ -134,7 +141,7 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    CalMid = GmlCompileKernel( TetrahedraBasicLoop, "TetrahedraBasic",
-                              GmlTetrahedra, 4,
+                              Arguments, GmlTetrahedra, 4,
                               TetIdx, GmlReadMode,  NULL,
                               VerIdx, GmlReadMode,  NULL,
                               SolIdx, GmlReadMode,  NULL,

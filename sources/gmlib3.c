@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: nov 22 2019                                           */
+/*   Last modification: nov 27 2019                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -18,12 +18,12 @@
 /* Includes                                                                   */
 /*----------------------------------------------------------------------------*/
 
-#include <stdio.h> 
-#include <stdlib.h> 
-#include <string.h> 
-#include <unistd.h> 
-#include <math.h> 
-#include <limits.h> 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <math.h>
+#include <limits.h>
 #include <stdarg.h>
 #include "gmlib3.h"
 #include "reduce.h"
@@ -92,6 +92,7 @@ static int  GmlNewBall              (int, int);
 static int  GmlFreeBall             (int);
 static int  GmlUploadBall           (int);
 static int  GmlNewKernel            (char *, char *);
+static void WriteUserTypedef        (char *, char *);
 static void WriteProcedureHeader    (char *, char *, int, int, int *);
 static void WriteKernelVariables    (char *, int, int, int *);
 static void WriteKernelMemoryReads  (char *, int, int, int *, int *);
@@ -130,10 +131,10 @@ int  TypSiz[10] = {
    sizeof(cl_float16) };
 
 int MshDatTyp[ GmlMaxTyp ] = {
-   0, 0, 0, GmlFlt4, GmlInt2, GmlInt4, GmlInt4, GmlInt4, GmlInt8 };
+   0, 0, 0, GmlFlt4, GmlInt2, GmlInt4, GmlInt4, GmlInt4, GmlInt8, GmlInt8, GmlInt8 };
 
-int MshDatVecSiz[ GmlMaxTyp ] = {0, 0, 0, 4, 2, 4, 4, 4, 8};
-int MshDatNmbCol[ GmlMaxTyp ] = {0, 0, 0, 1, 1, 1, 1, 1, 1 };
+int MshDatVecSiz[ GmlMaxTyp ] = {0, 0, 0, 4, 2, 4, 4, 4, 8, 8, 8};
+int MshDatNmbCol[ GmlMaxTyp ] = {0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1};
 int SizMat[8][8] = {
    {0,16,8,4,32,16,16,8},
    {2,0,2,2,8,8,8,4},
@@ -495,7 +496,8 @@ int GmlSetDataLine(int idx, int lin, ...)
 {
    GmlDatSct *dat = &gml.dat[ idx ];
    char     *adr = (void *)dat->CpuMem;
-   int      i, *tab, dim = 2;
+   int      i, *tab, dim = 3, siz, ref;
+   int      EleNmbInt[ GmlMaxTyp ] = {0, 0, 0, 1, 2, 3, 4, 4, 5, 6, 8};
    float    *crd;
    va_list  VarArg;
 
@@ -503,30 +505,37 @@ int GmlSetDataLine(int idx, int lin, ...)
 
    if(dat->MshTyp == GmlRawData)
    {
-      memcpy(&adr[ lin*dat->LinSiz ], va_arg(VarArg, void *), dat->LinSiz);
+      memcpy(&adr[ lin * dat->LinSiz ], va_arg(VarArg, void *), dat->LinSiz);
    }
    else if(dat->MshTyp == GmlLnkData)
    {
       tab = (int *)dat->CpuMem;
 
       for(i=0;i<dat->NmbCol;i++)
-         tab[ lin*dat->LinSiz + i ] = va_arg(VarArg, int);
+         tab[ lin * dat->NmbCol + i ] = va_arg(VarArg, int);
    }
    else if(dat->MshTyp == GmlVertices)
    {
       crd = (float *)dat->CpuMem;
 
-      for(i=0;i<dim;i++)
-         crd[ lin*dat->LinSiz + i ] = va_arg(VarArg, double);
+      if(dim == 2)
+         siz = 2;
+      else
+         siz = 4;
 
-      crd[ lin*dat->LinSiz + dim ] = va_arg(VarArg, int);
+      for(i=0;i<dim;i++)
+         crd[ lin * siz + i ] = va_arg(VarArg, double);
+
+      ref = va_arg(VarArg, int);
+      //crd[ lin*dat->LinSiz + dim ] = va_arg(VarArg, int);
    }
    else
    {
       tab = (int *)dat->CpuMem;
+      siz = TypVecSiz[ dat->MshTyp ];
 
-      for(i=0;i<dat->NmbCol;i++)
-         tab[ lin*dat->LinSiz + i ] = va_arg(VarArg, int);
+      for(i=0;i<EleNmbInt[ dat->MshTyp ];i++)
+         tab[ lin * siz + i ] = va_arg(VarArg, int);
    }
 
    va_end(VarArg);
@@ -812,9 +821,11 @@ static int GmlUploadBall(int idx)
 
 
 /*----------------------------------------------------------------------------*/
+/* Generate the kernel from user's source and data and compile it             */
 /*----------------------------------------------------------------------------*/
 
-int GmlCompileKernel(char *KrnSrc, char *PrcNam, int BasTyp, int NmbTyp, ...)
+int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
+                     int BasTyp, int NmbTyp, ...)
 {
    int KrnIdx, i, IdxTab[ GmlMaxDat ], TypTab[ GmlMaxDat ];
    int FlgTab[ GmlMaxDat ], LnkTab[ GmlMaxDat ];
@@ -836,6 +847,7 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, int BasTyp, int NmbTyp, ...)
 
    src[0] = 0;
 
+   //Parse arguments and add the required topological links
    for(i=0;i<NmbTyp;i++)
    {
       dat = &gml.dat[ IdxTab[i] ];
@@ -854,23 +866,38 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, int BasTyp, int NmbTyp, ...)
       }
    }
 
+   // Generate the kernel source code
+   WriteUserTypedef        (src, DefSrc);
    WriteProcedureHeader    (src, PrcNam, BasTyp, NmbTyp, IdxTab);
    WriteKernelVariables    (src, BasTyp, NmbTyp, IdxTab);
    WriteKernelMemoryReads  (src, BasTyp, NmbTyp, IdxTab, FlgTab);
    WriteUserKernel         (src, KrnSrc);
    WriteKernelMemoryWrites (src, BasTyp, NmbTyp, IdxTab, FlgTab);
 
-   puts(src);
-   exit(0);
-
    // And Compile it
    KrnIdx = GmlNewKernel   (src, PrcNam);
+
+   puts(src);
+   exit(0);
 
    return(KrnIdx);
 }
 
 
 /*----------------------------------------------------------------------------*/
+/* Add the user's parameters structure definition to the source code          */
+/*----------------------------------------------------------------------------*/
+
+static void WriteUserTypedef(char *src, char *TypSct)
+{
+   strcat(src, "// USER'S ARGUMENTS STRUCTURE\n");
+   strcat(src, TypSct);
+   strcat(src, "\n");
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Write the procedure name and typedef with all arguments types and names    */
 /*----------------------------------------------------------------------------*/
 
 static void WriteProcedureHeader(char *src, char *PrcNam,
@@ -904,6 +931,7 @@ static void WriteProcedureHeader(char *src, char *PrcNam,
 
 
 /*----------------------------------------------------------------------------*/
+/* Write definition of automatic local variables                              */
 /*----------------------------------------------------------------------------*/
 
 static void WriteKernelVariables(char *src, int BasTyp, int NmbTyp, int *IdxTab)
@@ -939,6 +967,7 @@ static void WriteKernelVariables(char *src, int BasTyp, int NmbTyp, int *IdxTab)
 
 
 /*----------------------------------------------------------------------------*/
+/* Write the memory reading from the global structure to the local variables  */
 /*----------------------------------------------------------------------------*/
 
 static void WriteKernelMemoryReads( char *src, int BasTyp, int NmbTyp,
@@ -1005,6 +1034,18 @@ static void WriteKernelMemoryReads( char *src, int BasTyp, int NmbTyp,
 
 
 /*----------------------------------------------------------------------------*/
+/* Pour the user's kernel code as it is                                       */
+/*----------------------------------------------------------------------------*/
+
+static void WriteUserKernel(char *src, char *KrnSrc)
+{
+   strcat(src, "// USER'S KERNEL CODE\n");
+   strcat                  (src, KrnSrc);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Write the final storage of requested variables from local to global struct */
 /*----------------------------------------------------------------------------*/
 
 static void WriteKernelMemoryWrites(char *src, int BasTyp, int NmbTyp,
@@ -1042,16 +1083,6 @@ static void WriteKernelMemoryWrites(char *src, int BasTyp, int NmbTyp,
    }
 
    strcat(src, "}\n");
-}
-
-
-/*----------------------------------------------------------------------------*/
-/*----------------------------------------------------------------------------*/
-
-static void WriteUserKernel(char *src, char *KrnSrc)
-{
-   strcat(src, "// USER'S KERNEL CODE\n");
-   strcat                  (src, KrnSrc);
 }
 
 
