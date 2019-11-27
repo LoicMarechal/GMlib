@@ -79,7 +79,7 @@ int         GmlNewLinkData       (int, int, int, char *);
 int         GmlFreeData          (int);
 int         GmlSetDataLine       (int, int, ...);
 int         GmlGetDataLine       (int, int, ...);
-int         GmlCompileKernel     (char *, char *, int, int, ...);
+int         GmlCompileKernel     (char *, char *, char *, int, int, ...);
 double      GmlLaunchKernel      (int, int);
 double      GmlReduceVector      (int, int, double *);
 size_t      GmlGetMemoryUsage    ();
