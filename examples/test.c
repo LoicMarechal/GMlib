@@ -35,10 +35,11 @@
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int i, NmbVer, NmbTet, ver=0, dim=0, ref, (*TetTab)[4]=NULL;
+   int i, j, NmbVer, NmbTet, ver=0, dim=0, *VerRef, (*TetTab)[5]=NULL;
    int VerIdx, TetIdx, BalIdx, MidIdx, SolIdx, CalMid, OptVer, GpuIdx=0;
    int64_t InpMsh;
-   float (*VerTab)[3]=NULL, (*MidTab)[4], dummy, chk=0.;
+   float (*VerTab)[3]=NULL, (*MidTab)[4], (*SolTab)[8], dummy, chk=0.;
+   float NulSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
    double GpuTim = 0., res;
 
 
@@ -59,8 +60,7 @@ int main(int ArgCnt, char **ArgVec)
    /*--------------*/
 
    // Open the mesh
-   if( !(InpMsh = GmfOpenMesh("tetrahedra.meshb", GmfRead, &ver, &dim))
-   || (ver != GmfFloat) || (dim != 3) )
+   if( !(InpMsh = GmfOpenMesh("tetrahedra.meshb", GmfRead, &ver, &dim)) || (dim != 3) )
    {
       puts("Could not open tetrahedra.meshb");
       puts("Please run the command in the same directory this mesh is located");
@@ -68,28 +68,31 @@ int main(int ArgCnt, char **ArgVec)
    }
 
    // Read the number of vertices and elements and allocate the memory
-   if( !(NmbVer = GmfStatKwd(InpMsh, GmfVertices)) \
-   || !(VerTab = malloc(NmbVer * 3 * sizeof(float))) )
+   if( !(NmbVer = GmfStatKwd(InpMsh, GmfVertices))
+   ||  !(VerTab = malloc( (NmbVer+1) * 3 * sizeof(float)))
+   ||  !(VerRef = malloc( (NmbVer+1)     * sizeof(int))) )
    {
       return(1);
    }
 
-   if( !(NmbTet = GmfStatKwd(InpMsh, GmfTetrahedra)) \
-   || !(TetTab = malloc(NmbTet * 4 * sizeof(int))) )
+   if( !(NmbTet = GmfStatKwd(InpMsh, GmfTetrahedra))
+   ||  !(TetTab = malloc( (NmbTet+1) * 5 * sizeof(int))) )
    {
       return(1);
    }
 
    // Read the vertices
-   GmfGotoKwd(InpMsh, GmfVertices);
-   for(i=0;i<NmbVer;i++)
-      GmfGetLin(InpMsh, GmfVertices, &VerTab[i][0], &VerTab[i][1], &VerTab[i][2], &ref);
+   GmfGetBlock(InpMsh, GmfVertices, 2, NmbVer, 0, NULL, NULL,
+               GmfFloatVec, 3, VerTab[1],  VerTab[ NmbVer ],
+               GmfInt,        &VerRef[1], &VerRef[ NmbVer ]);
 
    // Read the elements
-   GmfGotoKwd(InpMsh, GmfTetrahedra);
-   for(i=0;i<NmbTet;i++)
-      GmfGetLin(  InpMsh, GmfTetrahedra, &TetTab[i][0], &TetTab[i][1], \
-                  &TetTab[i][2], &TetTab[i][3], &ref );
+   GmfGetBlock(InpMsh, GmfTetrahedra, 1, NmbTet, 0, NULL, NULL,
+               GmfIntVec, 5, TetTab[1], TetTab[ NmbTet ]);
+
+   /*for(i=1;i<=NmbTet;i++)
+      printf(  "read ele %d: %d %d %d %d\n", i,
+               TetTab[i][0],TetTab[i][1],TetTab[i][2],TetTab[i][3] );*/
 
    // And close the mesh
    GmfCloseMesh(InpMsh);
@@ -107,28 +110,29 @@ int main(int ArgCnt, char **ArgVec)
    if(!(VerIdx = GmlNewMeshData(GmlVertices, NmbVer)))
       return(1);
 
-   for(i=0;i<NmbVer;i++)
-      GmlSetDataLine(VerIdx, i, VerTab[i][0], VerTab[i][1], VerTab[i][2], 0);
+   for(i=1;i<=NmbVer;i++)
+      GmlSetDataLine(VerIdx, i-1, VerTab[i][0], VerTab[i][1], VerTab[i][2], VerRef[i]);
 
    // Do the same with the elements
    if(!(TetIdx = GmlNewMeshData(GmlTetrahedra, NmbTet)))
       return(1);
 
-   for(i=0;i<NmbTet;i++)
-      GmlSetDataLine(TetIdx, i,
+   for(i=1;i<=NmbTet;i++)
+      GmlSetDataLine(TetIdx, i-1,
                      TetTab[i][0]-1, TetTab[i][1]-1,
-                     TetTab[i][2]-1, TetTab[i][3]-1, 0);
+                     TetTab[i][2]-1, TetTab[i][3]-1, TetTab[i][4]);
 
    // Create a raw datatype to store some value at vertices.
    if(!(SolIdx = GmlNewSolutionData(GmlVertices, 2, GmlFlt4, "SolAtVer")))
       return(1);
 
+   // Fill the initial field with crap
+   for(i=0;i<NmbVer;i++)
+      GmlSetDataLine(SolIdx, i, &NulSol);
+
    // Create a raw datatype to store the element middles.
    // It does not need to be tranfered to the GPU
    if(!(MidIdx = GmlNewSolutionData(GmlTetrahedra, 1, GmlFlt4, "TetMid")))
-      return(1);
-
-   if(!(MidTab = malloc((NmbTet+1)*4*sizeof(float))))
       return(1);
 
    // Assemble and compile the scatter kernel
@@ -152,7 +156,7 @@ int main(int ArgCnt, char **ArgVec)
 
    //exit(0);
 
-   // Launch the kernel on the GPU
+   // Launch the tetrahedra kernel on the GPU
    res  = GmlLaunchKernel(CalMid);
 
    if(res < 0)
@@ -163,7 +167,8 @@ int main(int ArgCnt, char **ArgVec)
 
    GpuTim += res;
 
-   /*res = GmlLaunchKernel(OptVer);
+   // Launch the vertex kernel on the GPU
+   res = GmlLaunchKernel(OptVer);
 
    if(res < 0)
    {
@@ -171,18 +176,39 @@ int main(int ArgCnt, char **ArgVec)
       exit(0);
    }
 
-   GpuTim += res;*/
+   GpuTim += res;
+
+   // Get the data back from the GPU memory
+   if(!(MidTab = malloc( NmbTet * 4 * sizeof(float))) )
+      return(1);
 
    for(i=0;i<NmbTet;i++)
    {
       GmlGetDataLine(MidIdx, i, MidTab[i]);
-      chk += sqrt(MidTab[i][0] * MidTab[i][0] \
-               +  MidTab[i][1] * MidTab[i][1] \
+      chk += sqrt(MidTab[i][0] * MidTab[i][0]
+               +  MidTab[i][1] * MidTab[i][1]
                +  MidTab[i][2] * MidTab[i][2]);
    }
 
    printf("%d tet centers computed in %g seconds, %ld MB used, %ld MB transfered, checksum = %g\n",
       NmbTet, GpuTim, GmlGetMemoryUsage()/1048576, GmlGetMemoryTransfer()/1048576, chk / NmbTet );
+
+   if(!(SolTab = calloc( NmbVer, 8 * sizeof(float))) )
+      return(1);
+
+   chk = 0.;
+
+   for(i=0;i<NmbVer;i++)
+   {
+      GmlGetDataLine(SolIdx, i, SolTab[i]);
+      /*printf("vertex %d : deg=%d, chk=%d %d %d %d\n", i+1,
+               (int)SolTab[i][0], (int)SolTab[i][4]+1, (int)SolTab[i][5]+1, (int)SolTab[i][6]+1, (int)SolTab[i][7]+1);*/
+
+      for(j=0;j<8;j++)
+         chk += SolTab[i][j];
+   }
+
+   printf("SolAtVertex checksum = %g\n",chk / NmbVer);
 
 
    /*-----*/
