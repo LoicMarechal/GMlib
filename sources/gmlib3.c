@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 13 2020                                           */
+/*   Last modification: feb 14 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -72,7 +72,7 @@ typedef struct
 typedef struct
 {
    int            NmbKrn, CurDev, RedKrnIdx[10], ParIdx;
-   int            TypIdx[ GmlMaxTyp ], EleCnt[ GmlMaxTyp ];
+   int            TypIdx[ GmlMaxTyp ], RefIdx[ GmlMaxTyp ], EleCnt[ GmlMaxTyp ];
    int            LnkMat[ GmlMaxTyp ][ GmlMaxTyp ];
    int            LnkHgh[ GmlMaxTyp ][ GmlMaxTyp ];
    int            CntMat[ GmlMaxTyp ][ GmlMaxTyp ];
@@ -390,6 +390,7 @@ int GmlNewMeshData(int MshTyp, int NmbLin)
    gml.TypIdx[ MshTyp ] = EleIdx;
    gml.LnkMat[ MshTyp ][ GmlVertices ] = EleIdx;
    gml.CntMat[ MshTyp ][ MshTyp ] = RefIdx;
+   gml.RefIdx[ MshTyp ] = RefIdx;
 
    return(EleIdx);
 }
@@ -488,7 +489,7 @@ int GmlNewLinkData(int BasTyp, int LnkTyp, int NmbDat, char *nam)
 int GmlNewBallData(int BasTyp, int LnkTyp, char *BalNam, char *DegNam)
 {
    int         i, j, BalIdx, HghIdx, DegIdx, VerIdx, SrcIdx, DstIdx;
-   int         EleSiz, VecSiz, BalSiz, MaxSiz, HghSiz = 0, chk[4];
+   int         EleSiz, VecSiz, BalSiz, MaxSiz, HghSiz = 0;
    int         *EleTab, *BalTab, *DegTab, *HghTab;
    int         MaxDeg = 0, MaxPos = 0, VecCnt, VecTyp, NmbDat;
    int64_t     DegTot = 0;
@@ -634,11 +635,6 @@ int GmlNewBallData(int BasTyp, int LnkTyp, char *BalNam, char *DegNam)
       DegTab[i] = 0;
 
    for(i=0;i<dst->NmbLin;i++)
-   {
-      /*printf(  "ball ele %d: %d %d %d %d\n", i+1,
-               EleTab[ i * EleSiz + 0 ]+1, EleTab[ i * EleSiz + 1 ]+1,
-               EleTab[ i * EleSiz + 2 ]+1, EleTab[ i * EleSiz + 3 ]+1 );*/
-
       for(j=0;j<EleSiz;j++)
       {
          VerIdx = EleTab[ i * EleSiz + j ];
@@ -650,36 +646,6 @@ int GmlNewBallData(int BasTyp, int LnkTyp, char *BalNam, char *DegNam)
 
          DegTab[ VerIdx ]++;
       }
-   }
-
-   for(i=0;i<src->NmbLin;i++)
-   {
-      chk[0] = chk[1] = chk[2] = chk[3] = 0;
-
-      if(DegTab[i] <= 16)
-         chk[0] = BalTab[ i * BalSiz ];
-      else if(DegTab[i] <= 32)
-      {
-         chk[0] = BalTab[ i * BalSiz      ];
-         chk[1] = BalTab[ i * BalSiz + 16 ];
-      }
-      else if(DegTab[i] <= 48)
-      {
-         chk[0] = HghTab[ (i - MaxPos) * HghSiz      ];
-         chk[1] = HghTab[ (i - MaxPos) * HghSiz + 16 ];
-         chk[2] = HghTab[ (i - MaxPos) * HghSiz + 32 ];
-      }
-      else
-      {
-         chk[0] = HghTab[ (i - MaxPos) * HghSiz      ];
-         chk[1] = HghTab[ (i - MaxPos) * HghSiz + 16 ];
-         chk[2] = HghTab[ (i - MaxPos) * HghSiz + 32 ];
-         chk[3] = HghTab[ (i - MaxPos) * HghSiz + 48 ];
-      }
-
-      /*printf(  "ball of %d:, deg=%d, chk=%d %d %d %d\n", i+1, DegTab[i],
-               chk[0]+1, chk[1]+1, chk[2]+1, chk[3]+1 );*/
-   }
 
    // Upload the ball data to th GPU memory
    gml.MovSiz += UploadData(BalIdx);
@@ -832,9 +798,6 @@ int GmlSetDataLine(int idx, int lin, ...)
          EleTab[ lin * siz + i ] = va_arg(VarArg, int);
 
       RefTab[ lin ] = va_arg(VarArg, int);
-      /*printf(  "set  ele %d: %d %d %d %d\n", lin+1,
-               EleTab[ lin * siz + 0 ]+1, EleTab[ lin * siz + 1 ]+1,
-               EleTab[ lin * siz + 2 ]+1, EleTab[ lin * siz + 3 ]+1 );*/
    }
 
    va_end(VarArg);
@@ -949,14 +912,14 @@ static int DownloadData(int idx)
 int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
                      int BasTyp, int NmbTyp, ...)
 {
-   int      i, j, flg, KrnIdx, KrnHghIdx, SrcTyp, DstTyp, NmbArg = 0;
+   int      i, j, flg, KrnIdx, KrnHghIdx, SrcTyp, DstTyp, NmbArg = 0, RefIdx;
    int      FlgTab[ GmlMaxDat ], IdxTab[ GmlMaxDat ];
    int      LnkTab[ GmlMaxDat ], CntTab[ GmlMaxDat ];
    int      NmbItm, NmbVec, VecTyp, VecSiz, LnkPos, CptPos, ArgHghPos;
    int      NmbHgh, HghVec, HghSiz, HghTyp, HghArg = -1, HghIdx = -1;
    char     src[10000] = "\0", BalNam[100], DegNam[100];
    va_list  VarArg;
-   DatSct   *dat;
+   DatSct   *dat, *RefDat;
    ArgSct   ArgTab[10];
    KrnSct   *krn;
 
@@ -1128,6 +1091,26 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
       ArgTab[ NmbArg ].MemMod = FlgTab[i];
       ArgTab[ NmbArg ].nam = dat->nam;
       NmbArg++;
+
+      if(!(FlgTab[i] & GmlRefFlag) || (CptPos != -1))
+         continue;
+
+      puts("Add refs");
+      RefIdx = gml.RefIdx[ DstTyp ];
+      RefDat = &gml.dat[ RefIdx ];
+      ArgTab[ NmbArg ].BasTyp = DstTyp;
+      ArgTab[ NmbArg ].BasIdx = RefIdx;
+      ArgTab[ NmbArg ].LnkTyp = DstTyp;
+      ArgTab[ NmbArg ].LnkIdx = LnkPos;
+      ArgTab[ NmbArg ].CptIdx = CptPos;
+      ArgTab[ NmbArg ].ItmDeg = -1;
+      ArgTab[ NmbArg ].MaxDeg = ArgTab[ LnkPos ].MaxDeg;
+      ArgTab[ NmbArg ].NmbVec = RefDat->NmbCol;
+      ArgTab[ NmbArg ].VecSiz = RefDat->VecSiz;
+      ArgTab[ NmbArg ].VecTyp = RefDat->DatTyp;
+      ArgTab[ NmbArg ].MemMod = FlgTab[i];
+      ArgTab[ NmbArg ].nam = RefDat->nam;
+      NmbArg++;
    }
 
    // Generate the kernel source code
@@ -1166,9 +1149,6 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
    ArgTab[ HghArg ].NmbVec = HghVec;
    ArgTab[ HghArg ].VecSiz = HghSiz;
    ArgTab[ HghArg ].VecTyp = HghTyp;
-
-   //ArgTab[ ArgHghPos ].MaxDeg = NmbHgh;
-
    src[0] = '\0';
 
    // Generate the kernel source code
@@ -1287,6 +1267,8 @@ static void WriteKernelVariables(char *src, int BasTyp,
          sprintf(str,  "   %s %sDeg;\n", OclTypStr[ CptArg->VecTyp ], arg->nam);
          strcat(src, str);
          sprintf(str,  "   %s %sNul;\n", OclTypStr[ arg->VecTyp ], arg->nam);
+         strcat(src, str);
+         sprintf(str,  "   #define   %sDegMax %d\n", arg->nam, LnkArg->MaxDeg);
          strcat(src, str);
       }
    }
@@ -1546,12 +1528,12 @@ static double RunOclKrn(KrnSct *krn)
    cl_event event;
    cl_ulong start, end;
 
-   printf("run kernel %d, nmblin=%d, shift=%d\n", krn->idx, krn->SizTab[0], krn->SizTab[1]);
+   //printf("run kernel %d, nmblin=%d, shift=%d\n", krn->idx, krn->SizTab[0], krn->SizTab[1]);
    for(i=0;i<krn->NmbDat;i++)
    {
       dat = &gml.dat[ krn->DatTab[i] ];
-      printf(  "DatTab[%d]=%d, GpuMem=%p, NmbLin=%d, NmbCol=%d, ColSiz=%d, VecSiz=%d, LinSiz=%d\n",
-               i,krn->DatTab[i],dat->GpuMem, dat->NmbLin, dat->NmbCol, dat->ColSiz, dat->VecSiz, dat->LinSiz);
+      /*printf(  "DatTab[%d]=%d, GpuMem=%p, NmbLin=%d, NmbCol=%d, ColSiz=%d, VecSiz=%d, LinSiz=%d\n",
+               i,krn->DatTab[i],dat->GpuMem, dat->NmbLin, dat->NmbCol, dat->ColSiz, dat->VecSiz, dat->LinSiz);*/
 
       if( (krn->DatTab[i] < 1) || (krn->DatTab[i] > GmlMaxDat) || !dat->GpuMem
       || (clSetKernelArg(krn->kernel, i, sizeof(cl_mem), &dat->GpuMem) != CL_SUCCESS) )
@@ -1560,21 +1542,18 @@ static double RunOclKrn(KrnSct *krn)
          return(-3);
       }
    }
-   puts("1");
 
    if(clSetKernelArg(krn->kernel, krn->NmbDat, sizeof(cl_mem),
                      &gml.dat[ gml.ParIdx ].GpuMem) != CL_SUCCESS)
    {
       return(-4);
    }
-   puts("2");
 
    if(clSetKernelArg(krn->kernel, krn->NmbDat+1,
                      2 * sizeof(int), krn->SizTab) != CL_SUCCESS)
    {
       return(-5);
    }
-   puts("3");
 
    // Fit data loop size to the GPU kernel size
    if(clGetKernelWorkGroupInfo(  krn->kernel, gml.device_id[ gml.CurDev ],
@@ -1583,7 +1562,6 @@ static double RunOclKrn(KrnSct *krn)
    {
       return(-6);
    }
-   puts("4");
 
    gml.CurLocSiz = LocSiz;
    GloSiz = krn->SizTab[0] / LocSiz;
@@ -1594,32 +1572,27 @@ static double RunOclKrn(KrnSct *krn)
 
    // Launch GPU code
    clFinish(gml.queue);
-   printf("LocSiz=%zu, GloSiz=%zu\n",LocSiz,GloSiz);
-   puts("5");
+   //printf("LocSiz=%zu, GloSiz=%zu\n",LocSiz,GloSiz);
 
    if(clEnqueueNDRangeKernel( gml.queue, krn->kernel, 1, NULL,
                               &GloSiz, &LocSiz, 0, NULL, &event) )
    {
       return(-7);
    }
-   puts("6");
 
    clFinish(gml.queue);
-   puts("7");
 
    if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START,
                               sizeof(start), &start, NULL) != CL_SUCCESS)
    {
       return(-8);
    }
-   puts("8");
 
    if(clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END,
                               sizeof(end), &end, NULL) != CL_SUCCESS)
    {
       return(-9);
    }
-   puts("9");
 
    return((double)(end - start) / 1e9);
 }
