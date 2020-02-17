@@ -4,7 +4,7 @@
 ################################
 
 cmake_minimum_required (VERSION 3.0.1)
-set (GMlib_VERSION_MAJOR 2)
+set (GMlib_VERSION_MAJOR 3)
 set (GMlib_VERSION_MINOR 0)
 project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C)
 set (CMAKE_C_FLAGS "-O3")
@@ -67,7 +67,7 @@ file(WRITE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
 "include(\${CMAKE_CURRENT_LIST_DIR}/GMlib-target.cmake)
 find_package(OpenCL)
 set(GMlib_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/include)
-set(GMlib_LIBRARIES GM.2 ${OpenCL_LIBRARIES})
+set(GMlib_LIBRARIES GM.3 ${OpenCL_LIBRARIES})
 set(GMlib_FOUND TRUE)
 ")
 write_basic_package_version_file(
