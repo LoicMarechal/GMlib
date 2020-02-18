@@ -41,34 +41,39 @@ First the "C" part executed by the host CPU:
 // Init the GMLIB with the first available GPU on the system
 GmlInit(1);
 
-// Compile the OpenCL source code
-CalMid = GmlNewKernel(TrianglesBasicLoop);
-
-// Create a vertices data type
-VerIdx = GmlNewData(GmlVertices, "Crd", NmbVer);
+// Create a vertex data type
+VerIdx = GmlNewMeshData(GmlVertices, NmbVer);
 
 // Fill the datatype with your mesh coordinates
-GmlSetDataBlock(VerIdx, VerTab[1], VerTab[ NmbVer ]);
+for(i=0;i<NmbVer;i++)
+   GmlSetDataLine(VerIdx, i, coords[i][0], coords[i][1], coords[i][2], VerRef[i]);
 
 // Do the same with the elements
-TriIdx = GmlNewData(GmlTriangles, "Tri", NmbTri);
-GmlSetDataBlock(TriIdx, TriTab[1], TriTab[ NmbTri ]);
+TriIdx = GmlNewMeshData(GmlTriangles, NmbTri);
+for(i=0;i<NmbTri;i++)
+   GmlSetDataLine(TriIdx, i, TriVer[i][0], TriVer[i][1], TriVer[i][2], TriRef[i]);
 
-// Create a raw datatype that will receive the elements' centers
-MidIdx = GmlNewData(GmlRawData, "Mid", NmbTri, GmlTriangles, "float4", sizeof(cl_float4));
+// Create a raw datatype to store the calculated elements' centers
+MidIdx = GmlNewSolutionData(GmlTriangles, 1, GmlFlt4, "TriMid");
 
-// Launch the kernel on the GPU passing three arguments to the OpenCL procedure:
-// the elements connectivity, the barycenter table and the vertices coordinates
-GmlLaunchKernel(CalMid, TriIdx, GmlRead, TriIdx, GmlWrite, MidIdx, GmlRead, VerIdx, GmlEnd);
+// Compile the OpenCL source code with the two needed datatypes:
+// the vertex coordinates (read) and the triangles centers (write)
+CalMid = GmlCompileKernel( TriangleCenter, "CalMid", NULL, GmlTriangles, 2,
+                           VerIdx, GmlReadMode,  NULL,
+                           MidIdx, GmlWriteMode, NULL );
+
+// Launch the kernel on the GPU
+GmlLaunchKernel(CalMid);
 
 // Get the results back from the GPU and print it
-GmlGetDataBlock(MidIdx, MidTab[1], MidTab[ NmbTri ]);
-
 for(i=0;i<NmbTri;i++)
+{
+   GmlGetDataLine(MidIdx, i, MidTab[i]);
    printf("triangle %d center = %g %g %g\n", i, MidTab[i][0], MidTab[i][1], MidTab[i][2]);
+}
 ```
 
 Then the "OpenCL" part executed by the GPU device:
 ```C++
-Mid = (TriCrd[0] + TriCrd[1] + TriCrd[2]) * (float4){1/3,1/3,1/3,0};
+TriMid = (TriCrd[0] + TriCrd[1] + TriCrd[2]) / 3.;
 ```
