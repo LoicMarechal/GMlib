@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 07 2020                                           */
+/*   Last modification: feb 18 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -44,12 +44,12 @@
 #endif
 
 enum  memory_type    {GmlInternal, GmlInput, GmlOutput, GmlInout};
-enum  reduction_opp  {GmlMin, GmlSum, GmlMax};
-enum  data_type      {GmlArgDat, GmlRawDat, GmlLnkDat, GmlEleDat, GmlRefDat};
 enum  element_type   {GmlVertices, GmlEdges, GmlTriangles, GmlQuadrilaterals,
-                      GmlTetrahedra, GmlPyramids, GmlPrisms, GmlHexahedra, GmlMaxTyp};
+                      GmlTetrahedra, GmlPyramids, GmlPrisms, GmlHexahedra,
+                      GmlMaxEleTyp};
 enum  opencl_type    {GmlInt, GmlInt2, GmlInt4, GmlInt8, GmlInt16,
-                      GmlFlt, GmlFlt2, GmlFlt4, GmlFlt8, GmlFlt16};
+                      GmlFlt, GmlFlt2, GmlFlt4, GmlFlt8, GmlFlt16,
+                      GmlMaxOclTyp};
 
 
 /*----------------------------------------------------------------------------*/
@@ -85,3 +85,5 @@ double      GmlReduceVector      (int, int, double *);
 size_t      GmlGetMemoryUsage    ();
 size_t      GmlGetMemoryTransfer ();
 GmlParSct  *GmlGetParameters     ();
+void        GmlDebugOn           ();
+void        GmlDebugOff          ();

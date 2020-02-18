@@ -102,6 +102,8 @@ int main(int ArgCnt, char **ArgVec)
    if(!GmlInit(GpuIdx))
       return(1);
 
+   GmlDebugOn();
+
    // Create a vertices data type and transfer the data to the GPU
    if(!(VerIdx = GmlNewMeshData(GmlVertices, NmbVer)))
       return(1);
