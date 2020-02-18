@@ -25,7 +25,7 @@
 ### Documentation
 
 - Quick reference card.
-- GitLab page.
+- GitHub page.
 
 
 
@@ -78,7 +78,7 @@
 ### Documentation
 
 - Full PDF documentation with quick setup, install, compile, write OpenCL code and procedure lists.
-- Full GitLab page with examples, sample files, source code and links to OpenCL and GPU programing.
+- Full GitHub page with examples, sample files, source code and links to OpenCL and GPU programing.
 
 
 ## PHASE 3
@@ -137,5 +137,5 @@
 
 ### Documentation
 
-- Update documentation and GitLab with High order elements.
+- Update documentation and GitHub with High order elements.
 - Add a WiKi on how to develop additional plugins.

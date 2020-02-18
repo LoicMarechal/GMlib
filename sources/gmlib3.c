@@ -920,7 +920,8 @@ int GmlGetDataLine(int idx, int lin, ...)
 
 static int UploadData(int idx)
 {
-   DatSct *dat = &gml.dat[ idx ];
+   int      res;
+   DatSct   *dat = &gml.dat[ idx ];
 
    // Check indices
    if( (idx < 1) || (idx > GmlMaxDat) || !dat->GpuMem
@@ -933,6 +934,7 @@ static int UploadData(int idx)
    // and keep track of the amount of uploaded data
    res = clEnqueueWriteBuffer(gml.queue, dat->GpuMem, CL_FALSE, 0,
                               dat->MemSiz, dat->CpuMem, 0, NULL,NULL);
+
    if(res != CL_SUCCESS)
    {
       printf("Uploading the data to the GPu failed with error %d\n", res);
