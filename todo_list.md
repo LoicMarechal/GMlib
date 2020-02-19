@@ -11,6 +11,7 @@
 - Write the triangles and tets neighbors generation.
 - Add the voyeurs information in all the uplink data and kernel sources.
 - Add a reduction internal kernel with min, max, L1 and L2 norms.
+- Add single float, double float and user selectable real float.
 
 ### Exposed API
 
@@ -27,6 +28,9 @@
 - Quick reference card.
 - GitHub page.
 
+### Done
+
+- Make the GMlib reentrant.
 
 
 ## PHASE 2
@@ -79,6 +83,8 @@
 
 - Full PDF documentation with quick setup, install, compile, write OpenCL code and procedure lists.
 - Full GitHub page with examples, sample files, source code and links to OpenCL and GPU programing.
+
+### Done
 
 
 ## PHASE 3
@@ -139,3 +145,5 @@
 
 - Update documentation and GitHub with High order elements.
 - Add a WiKi on how to develop additional plugins.
+
+### Done
