@@ -38,6 +38,7 @@
 #define VECPOWOCL    4
 #define VECPOWMAX    7
 enum    data_type    {GmlArgDat, GmlRawDat, GmlLnkDat, GmlEleDat, GmlRefDat};
+enum  memory_type    {GmlInternal, GmlInput, GmlOutput, GmlInout};
 
 
 /*----------------------------------------------------------------------------*/
@@ -55,7 +56,7 @@ typedef struct
 {
    int            AloTyp, MemAcs, MshTyp, LnkTyp, ItmTyp;
    int            NmbItm, ItmLen, ItmSiz, NmbLin, LinSiz;
-   char           *nam, use;
+   char           *nam, *src, use;
    size_t         MemSiz;
    cl_mem         GpuMem;
    void           *CpuMem;
@@ -70,7 +71,7 @@ typedef struct
 
 typedef struct
 {
-   int            NmbKrn, CurDev, ParIdx, DbgFlg;
+   int            NmbKrn, ParIdx, CurDev, DbgFlg;
    int            TypIdx[ GmlMaxEleTyp ];
    int            RefIdx[ GmlMaxEleTyp ];
    int            NmbEle[ GmlMaxEleTyp ];
@@ -270,13 +271,6 @@ size_t GmlInit(int DevIdx)
       return(0);
    }
 
-   // Allocate and return a public user customizable parameter structure
-   if(!(gml->ParIdx = GmlNewParameters(GmlIdx, sizeof(GmlParSct), "par")))
-   {
-      puts("Could not allocate the GMlib internal parameters structure.");
-      return(0);
-   }
-
    // Return a pointer on the allocated and initialize GMlib structure
    return(GmlIdx);
 }
@@ -315,7 +309,7 @@ void GmlListGPU()
 {
    int            i, res;
    size_t         GpuNamSiz;
-   char           GpuNam[100];
+   char           GpuNam[ GmlMaxStrSiz ];
    cl_platform_id PlfTab[ GmlMaxOclTyp ];
    cl_device_id   device_id[ MaxGpu ];
    cl_uint        NmbPlf, num_devices;
@@ -338,7 +332,7 @@ void GmlListGPU()
    }
 
    for(i=0;i<num_devices;i++)
-      if(clGetDeviceInfo(  device_id[i], CL_DEVICE_NAME, 100, GpuNam,
+      if(clGetDeviceInfo(  device_id[i], CL_DEVICE_NAME,  GmlMaxStrSiz , GpuNam,
                            &GpuNamSiz) == CL_SUCCESS )
       {
          printf("      %d      : %s\n", i, GpuNam);
@@ -350,7 +344,7 @@ void GmlListGPU()
 /* Allocate one of the 8 mesh data types                                      */
 /*----------------------------------------------------------------------------*/
 
-int GmlNewParameters(size_t GmlIdx, int siz, char *nam)
+void *GmlNewParameters(size_t GmlIdx, int siz, char *src)
 {
    int      idx;
    DatSct   *dat;
@@ -373,10 +367,13 @@ int GmlNewParameters(size_t GmlIdx, int siz, char *nam)
    dat->LinSiz = dat->NmbItm * dat->ItmSiz;
    dat->MemSiz    = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
    dat->GpuMem = dat->CpuMem = NULL;
-   dat->nam    = nam;
+   dat->nam    = "GmlParSct";
+   dat->src    = src;
 
    if(!NewData(gml, dat))
       return(0);
+
+   gml->ParIdx = idx;
 
    if(gml->DbgFlg)
    {
@@ -385,7 +382,7 @@ int GmlNewParameters(size_t GmlIdx, int siz, char *nam)
                idx, dat->MemSiz );
    }
 
-   return(idx);
+   return((void *)dat->CpuMem);
 }
 
 
@@ -992,7 +989,7 @@ static int DownloadData(GmlSct *gml, int idx)
 /*----------------------------------------------------------------------------*/
 
 int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
-                     char *DefSrc, int MshTyp, int NmbTyp, ...)
+                     int MshTyp, int NmbTyp, ...)
 {
    GETGMLPTR(gml, GmlIdx);
    int      i, j, flg, KrnIdx, KrnHghIdx, SrcTyp, DstTyp, NmbArg = 0, RefIdx;
@@ -1000,13 +997,16 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    int      LnkTab[ GmlMaxDat ], CntTab[ GmlMaxDat ];
    int      LnkItm, NmbItm, ItmTyp, ItmLen, LnkPos, CptPos, ArgHghPos;
    int      NmbHgh, HghVec, HghSiz, HghTyp, HghArg = -1, HghIdx = -1;
-   char     src[10000] = "\0", BalNam[100], DegNam[100];
+   char     *ParSrc, src[ GmlMaxSrcSiz ] = "\0";
+   char     BalNam[ GmlMaxStrSiz ], DegNam[ GmlMaxStrSiz ];
    va_list  VarArg;
    DatSct   *dat, *RefDat;
    ArgSct   *arg, ArgTab[ GmlMaxOclTyp ];
    KrnSct   *krn;
 
    // Read user's datatypes arguments
+   ParSrc = gml->ParIdx ? gml->dat[ gml->ParIdx ].src : NULL;
+
    va_start(VarArg, NmbTyp);
 
    for(i=0;i<NmbTyp;i++)
@@ -1225,7 +1225,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    }
 
    // Generate the kernel source code
-   WriteUserTypedef        (src, DefSrc);
+   WriteUserTypedef        (src, ParSrc);
    WriteProcedureHeader    (src, PrcNam, MshTyp, NmbArg, ArgTab);
    WriteKernelVariables    (src, MshTyp, NmbArg, ArgTab);
    WriteKernelMemoryReads  (src, MshTyp, NmbArg, ArgTab);
@@ -1273,7 +1273,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    src[0] = '\0';
 
    // Generate the kernel source code
-   WriteUserTypedef        (src, DefSrc);
+   WriteUserTypedef        (src, ParSrc);
    WriteProcedureHeader    (src, PrcNam, MshTyp, NmbArg, ArgTab);
    WriteKernelVariables    (src, MshTyp, NmbArg, ArgTab);
    WriteKernelMemoryReads  (src, MshTyp, NmbArg, ArgTab);
@@ -1308,10 +1308,10 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 /* Add the user's parameters structure definition to the source code          */
 /*----------------------------------------------------------------------------*/
 
-static void WriteUserTypedef(char *src, char *TypSct)
+static void WriteUserTypedef(char *src, char *ParSrc)
 {
    strcat(src, "// USER'S ARGUMENTS STRUCTURE\n");
-   strcat(src, TypSct);
+   strcat(src, ParSrc);
    strcat(src, "\n");
 }
 
@@ -1324,7 +1324,7 @@ static void WriteProcedureHeader(char *src, char *PrcNam, int MshTyp,
                                  int NmbArg, ArgSct *ArgTab)
 {
    int      i;
-   char     str[100];
+   char     str[ GmlMaxStrSiz ];
    ArgSct   *arg;
 
    strcat(src, "// KERNEL HEADER\n");
@@ -1346,7 +1346,7 @@ static void WriteProcedureHeader(char *src, char *PrcNam, int MshTyp,
       strcat(src, str);
    }
 
-   strcat(src, "\n   __global GmlParSct *par,");
+   strcat(src, "\n   __global GmlParSct *GmlPar,");
    strcat(src, "\n   const    int2       count )\n{\n");
 }
 
@@ -1359,7 +1359,7 @@ static void WriteKernelVariables(char *src, int MshTyp,
                                  int NmbArg, ArgSct *ArgTab)
 {
    int      i;
-   char     str[100];
+   char     str[ GmlMaxStrSiz ];
    ArgSct   *arg, *LnkArg, *CptArg;
 
    strcat(src, "// KERNEL VARIABLES DEFINITION\n");
@@ -1411,8 +1411,9 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
                                     int NmbArg, ArgSct *ArgTab)
 {
    int      i, j, k, siz;
-   char     str[100], ArgTd1[100], ArgTd2[100], LnkTd1[100], LnkTd2[100];
-   char     LnkNam[100], CptNam[100], DegTst[100], DegNul[100];
+   char     str   [ GmlMaxStrSiz ], ArgTd1[ GmlMaxStrSiz ], ArgTd2[ GmlMaxStrSiz ];
+   char     LnkTd1[ GmlMaxStrSiz ], LnkTd2[ GmlMaxStrSiz ], LnkNam[ GmlMaxStrSiz ];
+   char     CptNam[ GmlMaxStrSiz ], DegTst[ GmlMaxStrSiz ], DegNul[ GmlMaxStrSiz ];
    ArgSct   *arg, *LnkArg, *CptArg;
 
    strcat(src, "   int       cnt = get_global_id(0);\n\n");
@@ -1517,7 +1518,7 @@ static void WriteKernelMemoryWrites(char *src, int MshTyp,
                                     int NmbArg, ArgSct *ArgTab)
 {
    int      i, c;
-   char     str[100];
+   char     str[ GmlMaxStrSiz ];
    ArgSct   *arg;
 
    strcat(src, "\n");
@@ -1586,7 +1587,7 @@ static int NewOclKrn(GmlSct *gml, char *KernelSource, char *PrcNam)
    char     *buffer, *StrTab[1];
    int      err, res, idx = ++gml->NmbKrn;
    KrnSct   *krn = &gml->krn[ idx ];
-   size_t   len, LenTab[10];
+   size_t   len, LenTab[1];
 
    if(idx > GmlMaxKrn)
       return(0);
@@ -1802,17 +1803,6 @@ size_t GmlGetMemoryTransfer(size_t GmlIdx)
 {
    GETGMLPTR(gml, GmlIdx);
    return(gml->MovSiz);
-}
-
-
-/*----------------------------------------------------------------------------*/
-/* Return public parameter structure                                          */
-/*----------------------------------------------------------------------------*/
-
-GmlParSct *GmlGetParameters(size_t GmlIdx)
-{
-   GETGMLPTR(gml, GmlIdx);
-   return(gml->dat[ gml->ParIdx ].CpuMem);
 }
 
 

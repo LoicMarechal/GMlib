@@ -1,4 +1,4 @@
 typedef struct {
-   int   wei;
-   float MinQal, rlx;
+   int   foo;
+   float res;
 }GmlParSct;
