@@ -38,6 +38,7 @@ int main(int ArgCnt, char **ArgVec)
    int i, j, NmbVer, NmbTet, ver = 0, dim = 0, *VerRef, (*TetTab)[5];
    int VerIdx, TetIdx, BalIdx, MidIdx, SolIdx, CalMid, OptVer, GpuIdx = 0;
    int64_t InpMsh;
+   size_t GmlIdx;
    float MidTab[4], SolTab[8], dummy, TetChk = 0., VerChk = 0., (*VerTab)[3];
    float IniSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
    double TetTim = 0., VerTim = 0., res;
@@ -99,42 +100,42 @@ int main(int ArgCnt, char **ArgVec)
    /*---------------*/
 
    // Init the GMLIB and compile the OpenCL source code
-   if(!GmlInit(GpuIdx))
+   if(!(GmlIdx = GmlInit(GpuIdx)))
       return(1);
 
-   GmlDebugOn();
+   GmlDebugOn(GmlIdx);
 
    // Create a vertices data type and transfer the data to the GPU
-   if(!(VerIdx = GmlNewMeshData(GmlVertices, NmbVer)))
+   if(!(VerIdx = GmlNewMeshData(GmlIdx, GmlVertices, NmbVer)))
       return(1);
 
    for(i=1;i<=NmbVer;i++)
-      GmlSetDataLine(VerIdx, i-1, VerTab[i][0], VerTab[i][1], VerTab[i][2], VerRef[i]);
+      GmlSetDataLine(GmlIdx, VerIdx, i-1, VerTab[i][0], VerTab[i][1], VerTab[i][2], VerRef[i]);
 
    // Do the same with the elements
-   if(!(TetIdx = GmlNewMeshData(GmlTetrahedra, NmbTet)))
+   if(!(TetIdx = GmlNewMeshData(GmlIdx, GmlTetrahedra, NmbTet)))
       return(1);
 
    for(i=1;i<=NmbTet;i++)
-      GmlSetDataLine(TetIdx, i-1,
+      GmlSetDataLine(GmlIdx, TetIdx, i-1,
                      TetTab[i][0]-1, TetTab[i][1]-1,
                      TetTab[i][2]-1, TetTab[i][3]-1, TetTab[i][4]);
 
    // Create a raw datatype to store some value at vertices.
-   if(!(SolIdx = GmlNewSolutionData(GmlVertices, 2, GmlFlt4, "SolAtVer")))
+   if(!(SolIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 2, GmlFlt4, "SolAtVer")))
       return(1);
 
    // Fill the initial field with crap
    for(i=0;i<NmbVer;i++)
-      GmlSetDataLine(SolIdx, i, &IniSol);
+      GmlSetDataLine(GmlIdx, SolIdx, i, &IniSol);
 
    // Create a raw datatype to store the element middles.
    // It does not need to be tranfered to the GPU
-   if(!(MidIdx = GmlNewSolutionData(GmlTetrahedra, 1, GmlFlt4, "TetMid")))
+   if(!(MidIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt4, "TetMid")))
       return(1);
 
    // Assemble and compile the scatter kernel
-   CalMid = GmlCompileKernel( TetrahedraLoop, "TetrahedraBasic",
+   CalMid = GmlCompileKernel( GmlIdx, TetrahedraLoop, "TetrahedraBasic",
                               Parameters, GmlTetrahedra, 3,
                               VerIdx, GmlReadMode | GmlRefFlag,  NULL,
                               SolIdx, GmlReadMode,  NULL,
@@ -144,7 +145,7 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Assemble and compile the gather kernel
-   OptVer = GmlCompileKernel( VertexGather, "VertexGather",
+   OptVer = GmlCompileKernel( GmlIdx, VertexGather, "VertexGather",
                               Parameters, GmlVertices, 2,
                               SolIdx, GmlWriteMode, NULL,
                               MidIdx, GmlReadMode,  NULL );
@@ -155,7 +156,7 @@ int main(int ArgCnt, char **ArgVec)
    for(i=1;i<=100;i++)
    {
       // Launch the tetrahedra kernel on the GPU
-      res  = GmlLaunchKernel(CalMid);
+      res  = GmlLaunchKernel(GmlIdx, CalMid);
 
       if(res < 0)
       {
@@ -166,7 +167,7 @@ int main(int ArgCnt, char **ArgVec)
       TetTim += res;
 
       // Launch the vertex kernel on the GPU
-      res = GmlLaunchKernel(OptVer);
+      res = GmlLaunchKernel(GmlIdx, OptVer);
 
       if(res < 0)
       {
@@ -185,14 +186,14 @@ int main(int ArgCnt, char **ArgVec)
    // Get back the MidTet data from the GPU memory and compute a checksum
    for(i=0;i<NmbTet;i++)
    {
-      GmlGetDataLine(MidIdx, i, MidTab);
+      GmlGetDataLine(GmlIdx, MidIdx, i, MidTab);
       TetChk += MidTab[0] + MidTab[1] + MidTab[2];
    }
 
    // Get back the SolAtVer data from the GPU memory and compute a checksum
    for(i=0;i<NmbVer;i++)
    {
-      GmlGetDataLine(SolIdx, i, SolTab);
+      GmlGetDataLine(GmlIdx, SolIdx, i, SolTab);
       VerChk += SolTab[0] + SolTab[1] + SolTab[2] + SolTab[3];
    }
 
@@ -200,7 +201,8 @@ int main(int ArgCnt, char **ArgVec)
           NmbTet, TetTim + VerTim, TetTim, VerTim);
 
    printf("%ld MB used, %ld MB transfered\n",
-          GmlGetMemoryUsage()/1048576, GmlGetMemoryTransfer()/1048576);
+          GmlGetMemoryUsage   (GmlIdx) / 1048576,
+          GmlGetMemoryTransfer(GmlIdx) / 1048576);
 
    printf("MidTet checksum = %g, SolAtVer checksum = %g\n",
          TetChk / NmbTet, VerChk / NmbVer);
@@ -210,10 +212,10 @@ int main(int ArgCnt, char **ArgVec)
    /* END */
    /*-----*/
 
-   GmlFreeData(VerIdx);
-   GmlFreeData(TetIdx);
-   GmlFreeData(MidIdx);
-   GmlStop();
+   GmlFreeData(GmlIdx, VerIdx);
+   GmlFreeData(GmlIdx, TetIdx);
+   GmlFreeData(GmlIdx, MidIdx);
+   GmlStop(GmlIdx);
 
    free(TetTab);
    free(VerTab);

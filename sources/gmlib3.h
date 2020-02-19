@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.01                           */
+/*                         GPU Meshing Library 3.10                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 18 2020                                           */
+/*   Last modification: feb 19 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -68,22 +68,21 @@ typedef struct
 /* User available procedures                                                  */
 /*----------------------------------------------------------------------------*/
 
-GmlParSct  *GmlInit              (int);
-void        GmlStop              ();
+size_t      GmlInit              (int);
+void        GmlStop              (size_t);
 void        GmlListGPU           ();
-int         GmlNewParameters     (int, char *);
-int         GmlNewMeshData       (int, int);
-int         GmlNewSolutionData   (int, int, int, char *);
-int         GmlNewLinkData       (int, int, int, char *);
-int         GmlNewBallData       (int, int, char *, char *);
-int         GmlFreeData          (int);
-int         GmlSetDataLine       (int, int, ...);
-int         GmlGetDataLine       (int, int, ...);
-int         GmlCompileKernel     (char *, char *, char *, int, int, ...);
-double      GmlLaunchKernel      (int);
-double      GmlReduceVector      (int, int, double *);
-size_t      GmlGetMemoryUsage    ();
-size_t      GmlGetMemoryTransfer ();
-GmlParSct  *GmlGetParameters     ();
-void        GmlDebugOn           ();
-void        GmlDebugOff          ();
+int         GmlNewParameters     (size_t, int, char *);
+int         GmlNewMeshData       (size_t, int, int);
+int         GmlNewSolutionData   (size_t, int, int, int, char *);
+int         GmlNewLinkData       (size_t, int, int, int, char *);
+int         GmlFreeData          (size_t, int);
+int         GmlSetDataLine       (size_t, int, int, ...);
+int         GmlGetDataLine       (size_t, int, int, ...);
+int         GmlCompileKernel     (size_t, char *, char *, char *, int, int, ...);
+double      GmlLaunchKernel      (size_t, int);
+double      GmlReduceVector      (size_t, int, int, double *);
+size_t      GmlGetMemoryUsage    (size_t);
+size_t      GmlGetMemoryTransfer (size_t);
+GmlParSct  *GmlGetParameters     (size_t);
+void        GmlDebugOn           (size_t);
+void        GmlDebugOff          (size_t);

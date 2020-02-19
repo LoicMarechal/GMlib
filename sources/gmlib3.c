@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.01                           */
+/*                         GPU Meshing Library 3.10                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 18 2020                                           */
+/*   Last modification: feb 19 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -31,22 +31,22 @@
 
 
 /*----------------------------------------------------------------------------*/
-/* Macro instructions                                                         */
+/* Defines                                                                    */
 /*----------------------------------------------------------------------------*/
 
-#define MIN(a,b)     ((a) < (b) ? (a) : (b))
-#define MAX(a,b)     ((a) > (b) ? (a) : (b))
 #define MB           1048576
+#define VECPOWOCL    4
+#define VECPOWMAX    7
 enum    data_type    {GmlArgDat, GmlRawDat, GmlLnkDat, GmlEleDat, GmlRefDat};
 
 
 /*----------------------------------------------------------------------------*/
-/* Library internal data structures                                           */
+/* Library's internal data structures                                         */
 /*----------------------------------------------------------------------------*/
 
 typedef struct
 {
-   int            MshTyp, DatIdx, LnkTyp, LnkIdx, LnkDir, CntIdx;
+   int            ArgIdx, MshTyp, DatIdx, LnkTyp, LnkIdx, LnkDir, CntIdx;
    int            LnkDeg, MaxDeg, NmbItm, ItmLen, ItmTyp, FlgTab;
    char           *nam;
 }ArgSct;
@@ -88,13 +88,27 @@ typedef struct
 
 
 /*----------------------------------------------------------------------------*/
+/* Macro instructions                                                         */
+/*----------------------------------------------------------------------------*/
+
+#define MIN(a,b)        ((a) < (b) ? (a) : (b))
+#define MAX(a,b)        ((a) > (b) ? (a) : (b))
+#define CHKELETYP(t)    if( ((t) < 0) || ((t) >= GmlMaxEleTyp)) return(0)
+#define CHKOCLTYP(t)    if( ((t) < GmlInt) || ((t) > GmlFlt16)) return(0)
+#define GETGMLPTR(p,i)  GmlSct *p = (GmlSct *)(i)
+
+
+/*----------------------------------------------------------------------------*/
 /* Prototypes of local procedures                                             */
 /*----------------------------------------------------------------------------*/
 
-static int     NewData                 (DatSct *);
-static int     UploadData              (int);
-static int     DownloadData            (int);
-static int     NewKernel               (char *, char *);
+static int     NewData                 (GmlSct *, DatSct *);
+static int     NewBallData             (GmlSct *, int, int, char *, char *);
+static int     UploadData              (GmlSct *, int);
+static int     DownloadData            (GmlSct *, int);
+static int     NewOclKrn               (GmlSct *, char *, char *);
+static int     GetNewDatIdx            (GmlSct *);
+static double  RunOclKrn               (GmlSct *, KrnSct *);
 static void    WriteUserTypedef        (char *, char *);
 static void    WriteProcedureHeader    (char *, char *, int, int, ArgSct *);
 static void    WriteKernelVariables    (char *, int, int, ArgSct *);
@@ -102,15 +116,6 @@ static void    WriteKernelMemoryReads  (char *, int, int, ArgSct *);
 static void    WriteKernelMemoryWrites (char *, int, int, ArgSct *);
 static void    WriteUserKernel         (char *, char *);
 static void    GetCntVec               (int , int *, int *, int *);
-static int     GetNewDatIdx            ();
-static double  RunOclKrn               (KrnSct *);
-
-
-/*----------------------------------------------------------------------------*/
-/* Global library variables                                                   */
-/*----------------------------------------------------------------------------*/
-
-GmlSct gml;
 
 
 /*----------------------------------------------------------------------------*/
@@ -157,6 +162,7 @@ char *OclNulVec[ GmlMaxOclTyp ]  = {
    "(float16){0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.}" };
 
 int   TypVecSiz[ GmlMaxOclTyp ]  = {1,2,4,8,16,1,2,4,8,16};
+int   OclVecPow[ VECPOWOCL +1 ]  = {GmlInt, GmlInt2, GmlInt4, GmlInt8, GmlInt16};
 
 int   MshItmTyp[ GmlMaxEleTyp ]  = {GmlFlt4, GmlInt2, GmlInt4, GmlInt4,
                                     GmlInt4, GmlInt8, GmlInt8, GmlInt8};
@@ -204,15 +210,19 @@ char *sep="\n\n############################################################\n";
 /* Init device, context and queue                                             */
 /*----------------------------------------------------------------------------*/
 
-GmlParSct *GmlInit(int DevIdx)
+size_t GmlInit(int DevIdx)
 {
    int            err, res;
    cl_platform_id PlfTab[ GmlMaxOclTyp ];
    cl_uint        NmbPlf;
+   GmlSct         *gml;
+   size_t         GmlIdx;
 
    // Select which device to run on
-   memset(&gml, 0, sizeof(GmlSct));
-   gml.CurDev = DevIdx;
+   gml = calloc(1, sizeof(GmlSct));
+   assert(gml);
+   GmlIdx = (size_t)gml;
+   gml->CurDev = DevIdx;
 
    // Init the OpenCL software platform
    res = clGetPlatformIDs(10, PlfTab, &NmbPlf);
@@ -220,55 +230,55 @@ GmlParSct *GmlInit(int DevIdx)
    if(res != CL_SUCCESS)
    {
       puts("Could not find a valid platform to compile and run OpenCL sources.");
-      return(NULL);
+      return(0);
    }
 
    // Get the list of available OpenCL devices
    res = clGetDeviceIDs(PlfTab[0], CL_DEVICE_TYPE_ALL,
-                        MaxGpu, gml.device_id, &gml.NmbDev);
+                        MaxGpu, gml->device_id, &gml->NmbDev);
 
    if(res != CL_SUCCESS)
    {
       puts("Could not get the OpenCL devices list.");
-      return(NULL);
+      return(0);
    }
 
    // Check the user choosen device index against the bounds
-   if( (DevIdx < 0) || (DevIdx >= gml.NmbDev) )
+   if( (DevIdx < 0) || (DevIdx >= gml->NmbDev) )
    {
-      printf("Selected device Id is out of bounds (1 -> %d)\n", gml.NmbDev - 1);
-      return(NULL);
+      printf("Selected device Id is out of bounds (1 -> %d)\n", gml->NmbDev - 1);
+      return(0);
    }
 
    // Create the context based on the platform and the selected device
-   gml.context = clCreateContext(0, 1, &gml.device_id[ gml.CurDev ],
+   gml->context = clCreateContext(0, 1, &gml->device_id[ gml->CurDev ],
                                  NULL, NULL, &err);
 
-   if(!gml.context)
+   if(!gml->context)
    {
       printf("OpenCL context creation failed with error: %d\n", err);
-      return(NULL);
+      return(0);
    }
 
    // Create a command queue for this platform and device
-   gml.queue = clCreateCommandQueue(gml.context, gml.device_id[ gml.CurDev ],
+   gml->queue = clCreateCommandQueue(gml->context, gml->device_id[ gml->CurDev ],
                                     CL_QUEUE_PROFILING_ENABLE, &err);
 
-   if(!gml.queue)
+   if(!gml->queue)
    {
       printf("OpenCL command queue creation failed with error: %d\n", err);
-      return(NULL);
+      return(0);
    }
 
    // Allocate and return a public user customizable parameter structure
-   if(!(gml.ParIdx = GmlNewParameters(sizeof(GmlParSct), "par")))
+   if(!(gml->ParIdx = GmlNewParameters(GmlIdx, sizeof(GmlParSct), "par")))
    {
       puts("Could not allocate the GMlib internal parameters structure.");
-      return(NULL);
+      return(0);
    }
 
    // Return a pointer on the allocated and initialize GMlib structure
-   return(gml.dat[ gml.ParIdx ].CpuMem);
+   return(GmlIdx);
 }
 
 
@@ -276,23 +286,24 @@ GmlParSct *GmlInit(int DevIdx)
 /* Free OpenCL buffers and close the library                                  */
 /*----------------------------------------------------------------------------*/
 
-void GmlStop()
+void GmlStop(size_t GmlIdx)
 {
    int i;
+   GETGMLPTR(gml, GmlIdx);
 
    // Free GPU memories, kernels and queue
    for(i=1;i<=GmlMaxDat;i++)
-      if(gml.dat[i].GpuMem)
-         clReleaseMemObject(gml.dat[i].GpuMem);
+      if(gml->dat[i].GpuMem)
+         clReleaseMemObject(gml->dat[i].GpuMem);
 
-   for(i=1;i<=gml.NmbKrn;i++)
+   for(i=1;i<=gml->NmbKrn;i++)
    {
-      clReleaseKernel(gml.krn[i].kernel);
-      clReleaseProgram(gml.krn[i].program);
+      clReleaseKernel(gml->krn[i].kernel);
+      clReleaseProgram(gml->krn[i].program);
    }
 
-   clReleaseCommandQueue(gml.queue); 
-   clReleaseContext(gml.context);
+   clReleaseCommandQueue(gml->queue); 
+   clReleaseContext(gml->context);
 }
 
 
@@ -339,15 +350,16 @@ void GmlListGPU()
 /* Allocate one of the 8 mesh data types                                      */
 /*----------------------------------------------------------------------------*/
 
-int GmlNewParameters(int siz, char *nam)
+int GmlNewParameters(size_t GmlIdx, int siz, char *nam)
 {
-   int idx;
-   DatSct *dat;
+   int      idx;
+   DatSct   *dat;
+   GETGMLPTR(gml, GmlIdx);
 
-   if(!(idx = GetNewDatIdx()))
+   if(!(idx = GetNewDatIdx(gml)))
       return(0);
 
-   dat = &gml.dat[ idx ];
+   dat = &gml->dat[ idx ];
 
    dat->AloTyp = GmlArgDat;
    dat->MshTyp = 0;
@@ -363,10 +375,10 @@ int GmlNewParameters(int siz, char *nam)
    dat->GpuMem = dat->CpuMem = NULL;
    dat->nam    = nam;
 
-   if(!NewData(dat))
+   if(!NewData(gml, dat))
       return(0);
 
-   if(gml.DbgFlg)
+   if(gml->DbgFlg)
    {
       puts(sep);
       printf(  "Allocated a parameters data: index=%2d, size=%zu bytes\n",
@@ -381,18 +393,18 @@ int GmlNewParameters(int siz, char *nam)
 /* Allocate one of the 8 mesh data types                                      */
 /*----------------------------------------------------------------------------*/
 
-int GmlNewMeshData(int MshTyp, int NmbLin)
+int GmlNewMeshData(size_t GmlIdx, int MshTyp, int NmbLin)
 {
    int      EleIdx, RefIdx;
    DatSct   *EleDat, *RefDat;
 
-   if( (MshTyp < 0) || (MshTyp >= GmlMaxEleTyp) )
+   GETGMLPTR(gml, GmlIdx);
+   CHKELETYP(MshTyp);
+
+   if(!(EleIdx = GetNewDatIdx(gml)))
       return(0);
 
-   if(!(EleIdx = GetNewDatIdx()))
-      return(0);
-
-   EleDat = &gml.dat[ EleIdx ];
+   EleDat = &gml->dat[ EleIdx ];
 
    EleDat->AloTyp = GmlEleDat;
    EleDat->MshTyp = MshTyp;
@@ -408,13 +420,13 @@ int GmlNewMeshData(int MshTyp, int NmbLin)
    EleDat->GpuMem = EleDat->CpuMem = NULL;
    EleDat->nam    = MshTypStr[ MshTyp ];
 
-   if(!NewData(EleDat))
+   if(!NewData(gml, EleDat))
       return(0);
 
-   if(!(RefIdx = GetNewDatIdx()))
+   if(!(RefIdx = GetNewDatIdx(gml)))
       return(0);
 
-   RefDat = &gml.dat[ RefIdx ];
+   RefDat = &gml->dat[ RefIdx ];
 
    RefDat->AloTyp = GmlRefDat;
    RefDat->MshTyp = MshTyp;
@@ -430,16 +442,16 @@ int GmlNewMeshData(int MshTyp, int NmbLin)
    RefDat->GpuMem = RefDat->CpuMem = NULL;
    RefDat->nam    = MshRefStr[ MshTyp ];
 
-   if(!NewData(RefDat))
+   if(!NewData(gml, RefDat))
       return(0);
 
-   gml.NmbEle[ MshTyp ] = NmbLin;
-   gml.TypIdx[ MshTyp ] = EleIdx;
-   gml.LnkMat[ MshTyp ][ GmlVertices ] = EleIdx;
-   gml.CntMat[ MshTyp ][ MshTyp ] = RefIdx;
-   gml.RefIdx[ MshTyp ] = RefIdx;
+   gml->NmbEle[ MshTyp ] = NmbLin;
+   gml->TypIdx[ MshTyp ] = EleIdx;
+   gml->LnkMat[ MshTyp ][ GmlVertices ] = EleIdx;
+   gml->CntMat[ MshTyp ][ MshTyp ] = RefIdx;
+   gml->RefIdx[ MshTyp ] = RefIdx;
 
-   if(gml.DbgFlg)
+   if(gml->DbgFlg)
    {
       puts(sep);
       printf(  "Allocated mesh data: index=%2d, size=%zu bytes\n",
@@ -456,21 +468,20 @@ int GmlNewMeshData(int MshTyp, int NmbLin)
 /* Allocate a free solution/raw data associated with a mesh data type         */
 /*----------------------------------------------------------------------------*/
 
-int GmlNewSolutionData(int MshTyp, int NmbDat, int ItmTyp, char *nam)
+int GmlNewSolutionData( size_t GmlIdx, int MshTyp, int NmbDat,
+                                       int ItmTyp, char *nam )
 {
    int      idx;
    DatSct   *dat;
 
-   if( (MshTyp < GmlVertices) || (MshTyp > GmlHexahedra) )
+   GETGMLPTR(gml, GmlIdx);
+   CHKELETYP(MshTyp);
+   CHKOCLTYP(ItmTyp);
+
+   if(!(idx = GetNewDatIdx(gml)))
       return(0);
 
-   if( (ItmTyp < GmlInt) || (ItmTyp > GmlFlt16) )
-      return(0);
-
-   if(!(idx = GetNewDatIdx()))
-      return(0);
-
-   dat = &gml.dat[ idx ];
+   dat = &gml->dat[ idx ];
 
    dat->AloTyp = GmlRawDat;
    dat->MshTyp = MshTyp;
@@ -480,16 +491,16 @@ int GmlNewSolutionData(int MshTyp, int NmbDat, int ItmTyp, char *nam)
    dat->NmbItm = NmbDat;
    dat->ItmSiz = OclTypSiz[ ItmTyp ];
    dat->ItmLen = TypVecSiz[ ItmTyp ];
-   dat->NmbLin = gml.NmbEle[ MshTyp ];
+   dat->NmbLin = gml->NmbEle[ MshTyp ];
    dat->LinSiz = dat->NmbItm * dat->ItmSiz;
    dat->MemSiz = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
    dat->GpuMem = dat->CpuMem = NULL;
    dat->nam    = nam;
 
-   if(!NewData(dat))
+   if(!NewData(gml, dat))
       return(0);
 
-   if(gml.DbgFlg)
+   if(gml->DbgFlg)
    {
       puts(sep);
       printf(  "Allocated solutions data: index=%2d, size=%zu bytes\n",
@@ -504,23 +515,21 @@ int GmlNewSolutionData(int MshTyp, int NmbDat, int ItmTyp, char *nam)
 /* Create an arbitrary link table between two kinds of mesh data types        */
 /*----------------------------------------------------------------------------*/
 
-int GmlNewLinkData(int MshTyp, int LnkTyp, int NmbDat, char *nam)
+int GmlNewLinkData(size_t GmlIdx, int MshTyp, int LnkTyp, int NmbDat, char *nam)
 {
    int      LnkIdx, VecCnt, VecSiz, ItmTyp;
    DatSct   *dat;
 
-   if( (MshTyp < GmlVertices) || (MshTyp > GmlHexahedra) )
-      return(0);
+   GETGMLPTR(gml, GmlIdx);
+   CHKELETYP(MshTyp);
+   CHKELETYP(LnkTyp);
 
-   if( (LnkTyp < GmlVertices) || (LnkTyp > GmlHexahedra) )
-      return(0);
-
-   if(!(LnkIdx = GetNewDatIdx()))
+   if(!(LnkIdx = GetNewDatIdx(gml)))
       return(0);
 
    GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
 
-   dat = &gml.dat[ LnkIdx ];
+   dat = &gml->dat[ LnkIdx ];
 
    dat->AloTyp = GmlLnkDat;
    dat->MshTyp = MshTyp;
@@ -530,18 +539,18 @@ int GmlNewLinkData(int MshTyp, int LnkTyp, int NmbDat, char *nam)
    dat->NmbItm = VecCnt;
    dat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
    dat->ItmLen = 1;
-   dat->NmbLin = gml.NmbEle[ MshTyp ];
+   dat->NmbLin = gml->NmbEle[ MshTyp ];
    dat->LinSiz = dat->NmbItm * dat->ItmSiz;
    dat->MemSiz = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
    dat->GpuMem = dat->CpuMem = NULL;
    dat->nam    = nam;
 
-   if(!NewData(dat))
+   if(!NewData(gml, dat))
       return(0);
 
-   gml.LnkMat[ MshTyp ][ LnkTyp ] = LnkIdx;
+   gml->LnkMat[ MshTyp ][ LnkTyp ] = LnkIdx;
 
-   if(gml.DbgFlg)
+   if(gml->DbgFlg)
    {
       puts(sep);
       printf(  "Allocated link data: index=%2d, size=%zu bytes\n",
@@ -556,7 +565,7 @@ int GmlNewLinkData(int MshTyp, int LnkTyp, int NmbDat, char *nam)
 /* Create an arbitrary link table between two kinds of mesh data types        */
 /*----------------------------------------------------------------------------*/
 
-int GmlNewBallData(int MshTyp, int LnkTyp, char *BalNam, char *DegNam)
+int NewBallData(GmlSct *gml, int MshTyp, int LnkTyp, char *BalNam, char *DegNam)
 {
    int         i, j, BalIdx, HghIdx, DegIdx, VerIdx, SrcIdx, DstIdx;
    int         EleSiz, VecSiz, BalSiz, MaxSiz, HghSiz = 0;
@@ -565,29 +574,25 @@ int GmlNewBallData(int MshTyp, int LnkTyp, char *BalNam, char *DegNam)
    int64_t     DegTot = 0;
    DatSct      *src, *dst, *bal, *hgh, *deg, *BalDat, *HghDat, *DegDat;
 
-
    // Check and prepare some data
-   if( (MshTyp < 0) || (MshTyp >= GmlMaxEleTyp) )
-      return(0);
-
-   if( (LnkTyp < 0) || (LnkTyp >= GmlMaxEleTyp) )
-      return(0);
+   CHKELETYP(MshTyp);
+   CHKELETYP(LnkTyp);
 
    if(!BalNam || !DegNam)
       return(0);
 
-   SrcIdx = gml.TypIdx[ MshTyp ];
-   DstIdx = gml.TypIdx[ LnkTyp ];
-   src = &gml.dat[ SrcIdx ];
-   dst = &gml.dat[ DstIdx ];
+   SrcIdx = gml->TypIdx[ MshTyp ];
+   DstIdx = gml->TypIdx[ LnkTyp ];
+   src = &gml->dat[ SrcIdx ];
+   dst = &gml->dat[ DstIdx ];
 
 
    // Build the degrees table: count and allocate gml data,
    // base and high vector sizes for the next two phases
-   if(!(DegIdx = GetNewDatIdx()))
+   if(!(DegIdx = GetNewDatIdx(gml)))
       return(0);
 
-   DegDat = &gml.dat[ DegIdx ];
+   DegDat = &gml->dat[ DegIdx ];
 
    DegDat->AloTyp = GmlLnkDat;
    DegDat->MshTyp = MshTyp;
@@ -597,17 +602,17 @@ int GmlNewBallData(int MshTyp, int LnkTyp, char *BalNam, char *DegNam)
    DegDat->NmbItm = 1;
    DegDat->ItmSiz = OclTypSiz[ GmlInt ];
    DegDat->ItmLen = 0;
-   DegDat->NmbLin = gml.NmbEle[ MshTyp ];
+   DegDat->NmbLin = gml->NmbEle[ MshTyp ];
    DegDat->LinSiz = DegDat->NmbItm * DegDat->ItmSiz;
    DegDat->MemSiz = (size_t)DegDat->NmbLin * (size_t)DegDat->LinSiz;
    DegDat->GpuMem = DegDat->CpuMem = NULL;
    DegDat->nam    = DegNam;
 
-   if(!NewData(DegDat))
+   if(!NewData(gml, DegDat))
       return(0);
 
-   gml.CntMat[ MshTyp ][ LnkTyp ] = DegIdx;
-   deg = &gml.dat[ gml.CntMat[ src->MshTyp ][ dst->MshTyp ] ];
+   gml->CntMat[ MshTyp ][ LnkTyp ] = DegIdx;
+   deg = &gml->dat[ gml->CntMat[ src->MshTyp ][ dst->MshTyp ] ];
 
    DegTab = deg->CpuMem;
    EleTab = dst->CpuMem;
@@ -633,13 +638,13 @@ int GmlNewBallData(int MshTyp, int LnkTyp, char *BalNam, char *DegNam)
    SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
 
    // Allocate the base vector ball table
-   if(!(BalIdx = GetNewDatIdx()))
+   if(!(BalIdx = GetNewDatIdx(gml)))
       return(0);
 
    NmbDat = LenMatBas[ MshTyp ][ LnkTyp ];
    GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
 
-   BalDat = &gml.dat[ BalIdx ];
+   BalDat = &gml->dat[ BalIdx ];
 
    BalDat->AloTyp = GmlLnkDat;
    BalDat->MshTyp = MshTyp;
@@ -655,21 +660,21 @@ int GmlNewBallData(int MshTyp, int LnkTyp, char *BalNam, char *DegNam)
    BalDat->GpuMem = BalDat->CpuMem = NULL;
    BalDat->nam    = BalNam;
 
-   if(!NewData(BalDat))
+   if(!NewData(gml, BalDat))
       return(0);
 
-   gml.LnkMat[ MshTyp ][ LnkTyp ] = BalIdx;
-   bal = &gml.dat[ gml.LnkMat[ src->MshTyp ][ dst->MshTyp ] ];
+   gml->LnkMat[ MshTyp ][ LnkTyp ] = BalIdx;
+   bal = &gml->dat[ gml->LnkMat[ src->MshTyp ][ dst->MshTyp ] ];
 
 
    // Allocate the high vector ball table
-   if(!(HghIdx = GetNewDatIdx()))
+   if(!(HghIdx = GetNewDatIdx(gml)))
       return(0);
 
    NmbDat = SizMatHgh[ MshTyp ][ LnkTyp ];
    GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
 
-   HghDat = &gml.dat[ HghIdx ];
+   HghDat = &gml->dat[ HghIdx ];
 
    HghDat->AloTyp = GmlLnkDat;
    HghDat->MshTyp = MshTyp;
@@ -679,17 +684,17 @@ int GmlNewBallData(int MshTyp, int LnkTyp, char *BalNam, char *DegNam)
    HghDat->NmbItm = VecCnt;
    HghDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
    HghDat->ItmLen = 1;
-   HghDat->NmbLin = gml.NmbEle[ MshTyp ] - MaxPos;
+   HghDat->NmbLin = gml->NmbEle[ MshTyp ] - MaxPos;
    HghDat->LinSiz = HghDat->NmbItm * HghDat->ItmSiz;
    HghDat->MemSiz = (size_t)HghDat->NmbLin * (size_t)HghDat->LinSiz;
    HghDat->GpuMem = HghDat->CpuMem = NULL;
    HghDat->nam    = BalNam;
 
-   if(!NewData(HghDat))
+   if(!NewData(gml, HghDat))
       return(0);
 
-   gml.LnkHgh[ MshTyp ][ LnkTyp ] = HghIdx;
-   hgh = &gml.dat[ gml.LnkHgh[ src->MshTyp ][ dst->MshTyp ] ];
+   gml->LnkHgh[ MshTyp ][ LnkTyp ] = HghIdx;
+   hgh = &gml->dat[ gml->LnkHgh[ src->MshTyp ][ dst->MshTyp ] ];
 
 
    // Fill both ball tables at the same time
@@ -713,11 +718,11 @@ int GmlNewBallData(int MshTyp, int LnkTyp, char *BalNam, char *DegNam)
       }
 
    // Upload the ball data to th GPU memory
-   gml.MovSiz += UploadData(BalIdx);
-   gml.MovSiz += UploadData(HghIdx);
-   gml.MovSiz += UploadData(DegIdx);
+   gml->MovSiz += UploadData(gml, BalIdx);
+   gml->MovSiz += UploadData(gml, HghIdx);
+   gml->MovSiz += UploadData(gml, DegIdx);
 
-   if(gml.DbgFlg)
+   if(gml->DbgFlg)
    {
       puts(sep);
       printf(  "Ball generation: type %s -> %s\n",
@@ -741,12 +746,12 @@ int GmlNewBallData(int MshTyp, int LnkTyp, char *BalNam, char *DegNam)
 /* Find and return a free data slot int the GML structure                     */
 /*----------------------------------------------------------------------------*/
 
-static int GetNewDatIdx()
+static int GetNewDatIdx(GmlSct *gml)
 {
    for(int i=1;i<=GmlMaxDat;i++)
-      if(!gml.dat[i].use)
+      if(!gml->dat[i].use)
       {
-         gml.dat[i].use = 1;
+         gml->dat[i].use = 1;
          return(i);
       }
 
@@ -758,18 +763,18 @@ static int GetNewDatIdx()
 /* Allocate an OpenCL buffer plus 10% more for resizing                       */
 /*----------------------------------------------------------------------------*/
 
-static int NewData(DatSct *dat)
+static int NewData(GmlSct *gml, DatSct *dat)
 {
    int MemAcs[4] = {0, CL_MEM_READ_ONLY, CL_MEM_WRITE_ONLY, CL_MEM_READ_WRITE};
 
    // Allocate the requested memory size on the GPU
-   dat->GpuMem = clCreateBuffer( gml.context, MemAcs[ dat->MemAcs ],
+   dat->GpuMem = clCreateBuffer( gml->context, MemAcs[ dat->MemAcs ],
                                  dat->MemSiz, NULL, NULL );
 
    if(!dat->GpuMem)
    {
       printf(  "Cannot allocate %ld MB on the GPU (%ld MB already used)\n",
-               dat->MemSiz / MB, GmlGetMemoryUsage() / MB);
+               dat->MemSiz / MB, GmlGetMemoryUsage((size_t)gml) / MB);
       return(0);
    }
 
@@ -781,7 +786,7 @@ static int NewData(DatSct *dat)
    }
 
    // Keep track of allocated memory
-   gml.MemSiz += dat->MemSiz;
+   gml->MemSiz += dat->MemSiz;
 
    return(1);
 }
@@ -791,9 +796,10 @@ static int NewData(DatSct *dat)
 /* Release an OpenCL buffer                                                   */
 /*----------------------------------------------------------------------------*/
 
-int GmlFreeData(int idx)
+int GmlFreeData(size_t GmlIdx, int idx)
 {
-   DatSct *dat = &gml.dat[ idx ];
+   GETGMLPTR(gml, GmlIdx);
+   DatSct *dat = &gml->dat[ idx ];
 
    // Free both GPU and CPU memory buffers
    if( (idx >= 1) && (idx <= GmlMaxDat) && dat->GpuMem )
@@ -803,7 +809,7 @@ int GmlFreeData(int idx)
 
       dat->GpuMem = NULL;
       dat->use = 0;
-      gml.MemSiz -= dat->MemSiz;
+      gml->MemSiz -= dat->MemSiz;
 
       if(dat->CpuMem)
          free(dat->CpuMem);
@@ -819,9 +825,10 @@ int GmlFreeData(int idx)
 /* Set a line of mesh, link or solution data                                  */
 /*----------------------------------------------------------------------------*/
 
-int GmlSetDataLine(int idx, int lin, ...)
+int GmlSetDataLine(size_t GmlIdx, int idx, int lin, ...)
 {
-   DatSct   *dat = &gml.dat[ idx ], *RefDat;
+   GETGMLPTR(gml, GmlIdx);
+   DatSct   *dat = &gml->dat[ idx ], *RefDat;
    char     *adr = (void *)dat->CpuMem;
    int      i, *EleTab, siz, *RefTab, *tab;
    float    *CrdTab;
@@ -843,7 +850,7 @@ int GmlSetDataLine(int idx, int lin, ...)
    else if( (dat->AloTyp == GmlEleDat) && (dat->MshTyp == GmlVertices) )
    {
       CrdTab = (float *)dat->CpuMem;
-      RefDat = &gml.dat[ gml.CntMat[ dat->MshTyp ][ dat->MshTyp ] ];
+      RefDat = &gml->dat[ gml->CntMat[ dat->MshTyp ][ dat->MshTyp ] ];
       RefTab = (int *)RefDat->CpuMem;
       siz = 4;
 
@@ -857,7 +864,7 @@ int GmlSetDataLine(int idx, int lin, ...)
    {
       EleTab = (int *)dat->CpuMem;
       siz = TypVecSiz[ MshItmTyp[ dat->MshTyp ] ];
-      RefDat = &gml.dat[ gml.CntMat[ dat->MshTyp ][ dat->MshTyp ] ];
+      RefDat = &gml->dat[ gml->CntMat[ dat->MshTyp ][ dat->MshTyp ] ];
       RefTab = (int *)RefDat->CpuMem;
 
       for(i=0;i<EleNmbNod[ dat->MshTyp ];i++)
@@ -869,7 +876,7 @@ int GmlSetDataLine(int idx, int lin, ...)
    va_end(VarArg);
 
    if(lin == dat->NmbLin - 1)
-      gml.MovSiz += UploadData(idx);
+      gml->MovSiz += UploadData(gml, idx);
 
    return(1);
 }
@@ -879,9 +886,10 @@ int GmlSetDataLine(int idx, int lin, ...)
 /* Get a line of solution or vertex corrdinates from the librarie's buffers   */
 /*----------------------------------------------------------------------------*/
 
-int GmlGetDataLine(int idx, int lin, ...)
+int GmlGetDataLine(size_t GmlIdx, int idx, int lin, ...)
 {
-   DatSct   *dat = &gml.dat[ idx ];
+   GETGMLPTR(gml, GmlIdx);
+   DatSct   *dat = &gml->dat[ idx ];
    char     *adr = (void *)dat->CpuMem;
    int      i;
    float    *GpuCrd;
@@ -889,7 +897,7 @@ int GmlGetDataLine(int idx, int lin, ...)
    va_list  VarArg;
 
    if(lin == 0)
-      gml.MovSiz += DownloadData(idx);
+      gml->MovSiz += DownloadData(gml, idx);
 
    va_start(VarArg, lin);
 
@@ -918,10 +926,10 @@ int GmlGetDataLine(int idx, int lin, ...)
 /* Copy user's data into an OpenCL buffer                                     */
 /*----------------------------------------------------------------------------*/
 
-static int UploadData(int idx)
+static int UploadData(GmlSct *gml, int idx)
 {
    int      res;
-   DatSct   *dat = &gml.dat[ idx ];
+   DatSct   *dat = &gml->dat[ idx ];
 
    // Check indices
    if( (idx < 1) || (idx > GmlMaxDat) || !dat->GpuMem
@@ -932,7 +940,7 @@ static int UploadData(int idx)
 
    // Upload buffer from CPU ram to GPU ram
    // and keep track of the amount of uploaded data
-   res = clEnqueueWriteBuffer(gml.queue, dat->GpuMem, CL_FALSE, 0,
+   res = clEnqueueWriteBuffer(gml->queue, dat->GpuMem, CL_FALSE, 0,
                               dat->MemSiz, dat->CpuMem, 0, NULL,NULL);
 
    if(res != CL_SUCCESS)
@@ -942,7 +950,7 @@ static int UploadData(int idx)
    }
    else
    {
-      gml.MovSiz += dat->MemSiz;
+      gml->MovSiz += dat->MemSiz;
       return(dat->MemSiz);
    }
 }
@@ -952,10 +960,10 @@ static int UploadData(int idx)
 /* Copy an OpenCL buffer into user's data                                     */
 /*----------------------------------------------------------------------------*/
 
-static int DownloadData(int idx)
+static int DownloadData(GmlSct *gml, int idx)
 {
    int      res;
-   DatSct   *dat = &gml.dat[ idx ];
+   DatSct   *dat = &gml->dat[ idx ];
 
    // Check indices
    if( (idx < 1) || (idx > GmlMaxDat) || !dat->GpuMem || !dat->CpuMem )
@@ -963,7 +971,7 @@ static int DownloadData(int idx)
 
    // Download buffer from GPU ram to CPU ram
    // and keep track of the amount of downloaded data
-   res = clEnqueueReadBuffer( gml.queue, dat->GpuMem, CL_TRUE, 0,
+   res = clEnqueueReadBuffer( gml->queue, dat->GpuMem, CL_TRUE, 0,
                               dat->MemSiz, dat->CpuMem, 0, NULL, NULL );
 
    if(res != CL_SUCCESS)
@@ -973,7 +981,7 @@ static int DownloadData(int idx)
    }
    else
    {
-      gml.MovSiz += dat->MemSiz;
+      gml->MovSiz += dat->MemSiz;
       return(dat->MemSiz);
    }
 }
@@ -983,9 +991,10 @@ static int DownloadData(int idx)
 /* Generate the kernel from user's source and data and compile it             */
 /*----------------------------------------------------------------------------*/
 
-int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
-                     int MshTyp, int NmbTyp, ...)
+int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
+                     char *DefSrc, int MshTyp, int NmbTyp, ...)
 {
+   GETGMLPTR(gml, GmlIdx);
    int      i, j, flg, KrnIdx, KrnHghIdx, SrcTyp, DstTyp, NmbArg = 0, RefIdx;
    int      FlgTab[ GmlMaxDat ], IdxTab[ GmlMaxDat ];
    int      LnkTab[ GmlMaxDat ], CntTab[ GmlMaxDat ];
@@ -994,10 +1003,10 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
    char     src[10000] = "\0", BalNam[100], DegNam[100];
    va_list  VarArg;
    DatSct   *dat, *RefDat;
-   ArgSct   ArgTab[ GmlMaxOclTyp ];
+   ArgSct   *arg, ArgTab[ GmlMaxOclTyp ];
    KrnSct   *krn;
 
-   // Decode datatypes arguments
+   // Read user's datatypes arguments
    va_start(VarArg, NmbTyp);
 
    for(i=0;i<NmbTyp;i++)
@@ -1013,17 +1022,19 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
    // Check or build datatype indirect access tables
    for(i=0;i<NmbTyp;i++)
    {
-      dat = &gml.dat[ IdxTab[i] ];
+      dat = &gml->dat[ IdxTab[i] ];
 
       if( LnkTab[i] || (dat->MshTyp == MshTyp) )
          continue;
 
+      // Source and destination mesh datatype to access the connectivity matrix
       SrcTyp = MshTyp;
       DstTyp = dat->MshTyp;
 
       if(MshTypDim[ SrcTyp ] > MshTypDim[ DstTyp ])
       {
-         LnkTab[i] = gml.LnkMat[ MshTyp ][ DstTyp ];
+         // Downlink
+         LnkTab[i] = gml->LnkMat[ MshTyp ][ DstTyp ];
          CntTab[i] = 0;
       }
       else if(MshTypDim[ SrcTyp ] == MshTypDim[ DstTyp ])
@@ -1032,25 +1043,29 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
       }
       else
       {
-         if(!gml.LnkMat[ MshTyp ][ dat->MshTyp ])
+         // Uplink
+         if(!gml->LnkMat[ MshTyp ][ dat->MshTyp ])
          {
             // Generate the default link between the two kinds of entities
             sprintf(BalNam, "%s%sBal", BalTypStr[ MshTyp ], BalTypStr[ DstTyp ]);
             sprintf(DegNam, "%s%sDeg", BalTypStr[ MshTyp ], BalTypStr[ DstTyp ]);
-            GmlNewBallData(MshTyp, DstTyp, BalNam, DegNam);
+            NewBallData(gml, MshTyp, DstTyp, BalNam, DegNam);
          }
 
-         LnkTab[i] = gml.LnkMat[ MshTyp ][ DstTyp ];
-         CntTab[i] = gml.CntMat[ MshTyp ][ DstTyp ];
+         LnkTab[i] = gml->LnkMat[ MshTyp ][ DstTyp ];
+         CntTab[i] = gml->CntMat[ MshTyp ][ DstTyp ];
       }
    }
 
+   // Build the context arguments to store links
    for(i=0;i<NmbTyp;i++)
    {
+      // Process each datatype that needs a link
       if(!LnkTab[i])
          continue;
 
-      dat = &gml.dat[ IdxTab[i] ];
+      // Try to find if this link already exists in the previously defined arguments
+      dat = &gml->dat[ IdxTab[i] ];
       flg = 0;
 
       for(j=0;j<NmbArg;j++)
@@ -1060,69 +1075,81 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
       if(flg)
          continue;
 
+      // If not, get the link data index from the conectivity matrix
       DstTyp = dat->MshTyp;
       LnkItm = LenMatBas[ MshTyp ][ DstTyp ];
       GetCntVec(LnkItm, &NmbItm, &ItmLen, &ItmTyp);
 
+      // Create a new contextual argument
+      arg = &ArgTab[ NmbArg ];
+      arg->ArgIdx = NmbArg;
+      NmbArg++;
+
       if(MshTypDim[ SrcTyp ] > MshTypDim[ DstTyp ])
       {
-         ArgTab[ NmbArg ].MshTyp = DstTyp;
-         ArgTab[ NmbArg ].DatIdx = LnkTab[i];
-         ArgTab[ NmbArg ].LnkDir = -1;
-         ArgTab[ NmbArg ].LnkTyp = -1;
-         ArgTab[ NmbArg ].LnkIdx = -1;
-         ArgTab[ NmbArg ].CntIdx = -1;
-         ArgTab[ NmbArg ].LnkDeg = LnkItm;
-         ArgTab[ NmbArg ].MaxDeg = LnkItm;
-         ArgTab[ NmbArg ].NmbItm = NmbItm;
-         ArgTab[ NmbArg ].ItmLen = ItmLen;
-         ArgTab[ NmbArg ].ItmTyp = ItmTyp;
-         ArgTab[ NmbArg ].FlgTab = GmlReadMode;
-         ArgTab[ NmbArg ].nam = gml.dat[ ArgTab[ NmbArg ].DatIdx ].nam;
-         NmbArg++;
+         // Downlink access argument
+         arg->MshTyp = DstTyp;
+         arg->DatIdx = LnkTab[i];
+         arg->LnkDir = -1;
+         arg->LnkTyp = -1;
+         arg->LnkIdx = -1;
+         arg->CntIdx = -1;
+         arg->LnkDeg = LnkItm;
+         arg->MaxDeg = LnkItm;
+         arg->NmbItm = NmbItm;
+         arg->ItmLen = ItmLen;
+         arg->ItmTyp = ItmTyp;
+         arg->FlgTab = GmlReadMode;
+         arg->nam    = gml->dat[ arg->DatIdx ].nam;
       }
       else if(MshTypDim[ SrcTyp ] == MshTypDim[ DstTyp ])
       {
       }
       else if(MshTypDim[ SrcTyp ] < MshTypDim[ DstTyp ])
       {
-         ArgTab[ NmbArg ].MshTyp = DstTyp;
-         ArgTab[ NmbArg ].DatIdx = LnkTab[i];
-         ArgTab[ NmbArg ].LnkDir = 1;
-         ArgTab[ NmbArg ].LnkTyp = -1;
-         ArgTab[ NmbArg ].LnkIdx = -1;
-         ArgTab[ NmbArg ].CntIdx = -1;
-         ArgTab[ NmbArg ].LnkDeg = -1;
-         ArgTab[ NmbArg ].MaxDeg = LnkItm;
-         ArgTab[ NmbArg ].NmbItm = NmbItm;
-         ArgTab[ NmbArg ].ItmLen = ItmLen;
-         ArgTab[ NmbArg ].ItmTyp = ItmTyp;
-         ArgTab[ NmbArg ].FlgTab = GmlReadMode;
-         ArgTab[ NmbArg ].nam = gml.dat[ ArgTab[ NmbArg ].DatIdx ].nam;
-         HghArg = NmbArg;
-         HghIdx = gml.LnkHgh[ MshTyp ][ DstTyp ];
+         // Downlink access argument
+         arg->MshTyp = DstTyp;
+         arg->DatIdx = LnkTab[i];
+         arg->LnkDir = 1;
+         arg->LnkTyp = -1;
+         arg->LnkIdx = -1;
+         arg->CntIdx = -1;
+         arg->LnkDeg = -1;
+         arg->MaxDeg = LnkItm;
+         arg->NmbItm = NmbItm;
+         arg->ItmLen = ItmLen;
+         arg->ItmTyp = ItmTyp;
+         arg->FlgTab = GmlReadMode;
+         arg->nam    = gml->dat[ arg->DatIdx ].nam;
+         HghArg      = arg->ArgIdx;
+         HghIdx      = gml->LnkHgh[ MshTyp ][ DstTyp ];
+
+         // Variable counter argument
+         arg = &ArgTab[ NmbArg ];
+         arg->ArgIdx = NmbArg;
          NmbArg++;
 
-         ArgTab[ NmbArg ].MshTyp = DstTyp;
-         ArgTab[ NmbArg ].DatIdx = gml.CntMat[ MshTyp ][ DstTyp ];
-         ArgTab[ NmbArg ].LnkDir = 0;
-         ArgTab[ NmbArg ].LnkTyp = -1;
-         ArgTab[ NmbArg ].LnkIdx = -1;
-         ArgTab[ NmbArg ].CntIdx = -1;
-         ArgTab[ NmbArg ].LnkDeg = 1;
-         ArgTab[ NmbArg ].MaxDeg = 1;
-         ArgTab[ NmbArg ].NmbItm = 1;
-         ArgTab[ NmbArg ].ItmLen = 1;
-         ArgTab[ NmbArg ].ItmTyp = GmlInt;
-         ArgTab[ NmbArg ].FlgTab = GmlReadMode;
-         ArgTab[ NmbArg ].nam = gml.dat[ ArgTab[ NmbArg ].DatIdx ].nam;
-         NmbArg++;
+         arg->MshTyp = DstTyp;
+         arg->DatIdx = gml->CntMat[ MshTyp ][ DstTyp ];
+         arg->LnkDir = 0;
+         arg->LnkTyp = -1;
+         arg->LnkIdx = -1;
+         arg->CntIdx = -1;
+         arg->LnkDeg = 1;
+         arg->MaxDeg = 1;
+         arg->NmbItm = 1;
+         arg->ItmLen = 1;
+         arg->ItmTyp = GmlInt;
+         arg->FlgTab = GmlReadMode;
+         arg->nam    = gml->dat[ arg->DatIdx ].nam;
       }
    }
 
+   // Now that the links are defined first, the user's data can be accessed
    for(i=0;i<NmbTyp;i++)
    {
-      dat = &gml.dat[ IdxTab[i] ];
+      // For each datatype, try to find the arguments containing their link and counter
+      dat = &gml->dat[ IdxTab[i] ];
       DstTyp = dat->MshTyp;
       LnkPos = CptPos = -1;
 
@@ -1136,54 +1163,65 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
             if(ArgTab[j].DatIdx == CntTab[i])
                CptPos = j;
 
-      ArgTab[ NmbArg ].MshTyp = DstTyp;
-      ArgTab[ NmbArg ].DatIdx = IdxTab[i];
-      ArgTab[ NmbArg ].LnkTyp = DstTyp;
-      ArgTab[ NmbArg ].LnkIdx = LnkPos;
-      ArgTab[ NmbArg ].CntIdx = CptPos;
+      // Create a new data argument
+      arg = &ArgTab[ NmbArg ];
+      arg->ArgIdx = NmbArg;
+      NmbArg++;
+
+      arg->MshTyp = DstTyp;
+      arg->DatIdx = IdxTab[i];
+      arg->LnkTyp = DstTyp;
+      arg->LnkIdx = LnkPos;
+      arg->CntIdx = CptPos;
 
       if(LnkPos != -1 && CptPos != -1)
       {
-         ArgTab[ NmbArg ].LnkDeg = -1;
-         ArgTab[ NmbArg ].MaxDeg = ArgTab[ LnkPos ].MaxDeg;
-         ArgHghPos = NmbArg;
+         // Downlink with variable counter
+         arg->LnkDeg = -1;
+         arg->MaxDeg = ArgTab[ LnkPos ].MaxDeg;
+         ArgHghPos   = arg->ArgIdx;
       }
       else if(LnkPos != -1 && CptPos == -1)
       {
-         ArgTab[ NmbArg ].LnkDeg = ArgTab[ LnkPos ].LnkDeg;
-         ArgTab[ NmbArg ].MaxDeg = ArgTab[ LnkPos ].MaxDeg;
+         // Link with constant counter
+         arg->LnkDeg = ArgTab[ LnkPos ].LnkDeg;
+         arg->MaxDeg = ArgTab[ LnkPos ].MaxDeg;
       }
       else
       {
-         ArgTab[ NmbArg ].LnkDeg = -1;
-         ArgTab[ NmbArg ].MaxDeg = -1;
+         // No link: straight access
+         arg->LnkDeg = -1;
+         arg->MaxDeg = -1;
       }
 
-      ArgTab[ NmbArg ].NmbItm = dat->NmbItm;
-      ArgTab[ NmbArg ].ItmLen = dat->ItmLen;
-      ArgTab[ NmbArg ].ItmTyp = dat->ItmTyp;
-      ArgTab[ NmbArg ].FlgTab = FlgTab[i];
-      ArgTab[ NmbArg ].nam = dat->nam;
-      NmbArg++;
+      arg->NmbItm = dat->NmbItm;
+      arg->ItmLen = dat->ItmLen;
+      arg->ItmTyp = dat->ItmTyp;
+      arg->FlgTab = FlgTab[i];
+      arg->nam    = dat->nam;
 
       if(!(FlgTab[i] & GmlRefFlag) || (CptPos != -1))
          continue;
 
-      RefIdx = gml.RefIdx[ DstTyp ];
-      RefDat = &gml.dat[ RefIdx ];
-      ArgTab[ NmbArg ].MshTyp = DstTyp;
-      ArgTab[ NmbArg ].DatIdx = RefIdx;
-      ArgTab[ NmbArg ].LnkTyp = DstTyp;
-      ArgTab[ NmbArg ].LnkIdx = LnkPos;
-      ArgTab[ NmbArg ].CntIdx = CptPos;
-      ArgTab[ NmbArg ].LnkDeg = -1;
-      ArgTab[ NmbArg ].MaxDeg = ArgTab[ LnkPos ].MaxDeg;
-      ArgTab[ NmbArg ].NmbItm = RefDat->NmbItm;
-      ArgTab[ NmbArg ].ItmLen = RefDat->ItmLen;
-      ArgTab[ NmbArg ].ItmTyp = RefDat->ItmTyp;
-      ArgTab[ NmbArg ].FlgTab = FlgTab[i];
-      ArgTab[ NmbArg ].nam = RefDat->nam;
+      // Create a new ref argument
+      arg = &ArgTab[ NmbArg ];
+      arg->ArgIdx = NmbArg;
       NmbArg++;
+
+      RefIdx = gml->RefIdx[ DstTyp ];
+      RefDat = &gml->dat[ RefIdx ];
+      arg->MshTyp = DstTyp;
+      arg->DatIdx = RefIdx;
+      arg->LnkTyp = DstTyp;
+      arg->LnkIdx = LnkPos;
+      arg->CntIdx = CptPos;
+      arg->LnkDeg = -1;
+      arg->MaxDeg = ArgTab[ LnkPos ].MaxDeg;
+      arg->NmbItm = RefDat->NmbItm;
+      arg->ItmLen = RefDat->ItmLen;
+      arg->ItmTyp = RefDat->ItmTyp;
+      arg->FlgTab = FlgTab[i];
+      arg->nam    = RefDat->nam;
    }
 
    // Generate the kernel source code
@@ -1195,23 +1233,26 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
    WriteKernelMemoryWrites (src, MshTyp, NmbArg, ArgTab);
 
    // And Compile it
-   KrnIdx = NewKernel      (src, PrcNam);
+   KrnIdx = NewOclKrn      (gml, src, PrcNam);
 
-   if(gml.DbgFlg)
+   if(gml->DbgFlg)
    {
       puts(sep);
       printf("Generated source for kernel=%s, index=%2d\n", PrcNam, KrnIdx);
       puts(src);
    }
 
-   krn = &gml.krn[ KrnIdx ];
-   krn->NmbDat = NmbArg;
+   // Store information usefull to the kernel: loop indices and arguments list
+   krn = &gml->krn[ KrnIdx ];
+   krn->NmbDat    = NmbArg;
    krn->NmbLin[1] = 0;
 
+   // In case of constant counter, the kernel loops from 0 to NmbLin-1
+   // Otherwise, it loops up to the start of high degree entities
    if(HghIdx == -1)
-      krn->NmbLin[0] = gml.dat[ gml.TypIdx[ MshTyp ] ].NmbLin;
+      krn->NmbLin[0] = gml->dat[ gml->TypIdx[ MshTyp ] ].NmbLin;
    else
-      krn->NmbLin[0] = gml.dat[ gml.TypIdx[ MshTyp ] ].NmbLin - gml.dat[ HghIdx ].NmbLin;
+      krn->NmbLin[0] = gml->dat[ gml->TypIdx[ MshTyp ] ].NmbLin - gml->dat[ HghIdx ].NmbLin;
 
    for(i=0;i<NmbArg;i++)
       krn->DatTab[i] = ArgTab[i].DatIdx;
@@ -1223,6 +1264,7 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
    NmbHgh = SizMatHgh[ MshTyp ][ DstTyp ];
    GetCntVec(NmbHgh, &HghVec, &HghSiz, &HghTyp);
 
+   // Mofify the argument containing the uplink with the high count sizes
    ArgTab[ HghArg ].DatIdx = HghIdx;
    ArgTab[ HghArg ].MaxDeg = NmbHgh;
    ArgTab[ HghArg ].NmbItm = HghVec;
@@ -1239,18 +1281,19 @@ int GmlCompileKernel(char *KrnSrc, char *PrcNam, char *DefSrc,
    WriteKernelMemoryWrites (src, MshTyp, NmbArg, ArgTab);
 
    // And Compile it
-   KrnHghIdx = NewKernel   (src, PrcNam);
-   gml.krn[ KrnIdx ].HghIdx = KrnHghIdx;
+   KrnHghIdx = NewOclKrn   (gml, src, PrcNam);
+   gml->krn[ KrnIdx ].HghIdx = KrnHghIdx;
 
-   krn = &gml.krn[ KrnHghIdx ];
-   krn->NmbDat = NmbArg;
-   krn->NmbLin[0] = gml.dat[ HghIdx ].NmbLin;
-   krn->NmbLin[1] = gml.dat[ gml.TypIdx[ MshTyp ] ].NmbLin - gml.dat[ HghIdx ].NmbLin;
+   // Store information usefull to the kernel: loop indices and arguments list
+   krn = &gml->krn[ KrnHghIdx ];
+   krn->NmbDat    = NmbArg;
+   krn->NmbLin[0] = gml->dat[ HghIdx ].NmbLin;
+   krn->NmbLin[1] = gml->dat[ gml->TypIdx[ MshTyp ] ].NmbLin - gml->dat[ HghIdx ].NmbLin;
 
    for(i=0;i<NmbArg;i++)
       krn->DatTab[i] = ArgTab[i].DatIdx;
 
-   if(gml.DbgFlg)
+   if(gml->DbgFlg)
    {
       puts(sep);
       printf("Generated source for kernel=%s, index=%2d\n", PrcNam, KrnIdx);
@@ -1514,57 +1557,95 @@ static void WriteKernelMemoryWrites(char *src, int MshTyp,
 
 static void GetCntVec(int siz, int *cnt, int *vec, int *typ)
 {
-   // Handle only power of 2 vector sizes
-   switch(siz)
+   int p;
+
+   p = ceil(log2(siz));
+   p = MIN(p, VECPOWMAX);
+
+   if(p > VECPOWOCL)
    {
-      case 1 : {
-         *cnt = 1;
-         *vec = 1;
-         *typ = GmlInt;
-      }break;
-
-      case 2 : {
-         *cnt = 1;
-         *vec = 2;
-         *typ = GmlInt2;
-      }break;
-
-      case 4 : {
-         *cnt = 1;
-         *vec = 4;
-         *typ = GmlInt4;
-      }break;
-
-      case 8 : {
-         *cnt = 1;
-         *vec = 8;
-         *typ = GmlInt8;
-      }break;
-
-      case 16 : {
-         *cnt = 1;
-         *vec = 16;
-         *typ = GmlInt16;
-      }break;
-
-      case 32 : {
-         *cnt = 2;
-         *vec = 16;
-         *typ = GmlInt16;
-      }break;
-
-      case 64 : {
-         *cnt = 4;
-         *vec = 16;
-         *typ = GmlInt16;
-      }break;
-
-      case 128 : {
-         *cnt = 8;
-         *vec = 16;
-         *typ = GmlInt16;
-      }break;
+      *cnt = 1 << (p - VECPOWOCL);
+      *vec = 1 << VECPOWOCL;
+      *typ = OclVecPow[ VECPOWOCL ];
    }
+   else
+   {
+      *cnt = 1;
+      *vec = 1 << p;
+      *typ = OclVecPow[p];
+   }
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Read and compile an OpenCL source code                                     */
+/*----------------------------------------------------------------------------*/
+
+static int NewOclKrn(GmlSct *gml, char *KernelSource, char *PrcNam)
+{
+   char     *buffer, *StrTab[1];
+   int      err, res, idx = ++gml->NmbKrn;
+   KrnSct   *krn = &gml->krn[ idx ];
+   size_t   len, LenTab[10];
+
+   if(idx > GmlMaxKrn)
+      return(0);
+
+   StrTab[0] = KernelSource;
+   LenTab[0] = strlen(KernelSource) - 1;
+
+   // Compile source code
+   krn->program = clCreateProgramWithSource( gml->context, 1, (const char **)StrTab,
+                                             (const size_t *)LenTab, &err );
+   if(!krn->program)
+   {
+      printf("Compiling the kernel %s failed at step 1 with error %d\n", PrcNam, err);
+      return(0);
+   }
+
+   res = clBuildProgram(krn->program, 0, NULL,
+                        "-cl-single-precision-constant -cl-mad-enable", NULL, NULL);
+
+   if(res != CL_SUCCESS)
+   {
+      clGetProgramBuildInfo(  krn->program, gml->device_id[ gml->CurDev ],
+                              CL_PROGRAM_BUILD_LOG, 0, NULL, &len);
+
+      if(!(buffer = malloc(len)))
+         return(0);
+
+      clGetProgramBuildInfo(  krn->program, gml->device_id[ gml->CurDev ],
+                              CL_PROGRAM_BUILD_LOG, len, buffer, &len);
+
+      printf("Compiling the kernel %s failed at step 2 with error %d\n", PrcNam, res);
+      printf("%s\n", buffer);
+      free(buffer);
+      return(0);
+   }
+
+   krn->kernel = clCreateKernel(krn->program, PrcNam, &err);
+
+   if( !krn->kernel || (err != CL_SUCCESS) )
+   {
+      printf("Compiling the kernel %s failed at step 3 with error %d\n", PrcNam, err);
+      return(0);
+   }
+
+   krn->idx = idx;
+
+   if(gml->DbgFlg)
+   {
+      puts(sep);
+      res = clGetProgramInfo( krn->program, CL_PROGRAM_BINARY_SIZES,
+                              sizeof(size_t), &len, NULL );
+
+      if(res == CL_SUCCESS )
+         printf("binary executable of kernel %s: %ld bytes\n", PrcNam, len);
+      else
+         printf("could not get the size of kernel %s executable\n", PrcNam);
+   }
+
+   return(idx);
 }
 
 
@@ -1572,29 +1653,30 @@ static void GetCntVec(int siz, int *cnt, int *vec, int *typ)
 /* Select arguments and launch an OpenCL kernel                               */
 /*----------------------------------------------------------------------------*/
 
-double GmlLaunchKernel(int idx)
+double GmlLaunchKernel(size_t GmlIdx, int idx)
 {
+   GETGMLPTR(gml, GmlIdx);
    double   RunTim;
-   KrnSct   *hgh, *krn = &gml.krn[ idx ];
+   KrnSct   *hgh, *krn = &gml->krn[ idx ];
 
-   if( (idx < 1) || (idx > gml.NmbKrn) || !krn->kernel )
+   if( (idx < 1) || (idx > gml->NmbKrn) || !krn->kernel )
       return(-1);
 
    // First send the parameters to the GPU memmory
-   if(!UploadData(gml.ParIdx))
+   if(!UploadData(gml, gml->ParIdx))
       return(-2);
 
    if(!krn->HghIdx)
-      RunTim = RunOclKrn(krn);
+      RunTim = RunOclKrn(gml, krn);
    else
    {
-      hgh = &gml.krn[ krn->HghIdx ];
-      RunTim  = RunOclKrn(krn);
-      RunTim += RunOclKrn(hgh);
+      hgh = &gml->krn[ krn->HghIdx ];
+      RunTim  = RunOclKrn(gml, krn);
+      RunTim += RunOclKrn(gml, hgh);
    }
 
    // Finaly, get back the parameters from the GPU memmory
-   if(!DownloadData(gml.ParIdx))
+   if(!DownloadData(gml, gml->ParIdx))
       return(-10);
 
    return(RunTim);
@@ -1605,7 +1687,7 @@ double GmlLaunchKernel(int idx)
 /* Select arguments and launch an OpenCL kernel                               */
 /*----------------------------------------------------------------------------*/
 
-static double RunOclKrn(KrnSct *krn)
+static double RunOclKrn(GmlSct *gml, KrnSct *krn)
 {
    int      i, res;
    size_t   NmbGrp, GrpSiz, RetSiz = 0;
@@ -1615,7 +1697,7 @@ static double RunOclKrn(KrnSct *krn)
 
    for(i=0;i<krn->NmbDat;i++)
    {
-      dat = &gml.dat[ krn->DatTab[i] ];
+      dat = &gml->dat[ krn->DatTab[i] ];
 
       if((krn->DatTab[i] < 1) || (krn->DatTab[i] > GmlMaxDat) || !dat->GpuMem)
       {
@@ -1634,7 +1716,7 @@ static double RunOclKrn(KrnSct *krn)
    }
 
    res = clSetKernelArg(krn->kernel, krn->NmbDat, sizeof(cl_mem),
-                        &gml.dat[ gml.ParIdx ].GpuMem);
+                        &gml->dat[ gml->ParIdx ].GpuMem);
 
    if(res != CL_SUCCESS)
    {
@@ -1651,7 +1733,7 @@ static double RunOclKrn(KrnSct *krn)
    }
 
    // Fit data loop size to the GPU kernel size
-   res = clGetKernelWorkGroupInfo(  krn->kernel, gml.device_id[ gml.CurDev ],
+   res = clGetKernelWorkGroupInfo(  krn->kernel, gml->device_id[ gml->CurDev ],
                                     CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t),
                                     &GrpSiz, &RetSiz );
 
@@ -1662,7 +1744,7 @@ static double RunOclKrn(KrnSct *krn)
    }
 
    // Compute the hyperthreading level
-   gml.CurGrpSiz = GrpSiz;
+   gml->CurGrpSiz = GrpSiz;
    NmbGrp = krn->NmbLin[0] / GrpSiz;
    NmbGrp *= GrpSiz;
 
@@ -1670,15 +1752,15 @@ static double RunOclKrn(KrnSct *krn)
       NmbGrp += GrpSiz;
 
    // Launch GPU code
-   clFinish(gml.queue);
+   clFinish(gml->queue);
 
-   if(clEnqueueNDRangeKernel( gml.queue, krn->kernel, 1, NULL,
+   if(clEnqueueNDRangeKernel( gml->queue, krn->kernel, 1, NULL,
                               &NmbGrp, &GrpSiz, 0, NULL, &event) )
    {
       return(-7);
    }
 
-   clFinish(gml.queue);
+   clFinish(gml->queue);
 
    res = clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START,
                                  sizeof(start), &start, NULL);
@@ -1702,84 +1784,13 @@ static double RunOclKrn(KrnSct *krn)
 
 
 /*----------------------------------------------------------------------------*/
-/* Read and compile an OpenCL source code                                     */
-/*----------------------------------------------------------------------------*/
-
-static int NewKernel(char *KernelSource, char *PrcNam)
-{
-   char     *buffer, *StrTab[1];
-   int      err, res, idx = ++gml.NmbKrn;
-   KrnSct   *krn = &gml.krn[ idx ];
-   size_t   len, LenTab[10];
-
-   if(idx > GmlMaxKrn)
-      return(0);
-
-   StrTab[0] = KernelSource;
-   LenTab[0] = strlen(KernelSource) - 1;
-
-   // Compile source code
-   krn->program = clCreateProgramWithSource( gml.context, 1, (const char **)StrTab,
-                                             (const size_t *)LenTab, &err );
-   if(!krn->program)
-   {
-      printf("Compiling the kernel %s failed at step 1 with error %d\n", PrcNam, err);
-      return(0);
-   }
-
-   res = clBuildProgram(krn->program, 0, NULL,
-                        "-cl-single-precision-constant -cl-mad-enable", NULL, NULL);
-
-   if(res != CL_SUCCESS)
-   {
-      clGetProgramBuildInfo(  krn->program, gml.device_id[ gml.CurDev ],
-                              CL_PROGRAM_BUILD_LOG, 0, NULL, &len);
-
-      if(!(buffer = malloc(len)))
-         return(0);
-
-      clGetProgramBuildInfo(  krn->program, gml.device_id[ gml.CurDev ],
-                              CL_PROGRAM_BUILD_LOG, len, buffer, &len);
-
-      printf("Compiling the kernel %s failed at step 2 with error %d\n", PrcNam, res);
-      printf("%s\n", buffer);
-      free(buffer);
-      return(0);
-   }
-
-   krn->kernel = clCreateKernel(krn->program, PrcNam, &err);
-
-   if( !krn->kernel || (err != CL_SUCCESS) )
-   {
-      printf("Compiling the kernel %s failed at step 3 with error %d\n", PrcNam, err);
-      return(0);
-   }
-
-   krn->idx = idx;
-
-   if(gml.DbgFlg)
-   {
-      puts(sep);
-      res = clGetProgramInfo( krn->program, CL_PROGRAM_BINARY_SIZES,
-                              sizeof(size_t), &len, NULL );
-
-      if(res == CL_SUCCESS )
-         printf("binary executable of kernel %s: %ld bytes\n", PrcNam, len);
-      else
-         printf("could not get the size of kernel %s executable\n", PrcNam);
-   }
-
-   return(idx);
-}
-
-
-/*----------------------------------------------------------------------------*/
 /* Return memory currently allocated on the GPU                               */
 /*----------------------------------------------------------------------------*/
 
-size_t GmlGetMemoryUsage()
+size_t GmlGetMemoryUsage(size_t GmlIdx)
 {
-   return(gml.MemSiz);
+   GETGMLPTR(gml, GmlIdx);
+   return(gml->MemSiz);
 }
 
 
@@ -1787,9 +1798,10 @@ size_t GmlGetMemoryUsage()
 /* Return memory currently transfered to or from the GPU                      */
 /*----------------------------------------------------------------------------*/
 
-size_t GmlGetMemoryTransfer()
+size_t GmlGetMemoryTransfer(size_t GmlIdx)
 {
-   return(gml.MovSiz);
+   GETGMLPTR(gml, GmlIdx);
+   return(gml->MovSiz);
 }
 
 
@@ -1797,9 +1809,10 @@ size_t GmlGetMemoryTransfer()
 /* Return public parameter structure                                          */
 /*----------------------------------------------------------------------------*/
 
-GmlParSct *GmlGetParameters()
+GmlParSct *GmlGetParameters(size_t GmlIdx)
 {
-   return(gml.dat[ gml.ParIdx ].CpuMem);
+   GETGMLPTR(gml, GmlIdx);
+   return(gml->dat[ gml->ParIdx ].CpuMem);
 }
 
 
@@ -1807,12 +1820,14 @@ GmlParSct *GmlGetParameters()
 /* Turning the printing of debugging information on or off                    */
 /*----------------------------------------------------------------------------*/
 
-void GmlDebugOn()
+void GmlDebugOn(size_t GmlIdx)
 {
-   gml.DbgFlg = 1;
+   GETGMLPTR(gml, GmlIdx);
+   gml->DbgFlg = 1;
 }
 
-void GmlDebugOff()
+void GmlDebugOff(size_t GmlIdx)
 {
-   gml.DbgFlg = 0;
+   GETGMLPTR(gml, GmlIdx);
+   gml->DbgFlg = 0;
 }
