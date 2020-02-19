@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.00                           */
+/*                         GPU Meshing Library 3.10                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Basic loop on tetrahedra                              */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     nov 21 2019                                           */
-/*   Last modification: feb 07 2020                                           */
+/*   Last modification: feb 19 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -29,19 +29,31 @@
 
 
 /*----------------------------------------------------------------------------*/
+/* This structure definition must be exactly the same as the OpenCL one       */
+/*----------------------------------------------------------------------------*/
+
+typedef struct {
+   int   foo;
+   float res;
+}GmlParSct;
+
+
+/*----------------------------------------------------------------------------*/
 /* Read an element mesh, send the data on the GPU, compute                    */
 /* the elements middle and get back the results.                              */
 /*----------------------------------------------------------------------------*/
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int i, j, NmbVer, NmbTet, ver = 0, dim = 0, *VerRef, (*TetTab)[5];
-   int VerIdx, TetIdx, BalIdx, MidIdx, SolIdx, CalMid, OptVer, GpuIdx = 0;
-   int64_t InpMsh;
-   size_t GmlIdx;
-   float MidTab[4], SolTab[8], dummy, TetChk = 0., VerChk = 0., (*VerTab)[3];
-   float IniSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
-   double TetTim = 0., VerTim = 0., res;
+   int         i, j, NmbVer, NmbTet, ver = 0, dim = 0, *VerRef, (*TetTab)[5];
+   int         ParIdx, VerIdx, TetIdx, BalIdx, MidIdx, SolIdx, CalMid, OptVer;
+   int         GpuIdx = 0;
+   int64_t     InpMsh;
+   size_t      GmlIdx;
+   float       MidTab[4], SolTab[8], TetChk = 0., VerChk = 0., (*VerTab)[3];
+   float       IniSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
+   double      TetTim = 0., VerTim = 0., res;
+   GmlParSct   *GmlPar;
 
 
    // If no arguments are give, print the help
@@ -105,6 +117,10 @@ int main(int ArgCnt, char **ArgVec)
 
    GmlDebugOn(GmlIdx);
 
+   // Allocate a common parameters structure to pass along to every kernels
+   if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), Parameters)))
+      return(1);
+
    // Create a vertices data type and transfer the data to the GPU
    if(!(VerIdx = GmlNewMeshData(GmlIdx, GmlVertices, NmbVer)))
       return(1);
@@ -136,7 +152,7 @@ int main(int ArgCnt, char **ArgVec)
 
    // Assemble and compile the scatter kernel
    CalMid = GmlCompileKernel( GmlIdx, TetrahedraLoop, "TetrahedraBasic",
-                              Parameters, GmlTetrahedra, 3,
+                              GmlTetrahedra, 3,
                               VerIdx, GmlReadMode | GmlRefFlag,  NULL,
                               SolIdx, GmlReadMode,  NULL,
                               MidIdx, GmlWriteMode, NULL );
@@ -146,7 +162,7 @@ int main(int ArgCnt, char **ArgVec)
 
    // Assemble and compile the gather kernel
    OptVer = GmlCompileKernel( GmlIdx, VertexGather, "VertexGather",
-                              Parameters, GmlVertices, 2,
+                              GmlVertices, 2,
                               SolIdx, GmlWriteMode, NULL,
                               MidIdx, GmlReadMode,  NULL );
 
@@ -155,6 +171,8 @@ int main(int ArgCnt, char **ArgVec)
 
    for(i=1;i<=100;i++)
    {
+      GmlPar->res = i;
+
       // Launch the tetrahedra kernel on the GPU
       res  = GmlLaunchKernel(GmlIdx, CalMid);
 
@@ -215,6 +233,7 @@ int main(int ArgCnt, char **ArgVec)
    GmlFreeData(GmlIdx, VerIdx);
    GmlFreeData(GmlIdx, TetIdx);
    GmlFreeData(GmlIdx, MidIdx);
+   GmlFreeData(GmlIdx, ParIdx);
    GmlStop(GmlIdx);
 
    free(TetTab);

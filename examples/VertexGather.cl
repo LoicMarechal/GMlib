@@ -8,5 +8,5 @@
       right += TetMid[i];
    }
 
-   SolAtVer[0] = left  / TetMidDeg;
-   SolAtVer[1] = right / TetMidDeg;
+   SolAtVer[0] = GmlPar->res * left  / TetMidDeg;
+   SolAtVer[1] = GmlPar->res * right / TetMidDeg;
