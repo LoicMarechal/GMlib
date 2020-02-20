@@ -52,8 +52,7 @@
 
 ### Exposed CPU API
 
-- 
-```C++
+- ```C++
 IdxTab[] = GmlImportFile("file.meshb", GmfTetrahedra, GmfTriangles, GmfVertices, 0);
 ```
 
