@@ -18,7 +18,7 @@
 
 ### Exposed CPU API
 
-- GmlReduce(GMlibIndex, ReductionOpperation, &residual); :heavy_check_mark:
+- `GmlReduce(GMlibIndex, ReductionOpperation, &residual);` :heavy_check_mark:
 
 ### Examples
 
@@ -52,12 +52,12 @@
 
 ### Exposed CPU API
 
-- `C++ IdxTab[] = GmlImportFile("file.meshb", GmfTetrahedra, GmfTriangles, GmfVertices, 0);`
-- IdxTab[] = GmlImportFile("file.solb", GmfSolAtTetrahedra, GmfSolAtVertices, 0);
-- GmlExportFile("file.meshb", NmbDat, IdxTab[]);
-- GmlExportFile("file.solb", NmbDat, IdxTab[]);
-- GmlEvaluateNumbering();
-- GmlHilbertRenumbering();
+- `IdxTab[] = GmlImportFile("file.meshb", GmfTetrahedra, GmfTriangles, GmfVertices, 0);`
+- `IdxTab[] = GmlImportFile("file.solb", GmfSolAtTetrahedra, GmfSolAtVertices, 0);`
+- `GmlExportFile("file.meshb", NmbDat, IdxTab[]);`
+- `GmlExportFile("file.solb", NmbDat, IdxTab[]);`
+- `GmlEvaluateNumbering();`
+- `GmlHilbertRenumbering();`
 
 ### Exposed GPU API
 
@@ -95,40 +95,40 @@
 
 ### Exposed CPU API
 
-- GmlInit(idx, CUDA | OpenCL);
+- `GmlInit(idx, CUDA | OpenCL);`
 - New keywords: GmlEdgesP2, GmlEdgesP3, GmlTrianglesP2, GmlTrianglesP3, GmlTetrahedraP2, GmlTetrahedraP3
 
 ### Exposed GPU API
 
-- distance = DisVerVer(float4 a, float4 ver);
-- distance = DisVerEdg(float4 a, float4 edg[2]);
-- distance = DisVerTri(float4 a, float4 tri[3]);
-- coordinates[2] = BarVerEdg(float4 a, float4 edg[2]);
-- coordinates[3] = BarVerTri(float4 a, float4 tri[3]);
-- coordinates[4] = BarVerTet(float4 a, float4 tet[4]);
-- flag = IntEdgTri(float4 edg[2], float4 tri[3], float4 ver);
-- edg[ 2] = BezLagEdgP2(float4 edg[ 2]);
-- edg[ 3] = BezLagEdgP3(float4 edg[ 3]);
-- tri[ 6] = BezLagTriP2(float4 tri[ 6]);
-- tri[10] = BezLagTriP3(float4 tri[ 6]);
-- tet[10] = BezLagTetP2(float4 tet[10]);
-- tet[20] = BezLagTetP3(float4 tet[20]);
-- edg[ 2] = LagBezEdgP2(float4 edg[ 2]);
-- edg[ 3] = LagBezEdgP3(float4 edg[ 3]);
-- tri[ 6] = LagBezTriP2(float4 tri[ 6]);
-- tri[10] = LagBezTriP3(float4 tri[ 6]);
-- tet[10] = LagBezTetP2(float4 tet[10]);
-- tet[20] = LagBezTetP3(float4 tet[20]);
-- length  = CalEdgP2Len(float4 edg[ 2]);
-- length  = CalEdgP3Len(float4 edg[ 3]);
-- surface = CalTriP2Srf(float4 tri[ 6]);
-- surface = CalTriP3Srf(float4 tri[10]);
-- volume  = CalTetP2Vol(float4 tet[10]);
-- volume  = CalTetP3Vol(float4 tet[20]);
-- quality = CalTriP2Qal(float4 tri[ 6]);
-- quality = CalTriP3Qal(float4 tri[10]);
-- quality = CalTetP2Qal(float4 tet[10]);
-- quality = CalTetP3Qal(float4 tet[20]);
+- `distance = DisVerVer(float4 a, float4 ver);`
+- `distance = DisVerEdg(float4 a, float4 edg[2]);`
+- `distance = DisVerTri(float4 a, float4 tri[3]);`
+- `coordinates[2] = BarVerEdg(float4 a, float4 edg[2]);`
+- `coordinates[3] = BarVerTri(float4 a, float4 tri[3]);`
+- `coordinates[4] = BarVerTet(float4 a, float4 tet[4]);`
+- `flag = IntEdgTri(float4 edg[2], float4 tri[3], float4 ver);`
+- `edg[ 2] = BezLagEdgP2(float4 edg[ 2]);`
+- `edg[ 3] = BezLagEdgP3(float4 edg[ 3]);`
+- `tri[ 6] = BezLagTriP2(float4 tri[ 6]);`
+- `tri[10] = BezLagTriP3(float4 tri[ 6]);`
+- `tet[10] = BezLagTetP2(float4 tet[10]);`
+- `tet[20] = BezLagTetP3(float4 tet[20]);`
+- `edg[ 2] = LagBezEdgP2(float4 edg[ 2]);`
+- `edg[ 3] = LagBezEdgP3(float4 edg[ 3]);`
+- `tri[ 6] = LagBezTriP2(float4 tri[ 6]);`
+- `tri[10] = LagBezTriP3(float4 tri[ 6]);`
+- `tet[10] = LagBezTetP2(float4 tet[10]);`
+- `tet[20] = LagBezTetP3(float4 tet[20]);`
+- `length  = CalEdgP2Len(float4 edg[ 2]);`
+- `length  = CalEdgP3Len(float4 edg[ 3]);`
+- `surface = CalTriP2Srf(float4 tri[ 6]);`
+- `surface = CalTriP3Srf(float4 tri[10]);`
+- `volume  = CalTetP2Vol(float4 tet[10]);`
+- `volume  = CalTetP3Vol(float4 tet[20]);`
+- `quality = CalTriP2Qal(float4 tri[ 6]);`
+- `quality = CalTriP3Qal(float4 tri[10]);`
+- `quality = CalTetP2Qal(float4 tet[10]);`
+- `quality = CalTetP3Qal(float4 tet[20]);`
 
 ### Examples
 
