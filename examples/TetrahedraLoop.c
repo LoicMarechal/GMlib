@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.10                           */
+/*                         GPU Meshing Library 3.11                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Basic loop on tetrahedra                              */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     nov 21 2019                                           */
-/*   Last modification: feb 19 2020                                           */
+/*   Last modification: feb 20 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -47,12 +47,12 @@ int main(int ArgCnt, char **ArgVec)
 {
    int         i, j, NmbVer, NmbTet, ver = 0, dim = 0, *VerRef, (*TetTab)[5];
    int         ParIdx, VerIdx, TetIdx, BalIdx, MidIdx, SolIdx, CalMid, OptVer;
-   int         GpuIdx = 0;
+   int         GpuIdx = 0, ResIdx;
    int64_t     InpMsh;
    size_t      GmlIdx;
    float       MidTab[4], SolTab[8], TetChk = 0., VerChk = 0., (*VerTab)[3];
    float       IniSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
-   double      TetTim = 0., VerTim = 0., res;
+   double      TetTim = 0., VerTim = 0., RedTim = 0., res, residual;
    GmlParSct   *GmlPar;
 
 
@@ -150,11 +150,16 @@ int main(int ArgCnt, char **ArgVec)
    if(!(MidIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt4, "TetMid")))
       return(1);
 
+   // Allocate a residual vector
+   if(!(ResIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "ResVec")))
+      return(1);
+
    // Assemble and compile the scatter kernel
    CalMid = GmlCompileKernel( GmlIdx, TetrahedraLoop, "TetrahedraBasic",
-                              GmlTetrahedra, 3,
+                              GmlTetrahedra, 4,
                               VerIdx, GmlReadMode | GmlRefFlag,  NULL,
                               SolIdx, GmlReadMode,  NULL,
+                              ResIdx, GmlWriteMode, NULL,
                               MidIdx, GmlWriteMode, NULL );
 
    if(!CalMid)
@@ -194,6 +199,18 @@ int main(int ArgCnt, char **ArgVec)
       }
 
       VerTim += res;
+
+      // Launch the reduction kernel on the GPU
+      res = GmlReduceVector(GmlIdx, ResIdx, GmlSum, &residual);
+
+      if(res < 0)
+      {
+         printf("Launch reduction kernel failled with error: %g\n", res);
+         exit(0);
+      }
+
+      RedTim += res;
+      printf("Iteration: %3d, residual: %g\n", i, residual);
    }
 
 
@@ -215,8 +232,8 @@ int main(int ArgCnt, char **ArgVec)
       VerChk += SolTab[0] + SolTab[1] + SolTab[2] + SolTab[3];
    }
 
-   printf("%d tets processed in %g seconds, scater=%g, gather=%g\n",
-          NmbTet, TetTim + VerTim, TetTim, VerTim);
+   printf("%d tets processed in %g seconds, scater=%g, gather=%g, reduction=%g\n",
+          NmbTet, TetTim + VerTim + RedTim, TetTim, VerTim, RedTim);
 
    printf("%ld MB used, %ld MB transfered\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,

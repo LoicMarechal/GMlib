@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.10                           */
+/*                         GPU Meshing Library 3.11                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 19 2020                                           */
+/*   Last modification: feb 20 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -28,6 +28,7 @@
 #include <unistd.h>
 
 #include "gmlib3.h"
+#include "reduce.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -37,8 +38,8 @@
 #define MB           1048576
 #define VECPOWOCL    4
 #define VECPOWMAX    7
-enum    data_type    {GmlArgDat, GmlRawDat, GmlLnkDat, GmlEleDat, GmlRefDat};
-enum  memory_type    {GmlInternal, GmlInput, GmlOutput, GmlInout};
+enum data_type       {GmlArgDat, GmlRawDat, GmlLnkDat, GmlEleDat, GmlRefDat};
+enum memory_type     {GmlInternal, GmlInput, GmlOutput, GmlInout};
 
 
 /*----------------------------------------------------------------------------*/
@@ -54,7 +55,7 @@ typedef struct
 
 typedef struct
 {
-   int            AloTyp, MemAcs, MshTyp, LnkTyp, ItmTyp;
+   int            AloTyp, MemAcs, MshTyp, LnkTyp, ItmTyp, RedIdx;
    int            NmbItm, ItmLen, ItmSiz, NmbLin, LinSiz;
    char           *nam, *src, use;
    size_t         MemSiz;
@@ -78,6 +79,7 @@ typedef struct
    int            LnkMat[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
    int            LnkHgh[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
    int            CntMat[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
+   int            RedKrn[ GmlMaxRed ];
    cl_uint        NmbDev;
    size_t         MemSiz, CurGrpSiz, MovSiz;
    DatSct         dat[ GmlMaxDat + 1 ];
@@ -1704,7 +1706,7 @@ static double RunOclKrn(GmlSct *gml, KrnSct *krn)
       {
          printf(  "Invalid user argument %d, DatTab[i]=%d, GpuMem=%p\n",
                   i, krn->DatTab[i], dat->GpuMem );
-         return(0.);
+         return(-1.);
       }
 
       res = clSetKernelArg(krn->kernel, i, sizeof(cl_mem), &dat->GpuMem);
@@ -1712,7 +1714,7 @@ static double RunOclKrn(GmlSct *gml, KrnSct *krn)
       if(res != CL_SUCCESS)
       {
          printf("Adding user argument %d failed with error: %d\n", i, res);
-         return(0.);
+         return(-2.);
       }
    }
 
@@ -1722,7 +1724,7 @@ static double RunOclKrn(GmlSct *gml, KrnSct *krn)
    if(res != CL_SUCCESS)
    {
       printf("Adding the GMlib parameters argument failed with error %d\n", res);
-      return(0.);
+      return(-3.);
    }
 
    res = clSetKernelArg(krn->kernel, krn->NmbDat+1, 2 * sizeof(int), krn->NmbLin);
@@ -1730,7 +1732,7 @@ static double RunOclKrn(GmlSct *gml, KrnSct *krn)
    if(res != CL_SUCCESS)
    {
       printf("Adding the kernel loop counter argument failed with error %d\n", res);
-      return(0.);
+      return(-4.);
    }
 
    // Fit data loop size to the GPU kernel size
@@ -1741,7 +1743,7 @@ static double RunOclKrn(GmlSct *gml, KrnSct *krn)
    if(res != CL_SUCCESS )
    {
       printf("Geting the kernel workgroup size failed with error %d\n", res);
-      return(0.);
+      return(-5.);
    }
 
    // Compute the hyperthreading level
@@ -1758,7 +1760,7 @@ static double RunOclKrn(GmlSct *gml, KrnSct *krn)
    if(clEnqueueNDRangeKernel( gml->queue, krn->kernel, 1, NULL,
                               &NmbGrp, &GrpSiz, 0, NULL, &event) )
    {
-      return(-7);
+      return(-6.);
    }
 
    clFinish(gml->queue);
@@ -1768,7 +1770,7 @@ static double RunOclKrn(GmlSct *gml, KrnSct *krn)
    if(res != CL_SUCCESS )
    {
       printf("Geting the start time event failed with error %d\n", res);
-      return(0.);
+      return(-7.);
    }
 
    res = clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END,
@@ -1777,10 +1779,118 @@ static double RunOclKrn(GmlSct *gml, KrnSct *krn)
    if(res != CL_SUCCESS )
    {
       printf("Geting the end time event failed with error %d\n", res);
-      return(0.);
+      return(-8.);
    }
 
    return((double)(end - start) / 1e9);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Compute various reduction functions: min,max,L1,L2 norms                   */
+/*----------------------------------------------------------------------------*/
+
+double GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *res)
+{
+   int      i, NmbLin;
+   float    *vec;
+   double   tim;
+   char     *RedNam[3] = {"reduce_min", "reduce_max", "reduce_sum"};
+   GETGMLPTR(gml, GmlIdx);
+   DatSct   *dat, *red;
+   KrnSct   *krn;
+
+   // Check indices and data conformity
+   if( (DatIdx < 1) || (DatIdx > GmlMaxDat) )
+   {
+      printf("Invalid data index: %d\n", DatIdx);
+      return(-1.);
+   }
+
+   dat = &gml->dat[ DatIdx ];
+
+   if( (dat->ItmTyp != GmlFlt) || (dat->NmbItm != 1) || (dat->ItmLen != 1) )
+   {
+      printf(  "Invalid data structure: count %d, type %s, length %d\n",
+               dat->NmbItm, OclTypStr[ dat->ItmTyp ], dat->ItmLen );
+      return(-2.);
+   }
+
+   if( (RedOpp < 0) || (RedOpp > GmlMaxRed) )
+   {
+      printf("Invalid operation code %d\n", RedOpp);
+      return(-3.);
+   }
+
+   // Allocate an output vector the size of the input vector
+   if(!dat->RedIdx)
+      dat->RedIdx = GmlNewSolutionData(GmlIdx, dat->MshTyp, 1, GmlFlt, "reduce");
+
+   if(!dat->RedIdx)
+   {
+      printf(  "Failed to allocate a reduction vector of %d bytes\n",
+               OclTypSiz[ GmlFlt ] * dat->NmbLin );
+      return(-4.);
+   }
+
+   // Compile a reduction kernel with the required operation if needed
+   if(!gml->RedKrn[ RedOpp ])
+      gml->RedKrn[ RedOpp ] = NewOclKrn(gml, reduce, RedNam[ RedOpp ]);
+
+   if(!gml->RedKrn[ RedOpp ])
+   {
+      printf("Failed to compile the %s reduction kernel\n", RedNam[ RedOpp ]);
+      return(-5.);
+   }
+
+   // Set the kernel with two vectors: an input and a reduced output one
+   krn = &gml->krn[ gml->RedKrn[ RedOpp ] ];
+   krn->NmbDat    = 2;
+   krn->DatTab[0] = DatIdx;
+   krn->DatTab[1] = dat->RedIdx;
+   krn->NmbLin[0] = dat->NmbLin;
+
+   // Launch the right reduction kernel according to the requested opperation
+   tim = RunOclKrn(gml, krn);
+
+   if(tim < 0)   
+      return(tim);
+
+   // Trim the size of the output vector down to the number of OpenCL groups
+   // used by the kernel and download this amount of data
+   red = &gml->dat[ dat->RedIdx ];
+   red->MemSiz = dat->MemSiz / gml->CurGrpSiz;
+   NmbLin = dat->NmbLin / gml->CurGrpSiz;
+   DownloadData(gml, dat->RedIdx);
+   red->MemSiz = dat->MemSiz;
+   vec = (float *)red->CpuMem;
+
+   // Perform the last reduction step on the CPU
+   switch(RedOpp)
+   {
+      case GmlMin :
+      {
+         *res = 1e37;
+         for(i=0;i<NmbLin;i++)
+            *res = MIN(*res, vec[i]);
+      }break;
+
+      case GmlSum :
+      {
+         *res = 0.;
+         for(i=0;i<NmbLin;i++)
+            *res += vec[i];
+      }break;
+
+      case GmlMax :
+      {
+         *res = -1e37;
+         for(i=0;i<NmbLin;i++)
+            *res = MAX(*res, vec[i]);
+      }break;
+   }
+
+   return(tim);
 }
 
 
