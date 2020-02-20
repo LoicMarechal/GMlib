@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.10                           */
+/*                         GPU Meshing Library 3.11                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 19 2020                                           */
+/*   Last modification: feb 20 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -47,6 +47,8 @@ enum  element_type   {GmlVertices, GmlEdges, GmlTriangles, GmlQuadrilaterals,
 enum  opencl_type    {GmlInt, GmlInt2, GmlInt4, GmlInt8, GmlInt16,
                       GmlFlt, GmlFlt2, GmlFlt4, GmlFlt8, GmlFlt16,
                       GmlMaxOclTyp};
+enum reduction_opp   {GmlMin, GmlMax, GmlSum, GmlMaxRed};
+
 
 /*----------------------------------------------------------------------------*/
 /* User available procedures                                                  */
