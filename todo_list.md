@@ -52,12 +52,12 @@
 
 ### Exposed CPU API
 
-- IdxTab[] = GmlImportFile("file.meshb", GmfTetrahedra, GmfTriangles, GmfVertices, 0);
-- IdxTab[] = GmlImportFile("file.solb", GmfSolAtTetrahedra, GmfSolAtVertices, 0);
-- GmlExportFile("file.meshb", NmbDat, IdxTab[]);
-- GmlExportFile("file.solb", NmbDat, IdxTab[]);
-- GmlEvaluateNumbering();
-- GmlHilbertRenumbering();
+- ```C++ IdxTab[] = GmlImportFile("file.meshb", GmfTetrahedra, GmfTriangles, GmfVertices, 0);```
+- ```C++ IdxTab[] = GmlImportFile("file.solb", GmfSolAtTetrahedra, GmfSolAtVertices, 0);```
+- ```C++ GmlExportFile("file.meshb", NmbDat, IdxTab[]);```
+- ```C++ GmlExportFile("file.solb", NmbDat, IdxTab[]);```
+- ```C++ GmlEvaluateNumbering();```
+- ```C++ GmlHilbertRenumbering();```
 
 ### Exposed GPU API
 
