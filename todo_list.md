@@ -12,10 +12,10 @@
 - Write the ball of edges or triangles
 - Write the triangles and tets neighbors generation
 - Add the voyeurs information in all the uplink data and kernel sources
-- Add a reduction internal kernel with min, max and L1 :check_mark:
+- Add a reduction internal kernel with min, max and L1 :heavy_check_mark:
 - Add single float, double float and user selectable real float
-- Make the GMlib reentrant :check_mark:
-- Revise the parameters structure mechanism :check_mark:
+- Make the GMlib reentrant :heavy_check_mark:
+- Revise the parameters structure mechanism :heavy_check_mark:
 
 ### Exposed API
 
