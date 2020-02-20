@@ -18,7 +18,7 @@
 
 ### Exposed CPU API
 
-- residual = GmlReduce(idx, opp);
+- GmlReduce(GMlibIndex, ReductionOpperation, &residual); :heavy_check_mark:
 
 ### Examples
 
