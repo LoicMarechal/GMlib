@@ -18,7 +18,7 @@
 
 ### Exposed CPU API
 
-- `GmlReduce(GMlibIndex, ReductionOpperation, &residual);` :heavy_check_mark:
+- `C++ GmlReduce(GMlibIndex, ReductionOpperation, &residual);` :heavy_check_mark:
 
 ### Examples
 
@@ -61,15 +61,15 @@
 
 ### Exposed GPU API
 
-- CalEdgLen(float4 ver[2]);
-- CalTriSrf(float4 ver[3]);
-- CalQadSrf(float4 ver[4]);
-- CalTetVol(float4 ver[4]);
-- CalHexVol(float4 ver[8]);
-- CalTriQal(float4 ver[3]);
-- CalQadQal(float4 ver[4]);
-- CalTetQal(float4 ver[4]);
-- CalHexQal(float4 ver[8]);
+- `CalEdgLen(float4 ver[2]);`
+- `CalTriSrf(float4 ver[3]);`
+- `CalQadSrf(float4 ver[4]);`
+- `CalTetVol(float4 ver[4]);`
+- `CalHexVol(float4 ver[8]);`
+- `CalTriQal(float4 ver[3]);`
+- `CalQadQal(float4 ver[4]);`
+- `CalTetQal(float4 ver[4]);`
+- `CalHexQal(float4 ver[8]);`
 
 ### Examples
 
