@@ -1,6 +1,5 @@
-## PHASE 1
 
-### Internal source code## PHASE 1
+## PHASE 1
 
 ### Internal source code
 
@@ -17,7 +16,7 @@
 - Make the GMlib reentrant :heavy_check_mark:
 - Revise the parameters structure mechanism :heavy_check_mark:
 
-### Exposed API
+### Exposed CPU API
 
 - residual = GmlReduce(idx, opp);
 
@@ -31,7 +30,6 @@
 
 - Quick reference card
 - GitHub page
-
 
 ## PHASE 2
 
@@ -83,7 +81,6 @@
 
 - Full PDF documentation with quick setup, install, compile, write OpenCL code and procedure lists
 - Full GitHub page with examples, sample files, source code and links to OpenCL and GPU programing
-
 
 ## PHASE 3
 
