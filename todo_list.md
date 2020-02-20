@@ -18,7 +18,7 @@
 
 ### Exposed CPU API
 
-- `C++ GmlReduce(GMlibIndex, ReductionOpperation, &residual);` :heavy_check_mark:
+- `GmlReduce(GMlibIndex, ReductionOpperation, &residual);` :heavy_check_mark:
 
 ### Examples
 
