@@ -169,7 +169,7 @@ int main(int ArgCnt, char **ArgVec)
    OptVer = GmlCompileKernel( GmlIdx, VertexGather, "VertexGather",
                               GmlVertices, 2,
                               SolIdx, GmlWriteMode, NULL,
-                              MidIdx, GmlReadMode,  NULL );
+                              MidIdx, GmlReadMode | GmlVoyeurs,  NULL );
 
    if(!OptVer)
       return(1);

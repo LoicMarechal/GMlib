@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.11                           */
+/*                         GPU Meshing Library 3.12                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 20 2020                                           */
+/*   Last modification: mar 04 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -37,6 +37,7 @@
 #define GmlRefFlag   1
 #define GmlReadMode  2
 #define GmlWriteMode 4
+#define GmlVoyeurs   8
 #ifndef MAX_WORKGROUP_SIZE
 #define MAX_WORKGROUP_SIZE 1024
 #endif

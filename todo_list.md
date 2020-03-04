@@ -6,10 +6,10 @@
 - Split the compile kernel procedure into separate modules to better handle uplink kernels
 - Write the neighbors link kernel compilation
 - Handle user defined topological links
-- Handle the shell uplinks
-- Write the tet and triangles shell generation
-- Write the ball of edges or triangles
-- Write the triangles and tets neighbors generation
+- Handle the shell uplinks :heavy_check_mark:
+- Write the tet and triangles shell generation :heavy_check_mark:
+- Write the ball of edges or triangles :heavy_check_mark:
+- Write the triangles and tets neighbors generation :heavy_check_mark:
 - Add the voyeurs information in all the uplink data and kernel sources
 - Add a reduction internal kernel with min, max and L1 :heavy_check_mark:
 - Add single float, double float and user selectable real float
