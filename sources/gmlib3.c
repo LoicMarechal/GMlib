@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.11                           */
+/*                         GPU Meshing Library 3.12                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 20 2020                                           */
+/*   Last modification: mar 04 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -48,16 +48,29 @@ enum memory_type     {GmlInternal, GmlInput, GmlOutput, GmlInout};
 
 typedef struct
 {
+   int            EleIdx, ItmIdx, NxtDat, nod[4];
+}BucSct;
+
+typedef struct
+{
+   int            HshTyp, DatLen, KeyLen, *HshTab;
+   int64_t        NmbMis, NmbHit, TabSiz, NmbDat, NxtDat;
+   BucSct         *DatTab;
+}HshTabSct;
+
+typedef struct
+{
    int            ArgIdx, MshTyp, DatIdx, LnkTyp, LnkIdx, LnkDir, CntIdx;
    int            LnkDeg, MaxDeg, NmbItm, ItmLen, ItmTyp, FlgTab;
-   char           *nam;
+   const char     *nam;
 }ArgSct;
 
 typedef struct
 {
    int            AloTyp, MemAcs, MshTyp, LnkTyp, ItmTyp, RedIdx;
    int            NmbItm, ItmLen, ItmSiz, NmbLin, LinSiz;
-   char           *nam, *src, use;
+   char           *src, use;
+   const char     *nam;
    size_t         MemSiz;
    cl_mem         GpuMem;
    void           *CpuMem;
@@ -119,16 +132,21 @@ static void    WriteKernelMemoryReads  (char *, int, int, ArgSct *);
 static void    WriteKernelMemoryWrites (char *, int, int, ArgSct *);
 static void    WriteUserKernel         (char *, char *);
 static void    GetCntVec               (int , int *, int *, int *);
+static int     BldLnk                  (GmlSct *, int, int);
+static void    GetItmNod               (int *, int, int, int, int *);
+static int     CalHshKey               (HshTabSct *, int *);
+static void    AddHsh                  (HshTabSct *, int, int, int, int *);
+static int     GetHsh                  (HshTabSct *, int, int, int, int *, int *);
 
 
 /*----------------------------------------------------------------------------*/
 /* Global tables                                                              */
 /*----------------------------------------------------------------------------*/
 
-char  OclHexNmb[16] = { '0','1','2','3','4','5','6','7',
-                        '8','9','a','b','c','d','e','f' };
+static const char OclHexNmb[16] = {
+   '0','1','2','3','4','5','6','7', '8','9','a','b','c','d','e','f' };
 
-int   OclTypSiz[ GmlMaxOclTyp ] = {
+static const int  OclTypSiz[ GmlMaxOclTyp ] = {
    sizeof(cl_int),
    sizeof(cl_int2),
    sizeof(cl_int4),
@@ -140,7 +158,7 @@ int   OclTypSiz[ GmlMaxOclTyp ] = {
    sizeof(cl_float8),
    sizeof(cl_float16) };
 
-char *OclTypStr[ GmlMaxOclTyp ]  = {
+static const char *OclTypStr[ GmlMaxOclTyp ]  = {
    "int      ",
    "int2     ",
    "int4     ",
@@ -152,7 +170,7 @@ char *OclTypStr[ GmlMaxOclTyp ]  = {
    "float8   ",
    "float16  " };
 
-char *OclNulVec[ GmlMaxOclTyp ]  = {
+static const char *OclNulVec[ GmlMaxOclTyp ]  = {
    "(int){0}",
    "(int2){0,0}",
    "(int4){0,0,0,0}",
@@ -164,47 +182,94 @@ char *OclNulVec[ GmlMaxOclTyp ]  = {
    "(float8){0.,0.,0.,0.,0.,0.,0.,0.}",
    "(float16){0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.}" };
 
-int   TypVecSiz[ GmlMaxOclTyp ]  = {1,2,4,8,16,1,2,4,8,16};
-int   OclVecPow[ VECPOWOCL +1 ]  = {GmlInt, GmlInt2, GmlInt4, GmlInt8, GmlInt16};
+static const int  TypVecSiz[ GmlMaxOclTyp ]  = {1,2,4,8,16,1,2,4,8,16};
 
-int   MshItmTyp[ GmlMaxEleTyp ]  = {GmlFlt4, GmlInt2, GmlInt4, GmlInt4,
-                                    GmlInt4, GmlInt8, GmlInt8, GmlInt8};
+static const int  OclVecPow[ VECPOWOCL +1 ]  = {
+   GmlInt, GmlInt2, GmlInt4, GmlInt8, GmlInt16};
 
-int   EleNmbNod[ GmlMaxEleTyp ]  = {0, 2, 3, 4, 4, 5, 6, 8};
-int   EleItmLen[ GmlMaxEleTyp ]  = {4, 2, 4, 4, 4, 8, 8, 8};
-int   EleNmbItm[ GmlMaxEleTyp ]  = {1, 1, 1, 1, 1, 1, 1, 1};
-int   MshTypDim[ GmlMaxEleTyp ]  = {0,1,2,2,3,3,3,3};
+static const int  MshItmTyp[ GmlMaxEleTyp ]  = {
+   GmlFlt4, GmlInt2, GmlInt4, GmlInt4, GmlInt4, GmlInt8, GmlInt8, GmlInt8};
 
-char *BalTypStr[ GmlMaxEleTyp ]  = {"Ver", "Edg", "Tri", "Qad",
-                                    "Tet", "Pyr", "Pri", "Hex"};
+static const int  EleNmbNod[ GmlMaxEleTyp ]  = {0, 2, 3, 4, 4, 5, 6, 8};
+static const int  EleItmLen[ GmlMaxEleTyp ]  = {4, 2, 4, 4, 4, 8, 8, 8};
+static const int  EleNmbItm[ GmlMaxEleTyp ]  = {1, 1, 1, 1, 1, 1, 1, 1};
+static const int  MshTypDim[ GmlMaxEleTyp ]  = {0,1,2,2,3,3,3,3};
 
-char *MshTypStr[ GmlMaxEleTyp ]  = {"VerCrd", "EdgVer", "TriVer", "QadVer",
-                                    "TetVer", "PyrVer", "PriVer", "HexVer"};
+static const char *BalTypStr[ GmlMaxEleTyp ]  = {
+   "Ver", "Edg", "Tri", "Qad", "Tet", "Pyr", "Pri", "Hex"};
 
-char *MshRefStr[ GmlMaxEleTyp ]  = {"VerRef", "EdgRef", "TriRef", "QadRef",
-                                    "TetRef", "PyrRef", "PriRef", "HexRef"};
+static const char *MshTypStr[ GmlMaxEleTyp ]  = {
+   "VerCrd", "EdgVer", "TriVer", "QadVer",
+   "TetVer", "PyrVer", "PriVer", "HexVer" };
 
-int LenMatBas[ GmlMaxEleTyp ][ GmlMaxEleTyp ] = {
+static const char *MshRefStr[ GmlMaxEleTyp ]  = {
+   "VerRef", "EdgRef", "TriRef", "QadRef",
+   "TetRef", "PyrRef", "PriRef", "HexRef" };
+
+static const int LenMatBas[ GmlMaxEleTyp ][ GmlMaxEleTyp ] = {
    {0,16, 8, 4,32,16,16, 8},
    {2, 0, 2, 2, 8, 8, 8, 4},
    {4, 4, 0, 0, 2, 2, 2, 0},
    {4, 4, 0, 0, 0, 2, 2, 2},
-   {4, 8, 4, 0, 0, 0, 0, 0},
-   {8, 8, 4, 1, 0, 0, 0, 0},
-   {8,16, 2, 4, 0, 0, 0, 0},
-   {8,16, 0, 8, 0, 0, 0, 0} };
+   {4, 8, 4, 0, 4, 4, 4, 0},
+   {8, 8, 4, 1, 4, 8, 8, 1},
+   {8,16, 2, 4, 2, 8, 8, 4},
+   {8,16, 0, 8, 0, 8, 8, 8} };
 
-int SizMatHgh[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
+static int SizMatHgh[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
 
-int LenMatMax[ GmlMaxEleTyp ][ GmlMaxEleTyp ] = {
+static const int LenMatMax[ GmlMaxEleTyp ][ GmlMaxEleTyp ] = {
    {0,64,16, 8,64,32,32,16},
    {2, 0, 2, 2,16,16,16, 8},
    {4, 4, 0, 0, 2, 2, 2, 0},
    {4, 4, 0, 0, 0, 2, 2, 2},
-   {4, 8, 4, 0, 0, 0, 0, 0},
-   {8, 8, 4, 1, 0, 0, 0, 0},
-   {8,16, 2, 4, 0, 0, 0, 0},
-   {8,16, 0, 8, 0, 0, 0, 0} };
+   {4, 8, 4, 0, 4, 4, 4, 0},
+   {8, 8, 4, 1, 4, 8, 8, 1},
+   {8,16, 2, 4, 2, 8, 8, 4},
+   {8,16, 0, 8, 0, 8, 8, 8} };
+
+static const int NmbTpoLnk[ GmlMaxEleTyp ][ GmlMaxEleTyp ] = {
+   {1, 1, 1, 1, 1, 1, 1, 1},
+   {2, 2, 1, 1, 1, 1, 1, 1},
+   {3, 3, 3, 0, 2, 2, 2, 0},
+   {4, 4, 0, 4, 0, 2, 2, 2},
+   {4, 6, 4, 0, 4, 4, 4, 0},
+   {5, 8, 4, 1, 4, 5, 5, 1},
+   {6, 9, 2, 3, 2, 5, 5, 3},
+   {8,12, 0, 6, 0, 6, 6, 6} };
+
+static const int NgbTyp[8]    = {-1,0,1,1,2,3,3,3};
+static const int HshLenTab[5] = {0,1,2,3,2};
+static const int ItmNmbVer[8] = {1,2,3,4,4,5,6,8};
+static const int ItmNmbEdg[8] = {0,1,3,4,6,8,9,12};
+
+static const int ItmEdgNod[8][12][2] = {
+{ {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
+{ {0,1}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
+{ {0,1}, {1,2}, {2,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
+{ {0,1}, {1,2}, {2,3}, {3,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
+{ {0,1}, {1,2}, {2,0}, {3,0}, {3,1}, {3,2}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
+{ {0,1}, {3,2}, {0,3}, {1,2}, {0,4}, {1,4}, {2,4}, {3,4}, {0,0}, {0,0}, {0,0}, {0,0} },
+{ {0,1}, {1,2}, {2,0}, {3,4}, {4,5}, {5,3}, {0,3}, {1,4}, {2,5}, {0,0}, {0,0}, {0,0} },
+{ {0,1}, {3,2}, {7,6}, {4,5}, {0,3}, {4,7}, {5,6}, {1,2}, {0,4}, {1,5}, {2,6}, {3,7} } };
+
+static const int ItmNmbFac[8] = {0,0,1,1,4,5,5,6};
+static const int ItmNmbTri[8] = {0,0,1,0,4,4,2,0};
+static const int ItmNmbQad[8] = {0,0,0,1,0,1,3,6};
+
+static const int ItmFacDeg[8][6] = { 
+{0,0,0,0,0,0}, {0,0,0,0,0,0}, {3,0,0,0,0,0}, {4,0,0,0,0,0},
+{3,3,3,3,0,0}, {3,3,3,3,4,0}, {3,3,4,4,4,0}, {4,4,4,4,4,4} };
+
+static const int ItmFacNod[8][6][4] = {
+{ {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} },
+{ {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} },
+{ {0,1,2,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} },
+{ {0,1,2,3}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} },
+{ {1,2,3,0}, {2,0,3,0}, {3,0,1,0}, {0,2,1,0}, {0,0,0,0}, {0,0,0,0} },
+{ {0,1,4,0}, {1,2,4,0}, {2,3,4,0}, {3,0,4,0}, {3,2,1,0}, {0,0,0,0} },
+{ {0,2,1,0}, {3,4,5,0}, {0,1,4,3}, {1,2,5,4}, {3,5,2,0}, {0,0,0,0} },
+{ {0,4,7,3}, {1,2,6,5}, {0,1,5,4}, {3,7,6,2}, {0,3,2,1}, {4,5,6,7} } };
 
 char *sep="\n\n############################################################\n";
 
@@ -367,7 +432,7 @@ void *GmlNewParameters(size_t GmlIdx, int siz, char *src)
    dat->ItmLen = 0;
    dat->NmbLin = 1;
    dat->LinSiz = dat->NmbItm * dat->ItmSiz;
-   dat->MemSiz    = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
+   dat->MemSiz = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
    dat->GpuMem = dat->CpuMem = NULL;
    dat->nam    = "GmlParSct";
    dat->src    = src;
@@ -561,183 +626,533 @@ int GmlNewLinkData(size_t GmlIdx, int MshTyp, int LnkTyp, int NmbDat, char *nam)
 
 
 /*----------------------------------------------------------------------------*/
-/* Create an arbitrary link table between two kinds of mesh data types        */
+/* Build an arbitray element kind and dimension link table                    */
 /*----------------------------------------------------------------------------*/
 
-int NewBallData(GmlSct *gml, int MshTyp, int LnkTyp, char *BalNam, char *DegNam)
+int NewBallData(GmlSct *gml, int SrcTyp, int DstTyp, char *BalNam, char *DegNam)
 {
-   int         i, j, BalIdx, HghIdx, DegIdx, VerIdx, SrcIdx, DstIdx;
+   int         i, j, k, idx, cod, cpt, tmp, dir, HshKey, ItmTab[3];
+   int         BalIdx, HghIdx, DegIdx, VerIdx, SrcIdx, DstIdx;
    int         EleSiz, VecSiz, BalSiz, MaxSiz, HghSiz = 0;
    int         *EleTab, *BalTab, *DegTab, *HghTab;
-   int         MaxDeg = 0, MaxPos = 0, VecCnt, ItmTyp, NmbDat;
-   int64_t     DegTot = 0;
+   int         MaxDeg = 0, MaxPos = 0, DegTot = 0, VecCnt, ItmTyp, NmbDat;
+   int         SrcNmbItm, SrcLen, DstNmbItm, DstLen, *SrcNod, *DstNod, *EleNod;
+   const char  *SrcNam, *DstNam;
    DatSct      *src, *dst, *bal, *hgh, *deg, *BalDat, *HghDat, *DegDat;
+   BucSct      *buc;
+   HshTabSct   lnk;
 
-   // Check and prepare some data
-   CHKELETYP(MshTyp);
-   CHKELETYP(LnkTyp);
+   // Get and check the source and destination mesh datatypes
+   CHKELETYP(SrcTyp);
+   CHKELETYP(DstTyp);
 
-   if(!BalNam || !DegNam)
-      return(0);
+   src = &gml->dat[ gml->TypIdx[ SrcTyp ] ];
+   dst = &gml->dat[ gml->TypIdx[ DstTyp ] ];
 
-   SrcIdx = gml->TypIdx[ MshTyp ];
-   DstIdx = gml->TypIdx[ LnkTyp ];
-   src = &gml->dat[ SrcIdx ];
-   dst = &gml->dat[ DstIdx ];
-
-
-   // Build the degrees table: count and allocate gml data,
-   // base and high vector sizes for the next two phases
-   if(!(DegIdx = GetNewDatIdx(gml)))
-      return(0);
-
-   DegDat = &gml->dat[ DegIdx ];
-
-   DegDat->AloTyp = GmlLnkDat;
-   DegDat->MshTyp = MshTyp;
-   DegDat->LnkTyp = LnkTyp;
-   DegDat->MemAcs = GmlInout;
-   DegDat->ItmTyp = GmlInt;
-   DegDat->NmbItm = 1;
-   DegDat->ItmSiz = OclTypSiz[ GmlInt ];
-   DegDat->ItmLen = 0;
-   DegDat->NmbLin = gml->NmbEle[ MshTyp ];
-   DegDat->LinSiz = DegDat->NmbItm * DegDat->ItmSiz;
-   DegDat->MemSiz = (size_t)DegDat->NmbLin * (size_t)DegDat->LinSiz;
-   DegDat->GpuMem = DegDat->CpuMem = NULL;
-   DegDat->nam    = DegNam;
-
-   if(!NewData(gml, DegDat))
-      return(0);
-
-   gml->CntMat[ MshTyp ][ LnkTyp ] = DegIdx;
-   deg = &gml->dat[ gml->CntMat[ src->MshTyp ][ dst->MshTyp ] ];
-
-   DegTab = deg->CpuMem;
-   EleTab = dst->CpuMem;
-   BalSiz = LenMatBas[ src->MshTyp ][ dst->MshTyp ];
-   MaxSiz = LenMatMax[ src->MshTyp ][ dst->MshTyp ];
-   EleSiz = EleNmbNod[ dst->MshTyp ];
-
-   for(i=0;i<dst->NmbLin;i++)
-      for(j=0;j<EleSiz;j++)
-         DegTab[ EleTab[ i * EleSiz + j ] ]++;
-
-   for(i=0;i<src->NmbLin;i++)
-   {
-      if(!MaxPos && (DegTab[i] > BalSiz))
-         MaxPos = i;
-
-      DegTot += DegTab[i];
-      MaxDeg = MAX(MaxDeg, DegTab[i]);
-   }
-
-   MaxDeg = pow(2., ceil(log2(MaxDeg)));
-   HghSiz = MIN(MaxDeg, LenMatMax[ src->MshTyp ][ dst->MshTyp ]);
-   SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
-
-   // Allocate the base vector ball table
-   if(!(BalIdx = GetNewDatIdx(gml)))
-      return(0);
-
-   NmbDat = LenMatBas[ MshTyp ][ LnkTyp ];
-   GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
-
-   BalDat = &gml->dat[ BalIdx ];
-
-   BalDat->AloTyp = GmlLnkDat;
-   BalDat->MshTyp = MshTyp;
-   BalDat->LnkTyp = LnkTyp;
-   BalDat->MemAcs = GmlInout;
-   BalDat->ItmTyp = ItmTyp;
-   BalDat->NmbItm = VecCnt;
-   BalDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
-   BalDat->ItmLen = 1;
-   BalDat->NmbLin = MaxPos+1;
-   BalDat->LinSiz = BalDat->NmbItm * BalDat->ItmSiz;
-   BalDat->MemSiz = (size_t)BalDat->NmbLin * (size_t)BalDat->LinSiz;
-   BalDat->GpuMem = BalDat->CpuMem = NULL;
-   BalDat->nam    = BalNam;
-
-   if(!NewData(gml, BalDat))
-      return(0);
-
-   gml->LnkMat[ MshTyp ][ LnkTyp ] = BalIdx;
-   bal = &gml->dat[ gml->LnkMat[ src->MshTyp ][ dst->MshTyp ] ];
-
-
-   // Allocate the high vector ball table
-   if(!(HghIdx = GetNewDatIdx(gml)))
-      return(0);
-
-   NmbDat = SizMatHgh[ MshTyp ][ LnkTyp ];
-   GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
-
-   HghDat = &gml->dat[ HghIdx ];
-
-   HghDat->AloTyp = GmlLnkDat;
-   HghDat->MshTyp = MshTyp;
-   HghDat->LnkTyp = LnkTyp;
-   HghDat->MemAcs = GmlInout;
-   HghDat->ItmTyp = ItmTyp;
-   HghDat->NmbItm = VecCnt;
-   HghDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
-   HghDat->ItmLen = 1;
-   HghDat->NmbLin = gml->NmbEle[ MshTyp ] - MaxPos;
-   HghDat->LinSiz = HghDat->NmbItm * HghDat->ItmSiz;
-   HghDat->MemSiz = (size_t)HghDat->NmbLin * (size_t)HghDat->LinSiz;
-   HghDat->GpuMem = HghDat->CpuMem = NULL;
-   HghDat->nam    = BalNam;
-
-   if(!NewData(gml, HghDat))
-      return(0);
-
-   gml->LnkHgh[ MshTyp ][ LnkTyp ] = HghIdx;
-   hgh = &gml->dat[ gml->LnkHgh[ src->MshTyp ][ dst->MshTyp ] ];
-
-
-   // Fill both ball tables at the same time
-   BalTab = bal->CpuMem;
-   HghTab = hgh->CpuMem;
-
-   for(i=0;i<src->NmbLin;i++)
-      DegTab[i] = 0;
-
-   for(i=0;i<dst->NmbLin;i++)
-      for(j=0;j<EleSiz;j++)
-      {
-         VerIdx = EleTab[ i * EleSiz + j ];
-
-         if(VerIdx < MaxPos)
-            BalTab[ VerIdx * BalSiz + DegTab[ VerIdx ] ] = i;
-         else if(DegTab[ VerIdx ] < HghSiz)
-            HghTab[ (VerIdx - MaxPos) * HghSiz + DegTab[ VerIdx ] ] = i;
-
-         DegTab[ VerIdx ]++;
-      }
-
-   // Upload the ball data to th GPU memory
-   gml->MovSiz += UploadData(gml, BalIdx);
-   gml->MovSiz += UploadData(gml, HghIdx);
-   gml->MovSiz += UploadData(gml, DegIdx);
+   SrcNod = (int *)src->CpuMem;
+   DstNod = (int *)dst->CpuMem;
 
    if(gml->DbgFlg)
    {
-      puts(sep);
-      printf(  "Ball generation: type %s -> %s\n",
-               BalTypStr[ MshTyp ], BalTypStr[ LnkTyp ] );
-      printf(  "low degree ranging from 1 to %d, occupency = %g%%\n",
-               MaxPos, (float)(100 * DegTot) / (float)(MaxPos * BalSiz) );
-      printf(  "high degree entities = %d\n", src->NmbLin - MaxPos);
-      printf(  "Allocated degree     data: index=%2d, size=%zu bytes\n",
-               DegIdx, DegDat->MemSiz );
-      printf(  "Allocated short ball data: index=%2d, size=%zu bytes\n",
-               BalIdx, BalDat->MemSiz );
-      printf(  "Allocated long ball  data: index=%2d, size=%zu bytes\n",
-               HghIdx, HghDat->MemSiz );
+      SrcNam = BalTypStr[ SrcTyp ];
+      DstNam = BalTypStr[ DstTyp ];
    }
 
-   return(BalIdx);
+   // Select the link direction:
+   // +1 = uplink (ball or shell)
+   //  0 = intra link (neighbours)
+   // -1 = down link (list of edges or faces)
+   if(SrcTyp < DstTyp)
+   {
+      dir = 1;
+      lnk.HshTyp = SrcTyp;
+      lnk.TabSiz = src->NmbLin;
+
+      if(gml->DbgFlg)
+         printf("Building up link %s -> %s\n", SrcNam, DstNam);
+   }
+   else if(SrcTyp > DstTyp)
+   {
+      dir = -1;
+      lnk.HshTyp = DstTyp;
+      lnk.TabSiz = dst->NmbLin;
+
+      if(gml->DbgFlg)
+         printf("Building down link %s -> %s\n", SrcNam, DstNam);
+   }
+   else
+   {
+      dir = 0;
+      lnk.HshTyp = NgbTyp[ SrcTyp ];
+      lnk.TabSiz = src->NmbLin * NmbTpoLnk[ SrcTyp ][ SrcTyp ] / 2;
+
+      if(gml->DbgFlg)
+         printf(  "Building %s neighbours through %s\n",
+                  SrcNam, BalTypStr[ NgbTyp[ SrcTyp ] ] );
+   }
+
+   // Setup a hash table
+   lnk.DatLen = ItmNmbVer[ lnk.HshTyp ];
+   lnk.KeyLen = HshLenTab[ lnk.DatLen ];
+   lnk.NmbDat = lnk.TabSiz;
+   lnk.NxtDat = 0;
+   lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
+   lnk.DatTab = malloc(lnk.TabSiz * sizeof(BucSct));
+
+   if(gml->DbgFlg)
+      printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
+               lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
+
+   SrcNmbItm = NmbTpoLnk[ SrcTyp ][ lnk.HshTyp ];
+   DstNmbItm = NmbTpoLnk[ DstTyp ][ lnk.HshTyp ];
+
+   SrcLen = ItmNmbVer[ SrcTyp ];
+   DstLen = ItmNmbVer[ DstTyp ];
+
+   // Add destination entities to the hash table
+   for(i=0;i<dst->NmbLin;i++)
+   {
+      EleNod = &DstNod[ i * DstLen ];
+
+      for(j=0;j<DstNmbItm;j++)
+      {
+         GetItmNod(EleNod, DstTyp, lnk.HshTyp, j, ItmTab);
+         HshKey = CalHshKey(&lnk, ItmTab);
+         AddHsh(&lnk, HshKey, i, j, ItmTab);
+      }
+   }
+
+   if(gml->DbgFlg)
+      printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
+               lnk.NmbDat, (100LL * lnk.NmbHit) / lnk.TabSiz,
+               (double)lnk.NmbMis / (double)lnk.TabSiz );
+
+   // Allocate and fill a GPU data type to store the degrees in case uf uplink
+   if(dir == 1)
+   {
+      // Firsdt allocate the GPU datatype
+      if(!(DegIdx = GetNewDatIdx(gml)))
+         return(0);
+
+      DegDat = &gml->dat[ DegIdx ];
+
+      DegDat->AloTyp = GmlLnkDat;
+      DegDat->MshTyp = SrcTyp;
+      DegDat->LnkTyp = DstTyp;
+      DegDat->MemAcs = GmlInout;
+      DegDat->ItmTyp = GmlInt;
+      DegDat->NmbItm = 1;
+      DegDat->ItmSiz = OclTypSiz[ GmlInt ];
+      DegDat->ItmLen = 0;
+      DegDat->NmbLin = gml->NmbEle[ SrcTyp ];
+      DegDat->LinSiz = DegDat->NmbItm * DegDat->ItmSiz;
+      DegDat->MemSiz = (size_t)DegDat->NmbLin * (size_t)DegDat->LinSiz;
+      DegDat->GpuMem = DegDat->CpuMem = NULL;
+      DegDat->nam    = DegNam;
+
+      if(!NewData(gml, DegDat))
+         return(0);
+
+      if(gml->DbgFlg)
+         printf("Allocate a degree table with %d lines\n", DegDat->NmbLin);
+
+      // Then fetch the degrees from the hash table
+      gml->CntMat[ SrcTyp ][ DstTyp ] = DegIdx;
+      deg = &gml->dat[ gml->CntMat[ src->MshTyp ][ dst->MshTyp ] ];
+      DegTab = deg->CpuMem;
+
+      for(i=0;i<src->NmbLin;i++)
+      {
+         if(SrcTyp == GmlVertices)
+            EleNod = &i;
+         else
+            EleNod = &SrcNod[ i * SrcLen ];
+
+         for(j=0;j<SrcNmbItm;j++)
+         {
+            idx = i * SrcNmbItm + j;
+            GetItmNod(EleNod, SrcTyp, lnk.HshTyp, j, ItmTab);
+            HshKey = CalHshKey(&lnk, ItmTab);
+            DegTab[ idx ] = GetHsh(&lnk, HshKey, i, j, ItmTab, NULL);
+         }
+      }
+
+      EleTab = dst->CpuMem;
+      BalSiz = LenMatBas[ src->MshTyp ][ dst->MshTyp ];
+      MaxSiz = LenMatMax[ src->MshTyp ][ dst->MshTyp ];
+
+      for(i=0;i<src->NmbLin;i++)
+      {
+         if(!MaxPos && (DegTab[i] > BalSiz))
+            MaxPos = i;
+
+         DegTot += DegTab[i];
+         MaxDeg = MAX(MaxDeg, DegTab[i]);
+      }
+
+      MaxDeg = pow(2., ceil(log2(MaxDeg)));
+      HghSiz = MIN(MaxDeg, LenMatMax[ src->MshTyp ][ dst->MshTyp ]);
+      SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
+
+      if(gml->DbgFlg)
+         printf(  "Width for lines 1..%d: %d, for lines %d..%d:%d\n",
+                  MaxPos, BalSiz, MaxPos+1, src->NmbLin, MaxDeg);
+   }
+
+   // Build downlinks and neighbours
+   if(dir == -1 || dir == 0)
+   {
+      // Allocate the downlink table
+      if(!(BalIdx = GetNewDatIdx(gml)))
+         return(0);
+
+      NmbDat = LenMatBas[ SrcTyp ][ DstTyp ];
+      GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
+
+      BalDat = &gml->dat[ BalIdx ];
+
+      BalDat->AloTyp = GmlLnkDat;
+      BalDat->MshTyp = SrcTyp;
+      BalDat->LnkTyp = DstTyp;
+      BalDat->MemAcs = GmlInout;
+      BalDat->ItmTyp = ItmTyp;
+      BalDat->NmbItm = VecCnt;
+      BalDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
+      BalDat->ItmLen = 1;
+      BalDat->NmbLin = src->NmbLin;
+      BalDat->LinSiz = BalDat->NmbItm * BalDat->ItmSiz;
+      BalDat->MemSiz = (size_t)BalDat->NmbLin * (size_t)BalDat->LinSiz;
+      BalDat->GpuMem = BalDat->CpuMem = NULL;
+      BalDat->nam    = BalNam;
+
+      if(!NewData(gml, BalDat))
+         return(0);
+
+      // fetch the pointed items from the hash table and store them as downlinks
+      gml->LnkMat[ SrcTyp ][ DstTyp ] = BalIdx;
+      BalTab = bal->CpuMem;
+
+      for(i=0;i<src->NmbLin;i++)
+      {
+         EleNod = &SrcNod[ i * SrcLen ];
+
+         for(j=0;j<SrcNmbItm;j++)
+         {
+            idx = i * SrcNmbItm + j;
+            GetItmNod(EleNod, SrcTyp, lnk.HshTyp, j, ItmTab);
+            HshKey = CalHshKey(&lnk, ItmTab);
+
+            if((cpt = GetHsh(&lnk, HshKey, i, j, ItmTab, &cod)))
+            {
+               if(dir == 1)
+                  BalTab[ i * BalDat->ItmSiz + j ] = cod >> 4;
+               else
+               {
+                  if(cpt != 2)
+                     BalTab[ i * BalDat->ItmSiz + j ] = 0;
+                  else if( ((cod >> 4) != i) || ((cod & 7) != j) )
+                     BalTab[ i * BalDat->ItmSiz + j ] = cod;
+               }
+            }
+         }
+      }
+
+      // Upload the ball data to th GPU memory
+      gml->MovSiz += UploadData(gml, BalIdx);
+
+      printf("Stored %d uniq entries in the link table\n", src->NmbLin * SrcNmbItm);
+   }
+   else if(dir == 1) // More complex case: balls and shells
+   {
+      // Allocate the base vector ball table
+      if(!(BalIdx = GetNewDatIdx(gml)))
+         return(0);
+
+      NmbDat = LenMatBas[ SrcTyp ][ DstTyp ];
+      GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
+
+      BalDat = &gml->dat[ BalIdx ];
+
+      BalDat->AloTyp = GmlLnkDat;
+      BalDat->MshTyp = SrcTyp;
+      BalDat->LnkTyp = DstTyp;
+      BalDat->MemAcs = GmlInout;
+      BalDat->ItmTyp = ItmTyp;
+      BalDat->NmbItm = VecCnt;
+      BalDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
+      BalDat->ItmLen = 1;
+      BalDat->NmbLin = MaxPos+1;
+      BalDat->LinSiz = BalDat->NmbItm * BalDat->ItmSiz;
+      BalDat->MemSiz = (size_t)BalDat->NmbLin * (size_t)BalDat->LinSiz;
+      BalDat->GpuMem = BalDat->CpuMem = NULL;
+      BalDat->nam    = BalNam;
+
+      if(!NewData(gml, BalDat))
+         return(0);
+
+      if(gml->DbgFlg)
+         printf(  "Allocate a base table with %d lines of %d width vectors\n",
+                  BalDat->NmbLin, NmbDat);
+
+      gml->LnkMat[ SrcTyp ][ DstTyp ] = BalIdx;
+      bal = &gml->dat[ gml->LnkMat[ src->MshTyp ][ dst->MshTyp ] ];
+
+      // Allocate the high vector ball table
+      if(!(HghIdx = GetNewDatIdx(gml)))
+         return(0);
+
+      NmbDat = SizMatHgh[ SrcTyp ][ DstTyp ];
+      GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
+
+      HghDat = &gml->dat[ HghIdx ];
+
+      HghDat->AloTyp = GmlLnkDat;
+      HghDat->MshTyp = SrcTyp;
+      HghDat->LnkTyp = DstTyp;
+      HghDat->MemAcs = GmlInout;
+      HghDat->ItmTyp = ItmTyp;
+      HghDat->NmbItm = VecCnt;
+      HghDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
+      HghDat->ItmLen = 1;
+      HghDat->NmbLin = gml->NmbEle[ SrcTyp ] - MaxPos;
+      HghDat->LinSiz = HghDat->NmbItm * HghDat->ItmSiz;
+      HghDat->MemSiz = (size_t)HghDat->NmbLin * (size_t)HghDat->LinSiz;
+      HghDat->GpuMem = HghDat->CpuMem = NULL;
+      HghDat->nam    = BalNam;
+
+      if(!NewData(gml, HghDat))
+         return(0);
+
+      if(gml->DbgFlg)
+         printf(  "Allocate a hash table with %d lines of %d width vectors\n",
+                  HghDat->NmbLin, NmbDat);
+
+      gml->LnkHgh[ SrcTyp ][ DstTyp ] = HghIdx;
+      hgh = &gml->dat[ gml->LnkHgh[ src->MshTyp ][ dst->MshTyp ] ];
+
+      // Fill both ball tables at the same time
+      BalTab = bal->CpuMem;
+      HghTab = hgh->CpuMem;
+
+      if(gml->DbgFlg)
+         puts("Fetching balls from the hash table and filling both low and high degree tables");
+
+      for(i=0;i<src->NmbLin;i++)
+      {
+         if(SrcTyp == GmlVertices)
+            EleNod = &i;
+         else
+            EleNod = &SrcNod[ i * SrcLen ];
+
+         GetItmNod(EleNod, SrcTyp, lnk.HshTyp, 0, ItmTab);
+         HshKey = CalHshKey(&lnk, ItmTab);
+
+         if(i <= MaxPos)
+            GetHsh(&lnk, HshKey, i, 0, ItmTab, &BalTab[ i * BalSiz ]);
+         else
+            GetHsh(&lnk, HshKey, i, 0, ItmTab, &HghTab[ (i - MaxPos) * HghSiz ]);
+      }
+
+      if(gml->DbgFlg)
+         puts("Uploading the three tables");
+
+      // Upload the ball data to th GPU memory
+      gml->MovSiz += UploadData(gml, BalIdx);
+      gml->MovSiz += UploadData(gml, HghIdx);
+      gml->MovSiz += UploadData(gml, DegIdx);
+
+      if(gml->DbgFlg)
+      {
+         puts(sep);
+         printf(  "Ball generation: type %s -> %s\n",
+                  BalTypStr[ SrcTyp ], BalTypStr[ DstTyp ] );
+         printf(  "low degree ranging from 1 to %d, occupency = %g%%\n",
+                  MaxPos, (float)(100 * DegTot) / (float)(MaxPos * BalSiz) );
+         printf(  "high degree entities = %d\n", src->NmbLin - MaxPos);
+         printf(  "Allocated degree     data: index=%2d, size=%zu bytes\n",
+                  DegIdx, DegDat->MemSiz );
+         printf(  "Allocated short ball data: index=%2d, size=%zu bytes\n",
+                  BalIdx, BalDat->MemSiz );
+         printf(  "Allocated long ball  data: index=%2d, size=%zu bytes\n",
+                  HghIdx, HghDat->MemSiz );
+      }
+   }
+
+
+   /*for(i=0;i<src->NmbLin;i++)
+   {
+      printf("deg %d = %d :", i, DegTab[i]);
+
+      for(j=0;j<DegTab[i];j++)
+         if(i <= MaxPos)
+            printf("%d,", BalTab[ i * BalSiz + j ] >> 4);
+         else
+            printf("%d,", HghTab[ (i - MaxPos) * HghSiz + j ] >> 4);
+
+      puts("");
+   }
+   exit(0);*/
+
+   free(lnk.HshTab);
+   free(lnk.DatTab);
+
+   return(0);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Extract an element's entity node table                                     */
+/*----------------------------------------------------------------------------*/
+
+static void GetItmNod(  int *EleNod, int EleTyp,
+                        int ItmTyp, int ItmIdx, int *ItmTab )
+{
+   int i, j, tmp, NmbVer = ItmNmbVer[ ItmTyp ];
+
+   // Copy the hashed entity's vertices to the return table
+   switch(ItmTyp)
+   {
+      case GmlVertices :
+      {
+         ItmTab[0] = EleNod[ ItmIdx ];
+      }return;
+
+      case GmlEdges :
+      {
+         i = EleNod[ ItmEdgNod[ EleTyp ][ ItmIdx ][0] ];
+         j = EleNod[ ItmEdgNod[ EleTyp ][ ItmIdx ][1] ];
+         ItmTab[0] = MIN(i,j);
+         ItmTab[1] = MAX(i,j);
+      }return;
+
+      case GmlTriangles :
+      {
+         for(i=0;i<3;i++)
+            ItmTab[i] = EleNod[ ItmFacNod[ EleTyp ][ ItmIdx ][i] ];
+
+         // Sort the vertices to speed-up further comparison
+         for(i=0;i<3;i++)
+            for(j=i+1;j<3;j++)
+               if(ItmTab[i] > ItmTab[j])
+               {
+                  tmp       = ItmTab[i];
+                  ItmTab[i] = ItmTab[j];
+                  ItmTab[j] = tmp;
+               }
+      }return;
+
+      case GmlQuadrilaterals :
+      {
+         for(i=0;i<4;i++)
+            ItmTab[i] = EleNod[ ItmFacNod[ EleTyp ][ ItmIdx ][i] ];
+
+         // Sort the vertices to speed-up further comparison
+         for(i=0;i<4;i++)
+            for(j=i+1;j<4;j++)
+               if(ItmTab[i] > ItmTab[j])
+               {
+                  tmp       = ItmTab[i];
+                  ItmTab[i] = ItmTab[j];
+                  ItmTab[j] = tmp;
+               }
+      }return;
+   }
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Compute a hash key based on a node table and a hash table size             */
+/*----------------------------------------------------------------------------*/
+
+static int CalHshKey(HshTabSct *lnk, int *ItmTab)
+{
+   int i, k = 0, wei[4] = {3,5,7,11};
+
+   if(lnk->DatLen == 1)
+      return(ItmTab[0]);
+
+   for(i=0;i<lnk->DatLen;i++)
+      k += wei[i] * ItmTab[i];
+
+   return(k % lnk->TabSiz);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Add a pair element/entity to the hash table and handle any collision       */
+/*----------------------------------------------------------------------------*/
+
+static void AddHsh(  HshTabSct *lnk, int HshKey, int EleIdx,
+                     int ItmIdx, int *ItmTab )
+{
+   int i, nxt;
+   BucSct *buc;
+   
+   if(lnk->NxtDat == lnk->NmbDat)
+   {
+      lnk->NmbDat *= 2;
+      lnk->DatTab = realloc(lnk->DatTab, lnk->NmbDat * sizeof(BucSct));
+   }
+
+   nxt = lnk->HshTab[ HshKey ];
+   lnk->HshTab[ HshKey ] = lnk->NxtDat;
+   buc = &lnk->DatTab[ lnk->NxtDat ];
+   buc->EleIdx = EleIdx;
+   buc->ItmIdx = ItmIdx;
+   buc->NxtDat = nxt;
+   lnk->NxtDat++;
+
+   if(nxt)
+      lnk->NmbMis++;
+   else
+      lnk->NmbHit++;
+
+   for(i=0;i<lnk->DatLen;i++)
+      buc->nod[i] = ItmTab[i];
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Fetch an element/entity pair from the hash table                           */
+/*----------------------------------------------------------------------------*/
+
+static int GetHsh(   HshTabSct *lnk, int HshKey, int EleIdx,
+                     int ItmIdx, int *ItmTab, int *UsrTab )
+{
+   int i, flg, deg = 0;
+   BucSct *buc;
+
+   if(!lnk->HshTab[ HshKey ])
+      return(0);
+
+   buc = &lnk->DatTab[ lnk->HshTab[ HshKey ] ];
+
+   while(buc)
+   {
+      flg = 1;
+
+      for(i=0;i<lnk->DatLen;i++)
+         if(buc->nod[i] != ItmTab[i])
+         {
+            flg = 0;
+            break;
+         }
+
+      if(flg)
+      {
+         if(UsrTab)
+            UsrTab[ deg ] = (buc->EleIdx << 4) | buc->ItmIdx;
+
+         deg++;
+      }
+
+      if(!buc->NxtDat)
+         return(deg);
+
+      buc = &lnk->DatTab[ buc->NxtDat ];
+   }
+
+   return(0);
 }
 
 
@@ -1172,6 +1587,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 
       arg->MshTyp = DstTyp;
       arg->DatIdx = IdxTab[i];
+      arg->LnkDir = 0;
       arg->LnkTyp = DstTyp;
       arg->LnkIdx = LnkPos;
       arg->CntIdx = CptPos;
@@ -1214,6 +1630,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
       RefDat = &gml->dat[ RefIdx ];
       arg->MshTyp = DstTyp;
       arg->DatIdx = RefIdx;
+      arg->LnkDir = 0;
       arg->LnkTyp = DstTyp;
       arg->LnkIdx = LnkPos;
       arg->CntIdx = CptPos;
@@ -1416,6 +1833,7 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
    char     str   [ GmlMaxStrSiz ], ArgTd1[ GmlMaxStrSiz ], ArgTd2[ GmlMaxStrSiz ];
    char     LnkTd1[ GmlMaxStrSiz ], LnkTd2[ GmlMaxStrSiz ], LnkNam[ GmlMaxStrSiz ];
    char     CptNam[ GmlMaxStrSiz ], DegTst[ GmlMaxStrSiz ], DegNul[ GmlMaxStrSiz ];
+   char     BalSft[ GmlMaxStrSiz ], BalMsk[ GmlMaxStrSiz ];
    ArgSct   *arg, *LnkArg, *CptArg;
 
    strcat(src, "   int       cnt = get_global_id(0);\n\n");
@@ -1488,9 +1906,14 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
                DegNul[0] = DegTst[0] = '\0';
             }
 
-            sprintf( str, "   %s%s%s = %s %sTab[ %s%s%s ]%s %s;\n",
+            if(arg->LnkDir == 1)
+               sprintf(BalSft, ">> 4");
+            else
+               BalSft[0] = '\0';
+
+            sprintf( str, "   %s%s%s = %s %sTab[ %s%s%s ]%s %s %s;\n",
                      arg->nam, ArgTd2, ArgTd1,
-                     DegTst, arg->nam, LnkNam, LnkTd1, LnkTd2, ArgTd1, DegNul);
+                     DegTst, arg->nam, LnkNam, LnkTd1, LnkTd2, ArgTd1, BalSft, DegNul);
 
             strcat(src, str);
          }
