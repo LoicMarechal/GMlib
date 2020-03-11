@@ -2,7 +2,7 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.11                           */
+/*                         GPU Meshing Library 3.14                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
@@ -27,6 +27,7 @@
 #include "TetrahedraNgb.h"
 #include "TetrahedraLoop.h"
 #include "VertexGather.h"
+#include "FP64Test.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -48,12 +49,13 @@ int main(int ArgCnt, char **ArgVec)
 {
    int         i, j, NmbVer, NmbTet, ver = 0, dim = 0, *VerRef, (*TetTab)[5];
    int         ParIdx, VerIdx, TetIdx, BalIdx, MidIdx, SolIdx, CalMid, OptVer;
-   int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn;
+   int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, F64Idx, F64Krn;
    int64_t     InpMsh;
    size_t      GmlIdx;
    float       MidTab[4], SolTab[8], TetChk = 0., VerChk = 0., (*VerTab)[3];
    float       IniSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
-   double      NgbTim = 0, TetTim = 0, VerTim = 0, RedTim = 0, res, residual;
+   double      NgbTim = 0, TetTim = 0, VerTim = 0, RedTim = 0, F64Tim = 0;
+   double      res, residual;
    GmlParSct   *GmlPar;
 
 
@@ -116,7 +118,7 @@ int main(int ArgCnt, char **ArgVec)
    if(!(GmlIdx = GmlInit(GpuIdx)))
       return(1);
 
-   GmlDebugOn(GmlIdx);
+   //GmlDebugOn(GmlIdx);
 
    // Allocate a common parameters structure to pass along to every kernels
    if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), Parameters)))
@@ -158,6 +160,24 @@ int main(int ArgCnt, char **ArgVec)
    if(!(ResIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "ResVec")))
       return(1);
 
+   if(GmlCheckFP64(GmlIdx))
+   {
+      puts("This device has FP64 capability.");
+
+      if(!(F64Idx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlDbl, "F64Dat")))
+         return(1);
+
+      // Assemble and compile a neighbours kernel
+      F64Krn = GmlCompileKernel( GmlIdx, FP64Test, "FP64Test",
+                                 GmlTetrahedra, 1,
+                                 F64Idx, GmlReadMode, NULL );
+
+      if(!F64Krn)
+         return(1);
+   }
+   else
+      F64Idx = F64Krn = 0;
+
    // Assemble and compile a neighbours kernel
    NgbKrn = GmlCompileKernel( GmlIdx, TetrahedraNgb, "TetrahedraNeighbours",
                               GmlTetrahedra, 1,
@@ -189,6 +209,21 @@ int main(int ArgCnt, char **ArgVec)
    for(i=1;i<=100;i++)
    {
       GmlPar->res = i;
+
+      if(F64Krn)
+      {
+
+         // Launch the tetrahedra kernel on the GPU
+         res  = GmlLaunchKernel(GmlIdx, F64Krn);
+
+         if(res < 0)
+         {
+            printf("Launch kernel %d failled with error: %g\n", F64Krn, res);
+            exit(0);
+         }
+
+         F64Tim += res;
+      }
 
       // Launch the tetrahedra kernel on the GPU
       res  = GmlLaunchKernel(GmlIdx, NgbKrn);
@@ -255,8 +290,8 @@ int main(int ArgCnt, char **ArgVec)
       VerChk += SolTab[0] + SolTab[1] + SolTab[2] + SolTab[3];
    }
 
-   printf("%d tets processed in %g seconds, ngb access=%g, scater=%g, gather=%g, reduction=%g\n",
-          NmbTet, NgbTim + TetTim + VerTim + RedTim, NgbTim, TetTim, VerTim, RedTim);
+   printf("%d tets processed in %g seconds, FP64=%g, ngb access=%g, scater=%g, gather=%g, reduction=%g\n",
+          NmbTet, F64Tim + NgbTim + TetTim + VerTim + RedTim, F64Tim, NgbTim, TetTim, VerTim, RedTim);
 
    printf("%ld MB used, %ld MB transfered\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,
