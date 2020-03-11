@@ -2,7 +2,7 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.13                           */
+/*                         GPU Meshing Library 3.14                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
@@ -85,7 +85,7 @@ typedef struct
 
 typedef struct
 {
-   int            NmbKrn, ParIdx, CurDev, DbgFlg;
+   int            NmbKrn, ParIdx, CurDev, DbgFlg, DblExt, FpnSiz;
    int            TypIdx[ GmlMaxEleTyp ];
    int            RefIdx[ GmlMaxEleTyp ];
    int            NmbEle[ GmlMaxEleTyp ];
@@ -110,7 +110,7 @@ typedef struct
 #define MIN(a,b)        ((a) < (b) ? (a) : (b))
 #define MAX(a,b)        ((a) > (b) ? (a) : (b))
 #define CHKELETYP(t)    if( ((t) < 0) || ((t) >= GmlMaxEleTyp)) return(0)
-#define CHKOCLTYP(t)    if( ((t) < GmlInt) || ((t) > GmlFlt16)) return(0)
+#define CHKOCLTYP(t)    if( ((t) < GmlInt) || ((t) >= GmlMaxOclTyp)) return(0)
 #define GETGMLPTR(p,i)  GmlSct *p = (GmlSct *)(i)
 
 
@@ -156,7 +156,12 @@ static const int  OclTypSiz[ GmlMaxOclTyp ] = {
    sizeof(cl_float2),
    sizeof(cl_float4),
    sizeof(cl_float8),
-   sizeof(cl_float16) };
+   sizeof(cl_float16),
+   sizeof(cl_double),
+   sizeof(cl_double2),
+   sizeof(cl_double4),
+   sizeof(cl_double8),
+   sizeof(cl_double16) };
 
 static const char *OclTypStr[ GmlMaxOclTyp ]  = {
    "int      ",
@@ -168,7 +173,12 @@ static const char *OclTypStr[ GmlMaxOclTyp ]  = {
    "float2   ",
    "float4   ",
    "float8   ",
-   "float16  " };
+   "float16  ",
+   "double   ",
+   "double2  ",
+   "double4  ",
+   "double8  ",
+   "double16 " };
 
 static const char *OclNulVec[ GmlMaxOclTyp ]  = {
    "(int){0}",
@@ -180,9 +190,14 @@ static const char *OclNulVec[ GmlMaxOclTyp ]  = {
    "(float2){0.,0.}",
    "(float4){0.,0.,0.,0.}",
    "(float8){0.,0.,0.,0.,0.,0.,0.,0.}",
-   "(float16){0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.}" };
+   "(float16){0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.}",
+   "(double){0.}",
+   "(double2){0.,0.}",
+   "(double4){0.,0.,0.,0.}",
+   "(double8){0.,0.,0.,0.,0.,0.,0.,0.}",
+   "(double16){0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.}" };
 
-static const int  TypVecSiz[ GmlMaxOclTyp ]  = {1,2,4,8,16,1,2,4,8,16};
+static const int  TypVecSiz[ GmlMaxOclTyp ]  = {1,2,4,8,16,1,2,4,8,16,1,2,4,8,16};
 
 static const int  OclVecPow[ VECPOWOCL +1 ]  = {
    GmlInt, GmlInt2, GmlInt4, GmlInt8, GmlInt16};
@@ -280,11 +295,12 @@ char *sep="\n\n############################################################\n";
 
 size_t GmlInit(int DevIdx)
 {
+   char           str[1024];
    int            err, res;
    cl_platform_id PlfTab[ GmlMaxOclTyp ];
    cl_uint        NmbPlf;
    GmlSct         *gml;
-   size_t         GmlIdx;
+   size_t         GmlIdx, retSiz;
 
    // Select which device to run on
    gml = calloc(1, sizeof(GmlSct));
@@ -337,6 +353,12 @@ size_t GmlInit(int DevIdx)
       printf("OpenCL command queue creation failed with error: %d\n", err);
       return(0);
    }
+
+   err = clGetDeviceInfo(gml->device_id[ gml->CurDev ], CL_DEVICE_EXTENSIONS, 1024, str, &retSiz);
+
+   if(strstr(str, "cl_khr_fp64"))
+      gml->DblExt = 1;
+
 
    // Return a pointer on the allocated and initialize GMlib structure
    return(GmlIdx);
@@ -2365,6 +2387,16 @@ void GmlDebugOff(size_t GmlIdx)
 {
    GETGMLPTR(gml, GmlIdx);
    gml->DbgFlg = 0;
+}
+
+
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+
+int GmlCheckFP64(size_t GmlIdx)
+{
+   GETGMLPTR(gml, GmlIdx);
+   return(gml->DblExt);
 }
 
 

@@ -12,7 +12,7 @@
 - Write the triangles and tets neighbors generation :heavy_check_mark:
 - Add the voyeurs information in all the uplink data and kernel sources
 - Add a reduction internal kernel with min, max and L1 :heavy_check_mark:
-- Add single float, double float and user selectable real float
+- Add single float, double float and user selectable real float :heavy_check_mark:
 - Make the GMlib reentrant :heavy_check_mark:
 - Revise the parameters structure mechanism :heavy_check_mark:
 
