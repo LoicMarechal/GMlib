@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.12                           */
+/*                         GPU Meshing Library 3.13                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 04 2020                                           */
+/*   Last modification: mar 10 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -72,3 +72,6 @@ size_t   GmlGetMemoryUsage    (size_t);
 size_t   GmlGetMemoryTransfer (size_t);
 void     GmlDebugOn           (size_t);
 void     GmlDebugOff          (size_t);
+int      GmlExtractEdges      (size_t);
+int      GmlExtractFaces      (size_t);
+int      GmlSetNeighbours     (size_t, int);

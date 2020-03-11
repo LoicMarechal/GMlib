@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.12                           */
+/*                         GPU Meshing Library 3.13                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 04 2020                                           */
+/*   Last modification: mar 11 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -645,6 +645,7 @@ int NewBallData(GmlSct *gml, int SrcTyp, int DstTyp, char *BalNam, char *DegNam)
    // Get and check the source and destination mesh datatypes
    CHKELETYP(SrcTyp);
    CHKELETYP(DstTyp);
+   memset(&lnk, 0, sizeof(HshTabSct));
 
    src = &gml->dat[ gml->TypIdx[ SrcTyp ] ];
    dst = &gml->dat[ gml->TypIdx[ DstTyp ] ];
@@ -695,7 +696,7 @@ int NewBallData(GmlSct *gml, int SrcTyp, int DstTyp, char *BalNam, char *DegNam)
    lnk.DatLen = ItmNmbVer[ lnk.HshTyp ];
    lnk.KeyLen = HshLenTab[ lnk.DatLen ];
    lnk.NmbDat = lnk.TabSiz;
-   lnk.NxtDat = 0;
+   lnk.NxtDat = 1;
    lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
    lnk.DatTab = malloc(lnk.TabSiz * sizeof(BucSct));
 
@@ -2353,4 +2354,221 @@ void GmlDebugOff(size_t GmlIdx)
 {
    GETGMLPTR(gml, GmlIdx);
    gml->DbgFlg = 0;
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Exctract the list of unique volume edges from any kind of elements         */
+/*----------------------------------------------------------------------------*/
+
+int GmlExtractEdges(size_t GmlIdx)
+{
+   int         i, j, typ, idx, cod, cpt = 0, HshKey, ItmTab[3];
+   int         EdgIdx, EleSiz, NmbItm, EleLen, *EleNod, *nod;
+   DatSct      *dat;
+   BucSct      *buc;
+   HshTabSct   lnk;
+
+   GETGMLPTR(gml, GmlIdx);
+
+   for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
+      if(gml->TypIdx[ typ ])
+         cpt += gml->dat[ gml->TypIdx[ typ ] ].NmbLin;
+
+   // Setup a hash table
+   memset(&lnk, 0, sizeof(HshTabSct));
+   lnk.HshTyp = GmlEdges;
+   lnk.TabSiz = cpt;
+   lnk.DatLen = ItmNmbVer[ lnk.HshTyp ];
+   lnk.KeyLen = HshLenTab[ lnk.DatLen ];
+   lnk.NmbDat = lnk.TabSiz;
+   lnk.NxtDat = 1;
+   lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
+   lnk.DatTab = malloc(lnk.TabSiz * sizeof(BucSct));
+   cpt = 0;
+
+   if(gml->DbgFlg)
+      printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
+               lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
+
+   for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
+   {
+      if(!gml->TypIdx[ typ ])
+         continue;
+
+      dat = &gml->dat[ gml->TypIdx[ typ ] ];
+      EleNod = (int *)dat->CpuMem;
+      NmbItm = NmbTpoLnk[ typ ][ lnk.HshTyp ];
+      EleLen = ItmNmbVer[ typ ];
+
+      // Add edges to the hash table
+      for(i=0;i<dat->NmbLin;i++)
+      {
+         nod = &EleNod[ i * EleLen ];
+
+         for(j=0;j<NmbItm;j++)
+         {
+            GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
+            HshKey = CalHshKey(&lnk, ItmTab);
+
+            if(GetHsh(&lnk, HshKey, i, j, ItmTab, NULL))
+               continue;
+
+            AddHsh(&lnk, HshKey, i, j, ItmTab);
+            cpt++;
+         }
+      }
+   }
+
+   if(gml->DbgFlg)
+      printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
+               lnk.NxtDat-1, (100LL * lnk.NmbHit) / lnk.TabSiz,
+               (double)lnk.NmbMis / (double)lnk.TabSiz );
+
+   EdgIdx = GmlNewMeshData(GmlIdx, GmlEdges, cpt);
+   cpt = 0;
+
+   for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
+   {
+      if(!gml->TypIdx[ typ ])
+         continue;
+
+      dat = &gml->dat[ gml->TypIdx[ typ ] ];
+      EleNod = (int *)dat->CpuMem;
+      NmbItm = NmbTpoLnk[ typ ][ lnk.HshTyp ];
+      EleLen = ItmNmbVer[ typ ];
+
+      // Get edges from the hash table
+      for(i=0;i<dat->NmbLin;i++)
+      {
+         nod = &EleNod[ i * EleLen ];
+
+         for(j=0;j<NmbItm;j++)
+         {
+            GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
+            HshKey = CalHshKey(&lnk, ItmTab);
+            cod = 0;
+
+            if(!GetHsh(&lnk, HshKey, i, j, ItmTab, &cod))
+               continue;
+
+            if(cod >> 4 != i)
+               continue;
+
+            GmlSetDataLine(GmlIdx, EdgIdx, cpt, ItmTab[0], ItmTab[1], 0);
+            cpt++;
+         }
+      }
+   }
+
+   free(lnk.HshTab);
+   free(lnk.DatTab);
+
+   if(gml->DbgFlg)
+      printf("Hashed, setup and transfered %d edges to the GMlib.\n", cpt);
+
+   return(EdgIdx);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+
+int GmlExtractFaces(size_t GmlIdx)
+{
+   return(0);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Build, allocate and transfer neighbourhood information                     */
+/*----------------------------------------------------------------------------*/
+
+int GmlSetNeighbours(size_t GmlIdx, int typ)
+{
+   int         i, j, k, cpt, cod[2], HshKey, ItmTab[4], TetNgb[4];
+   int         NgbIdx;
+   int         NmbItm, EleLen, *EleNod, *nod;
+   DatSct      *dat;
+   BucSct      *buc;
+   HshTabSct   lnk;
+
+   if(typ == GmlPyramids || typ == GmlPrisms)
+   {
+      puts("Neighbours calculation between prisms or pyramids is not yet implemented.");
+      return(0);
+   }
+
+   GETGMLPTR(gml, GmlIdx);
+
+   // Get and check the source and destination mesh datatypes
+   CHKELETYP(typ);
+   dat = &gml->dat[ gml->TypIdx[ typ ] ];
+   EleNod = (int *)dat->CpuMem;
+
+   // Setup a hash table
+   memset(&lnk, 0, sizeof(HshTabSct));
+   lnk.HshTyp = NgbTyp[ typ ];
+   lnk.TabSiz = dat->NmbLin * NmbTpoLnk[ typ ][ typ ] / 2;
+   lnk.DatLen = ItmNmbVer[ lnk.HshTyp ];
+   lnk.KeyLen = HshLenTab[ lnk.DatLen ];
+   lnk.NmbDat = lnk.TabSiz;
+   lnk.NxtDat = 1;
+   lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
+   lnk.DatTab = malloc(lnk.TabSiz * sizeof(BucSct));
+
+   if(gml->DbgFlg)
+      printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
+               lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
+
+   NmbItm = NmbTpoLnk[ typ ][ lnk.HshTyp ];
+   EleLen = ItmNmbVer[ typ ];
+
+   // Add destination entities to the hash table
+   for(i=0;i<dat->NmbLin;i++)
+   {
+      nod = &EleNod[ i * EleLen ];
+
+      for(j=0;j<NmbItm;j++)
+      {
+         GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
+         HshKey = CalHshKey(&lnk, ItmTab);
+         AddHsh(&lnk, HshKey, i, j, ItmTab);
+      }
+   }
+
+   if(gml->DbgFlg)
+      printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
+               lnk.NmbDat, (100LL * lnk.NmbHit) / lnk.TabSiz,
+               (double)lnk.NmbMis / (double)lnk.TabSiz );
+
+   // Build downlinks and neighbours
+   NgbIdx = GmlNewLinkData(GmlIdx, typ, typ, dat->NmbLin * ItmNmbFac[ typ ], "ngb");
+
+   for(i=0;i<dat->NmbLin;i++)
+   {
+      nod = &EleNod[ i * EleLen ];
+
+      for(j=0;j<NmbItm;j++)
+      {
+         GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
+         HshKey = CalHshKey(&lnk, ItmTab);
+         cpt = GetHsh(&lnk, HshKey, i, j, ItmTab, cod);
+         TetNgb[j] = 0;
+
+         for(k=0;k<cpt;k++)
+            if(cod[k] >> 4 != i)
+               TetNgb[j] = cod[k] >> 4;
+      }
+
+      GmlSetDataLine(GmlIdx, NgbIdx, i, &TetNgb);
+   }
+
+   if(gml->DbgFlg)
+      printf("Stored %d uniq entries in the link table\n", dat->NmbLin * NmbItm);
+
+   free(lnk.HshTab);
+   free(lnk.DatTab);
+
+   return(NgbIdx);
 }
