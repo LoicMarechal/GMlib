@@ -979,21 +979,6 @@ int NewBallData(GmlSct *gml, int SrcTyp, int DstTyp, char *BalNam, char *DegNam)
       }
    }
 
-
-   /*for(i=0;i<src->NmbLin;i++)
-   {
-      printf("deg %d = %d :", i, DegTab[i]);
-
-      for(j=0;j<DegTab[i];j++)
-         if(i <= MaxPos)
-            printf("%d,", BalTab[ i * BalSiz + j ] >> 4);
-         else
-            printf("%d,", HghTab[ (i - MaxPos) * HghSiz + j ] >> 4);
-
-      puts("");
-   }
-   exit(0);*/
-
    free(lnk.HshTab);
    free(lnk.DatTab);
 
@@ -1455,11 +1440,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
          LnkTab[i] = gml->LnkMat[ MshTyp ][ DstTyp ];
          CntTab[i] = 0;
       }
-      else if(MshTypDim[ SrcTyp ] == MshTypDim[ DstTyp ])
-      {
-         // build neighbours
-      }
-      else
+      else if(MshTypDim[ SrcTyp ] < MshTypDim[ DstTyp ])
       {
          // Uplink
          if(!gml->LnkMat[ MshTyp ][ dat->MshTyp ])
@@ -1498,14 +1479,14 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
       LnkItm = LenMatBas[ MshTyp ][ DstTyp ];
       GetCntVec(LnkItm, &NmbItm, &ItmLen, &ItmTyp);
 
-      // Create a new contextual argument
+      // Create a new contextual arguments
       arg = &ArgTab[ NmbArg ];
       arg->ArgIdx = NmbArg;
       NmbArg++;
 
       if(MshTypDim[ SrcTyp ] > MshTypDim[ DstTyp ])
       {
-         // Downlink access argument
+         // Downlink access arguments
          arg->MshTyp = DstTyp;
          arg->DatIdx = LnkTab[i];
          arg->LnkDir = -1;
@@ -1522,10 +1503,24 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
       }
       else if(MshTypDim[ SrcTyp ] == MshTypDim[ DstTyp ])
       {
+         // Neighbours access arguments
+         arg->MshTyp = DstTyp;
+         arg->DatIdx = LnkTab[i];
+         arg->LnkDir = 0;
+         arg->LnkTyp = -1;
+         arg->LnkIdx = -1;
+         arg->CntIdx = -1;
+         arg->LnkDeg = LnkItm;
+         arg->MaxDeg = LnkItm;
+         arg->NmbItm = NmbItm;
+         arg->ItmLen = ItmLen;
+         arg->ItmTyp = ItmTyp;
+         arg->FlgTab = GmlReadMode;
+         arg->nam    = gml->dat[ arg->DatIdx ].nam;
       }
       else if(MshTypDim[ SrcTyp ] < MshTypDim[ DstTyp ])
       {
-         // Downlink access argument
+         // Uplink access arguments
          arg->MshTyp = DstTyp;
          arg->DatIdx = LnkTab[i];
          arg->LnkDir = 1;
@@ -1819,6 +1814,11 @@ static void WriteKernelVariables(char *src, int MshTyp,
          sprintf(str,  "   #define   %sDegMax %d\n", arg->nam, LnkArg->MaxDeg);
          strcat(src, str);
       }
+      else if(LnkArg && LnkArg->LnkDir == 0)
+      {
+         sprintf(str,  "   %s %sNul;\n", OclTypStr[ arg->ItmTyp ], arg->nam);
+         strcat(src, str);
+      }
    }
 }
 
@@ -1862,6 +1862,11 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
             strcat(src, str);
             strcat(src, "\n");
          }
+         else if(LnkArg && LnkArg->LnkDir == 0)
+         {
+            sprintf(str,  "   %sNul = %s;\n", arg->nam, OclNulVec[ arg->ItmTyp ]);
+            strcat(src, str);
+         }
 
          if(arg->NmbItm > 1)
             sprintf(ArgTd1, "[%d]", j);
@@ -1899,12 +1904,18 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
 
             if(CptArg)
             {
-               sprintf(DegNul, ": %sNul", arg->nam);
                sprintf(DegTst, "(%s <= %d) ?", CptNam, LnkArg->MaxDeg);
+               sprintf(DegNul, ": %sNul", arg->nam);
             }
             else
             {
-               DegNul[0] = DegTst[0] = '\0';
+               if(LnkArg && LnkArg->LnkDir == 0)
+               {
+                  sprintf(DegTst, "%s%s ?", LnkArg->nam, LnkTd2);
+                  sprintf(DegNul, ": %sNul", arg->nam);
+               }
+               else
+                  DegNul[0] = DegTst[0] = '\0';
             }
 
             if(arg->LnkDir == 1)
@@ -2543,7 +2554,7 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
                (double)lnk.NmbMis / (double)lnk.TabSiz );
 
    // Build downlinks and neighbours
-   NgbIdx = GmlNewLinkData(GmlIdx, typ, typ, dat->NmbLin * ItmNmbFac[ typ ], "ngb");
+   NgbIdx = GmlNewLinkData(GmlIdx, typ, typ, ItmNmbFac[ typ ], "ngb");
 
    for(i=0;i<dat->NmbLin;i++)
    {
