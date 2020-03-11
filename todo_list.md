@@ -4,8 +4,8 @@
 ### Internal source code
 
 - Split the compile kernel procedure into separate modules to better handle uplink kernels
-- Write the neighbors link kernel compilation
-- Handle user defined topological links
+- Write the neighbors link kernel compilation :heavy_check_mark:
+- Handle user defined topological links :heavy_check_mark:
 - Handle the shell uplinks :heavy_check_mark:
 - Write the tet and triangles shell generation :heavy_check_mark:
 - Write the ball of edges or triangles :heavy_check_mark:

@@ -9,7 +9,7 @@
 /*   Description:       Basic loop on tetrahedra                              */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     nov 21 2019                                           */
-/*   Last modification: feb 20 2020                                           */
+/*   Last modification: mar 11 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -24,6 +24,7 @@
 #include "libmeshb7.h"
 #include "gmlib3.h"
 #include "Parameters.h"
+#include "TetrahedraNgb.h"
 #include "TetrahedraLoop.h"
 #include "VertexGather.h"
 
@@ -47,12 +48,12 @@ int main(int ArgCnt, char **ArgVec)
 {
    int         i, j, NmbVer, NmbTet, ver = 0, dim = 0, *VerRef, (*TetTab)[5];
    int         ParIdx, VerIdx, TetIdx, BalIdx, MidIdx, SolIdx, CalMid, OptVer;
-   int         GpuIdx = 0, ResIdx;
+   int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn;
    int64_t     InpMsh;
    size_t      GmlIdx;
    float       MidTab[4], SolTab[8], TetChk = 0., VerChk = 0., (*VerTab)[3];
    float       IniSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
-   double      TetTim = 0., VerTim = 0., RedTim = 0., res, residual;
+   double      NgbTim = 0, TetTim = 0, VerTim = 0, RedTim = 0, res, residual;
    GmlParSct   *GmlPar;
 
 
@@ -137,6 +138,9 @@ int main(int ArgCnt, char **ArgVec)
                      TetTab[i][0]-1, TetTab[i][1]-1,
                      TetTab[i][2]-1, TetTab[i][3]-1, TetTab[i][4]);
 
+   // Build neighbours between tets as a user defined topological link
+   NgbIdx = GmlSetNeighbours(GmlIdx, GmlTetrahedra);
+
    // Create a raw datatype to store some value at vertices.
    if(!(SolIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 2, GmlFlt4, "SolAtVer")))
       return(1);
@@ -154,6 +158,14 @@ int main(int ArgCnt, char **ArgVec)
    if(!(ResIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "ResVec")))
       return(1);
 
+   // Assemble and compile a neighbours kernel
+   NgbKrn = GmlCompileKernel( GmlIdx, TetrahedraNgb, "TetrahedraNeighbours",
+                              GmlTetrahedra, 1,
+                              MidIdx, GmlReadMode, NgbIdx );
+
+   if(!NgbKrn)
+      return(1);
+
    // Assemble and compile the scatter kernel
    CalMid = GmlCompileKernel( GmlIdx, TetrahedraLoop, "TetrahedraBasic",
                               GmlTetrahedra, 4,
@@ -169,7 +181,7 @@ int main(int ArgCnt, char **ArgVec)
    OptVer = GmlCompileKernel( GmlIdx, VertexGather, "VertexGather",
                               GmlVertices, 2,
                               SolIdx, GmlWriteMode, NULL,
-                              MidIdx, GmlReadMode | GmlVoyeurs,  NULL );
+                              MidIdx, GmlReadMode,  NULL );
 
    if(!OptVer)
       return(1);
@@ -177,6 +189,17 @@ int main(int ArgCnt, char **ArgVec)
    for(i=1;i<=100;i++)
    {
       GmlPar->res = i;
+
+      // Launch the tetrahedra kernel on the GPU
+      res  = GmlLaunchKernel(GmlIdx, NgbKrn);
+
+      if(res < 0)
+      {
+         printf("Launch kernel %d failled with error: %g\n", NgbKrn, res);
+         exit(0);
+      }
+
+      NgbTim += res;
 
       // Launch the tetrahedra kernel on the GPU
       res  = GmlLaunchKernel(GmlIdx, CalMid);
@@ -232,8 +255,8 @@ int main(int ArgCnt, char **ArgVec)
       VerChk += SolTab[0] + SolTab[1] + SolTab[2] + SolTab[3];
    }
 
-   printf("%d tets processed in %g seconds, scater=%g, gather=%g, reduction=%g\n",
-          NmbTet, TetTim + VerTim + RedTim, TetTim, VerTim, RedTim);
+   printf("%d tets processed in %g seconds, ngb access=%g, scater=%g, gather=%g, reduction=%g\n",
+          NmbTet, NgbTim + TetTim + VerTim + RedTim, NgbTim, TetTim, VerTim, RedTim);
 
    printf("%ld MB used, %ld MB transfered\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,
