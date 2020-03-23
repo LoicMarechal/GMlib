@@ -35,8 +35,8 @@
 
 ### Internal source code
 
-- Optional include of libMeshb
-- Write a .meshb to GMlib import module
+- Optional include of libMeshb :heavy_check_mark:
+- Write a .meshb to GMlib import module :heavy_check_mark:
 - Write a .solb to GMlib import module
 - Write a GMlib to .solb export module
 - Optional include of LPlib
@@ -49,6 +49,8 @@
 - Update the ball generation to handle hybrid meshes
 - Update the shell generation to handle hybrid meshes
 - Update the neighbors generation to handle hybrid meshes
+- Add a SetBlock() function for faster upload :heavy_check_mark:
+- Add a GetBlock() function for faster download
 
 ### Exposed CPU API
 

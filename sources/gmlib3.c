@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.14                           */
+/*                         GPU Meshing Library 3.17                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 11 2020                                           */
+/*   Last modification: mar 23 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -1345,6 +1345,83 @@ int GmlGetDataLine(size_t GmlIdx, int idx, int lin, ...)
 
 
 /*----------------------------------------------------------------------------*/
+/* Set a line of mesh, link or solution data                                  */
+/*----------------------------------------------------------------------------*/
+
+int GmlSetDataBlock( size_t GmlIdx, int TypIdx,
+                     int   BegIdx, int   EndIdx,
+                     void *DatBeg, void *DatEnd,
+                     int  *RefBeg, int  *RefEnd )
+{
+   GETGMLPTR(gml, GmlIdx);
+   int      DatIdx = gml->TypIdx[ TypIdx ];
+   DatSct   *dat = &gml->dat[ DatIdx ], *RefDat;
+   char     *adr = (void *)dat->CpuMem;
+   int      i, j, *EleTab, siz, *RefTab, *tab, *UsrRef, *UsrEle;
+   float    *CrdTab, *UsrCrd;
+   size_t   DatLen, RefLen;
+
+   if(EndIdx <= BegIdx)
+      return(0);
+
+   if(dat->AloTyp == GmlRawDat)
+   {
+      return(0);
+   }
+   else if(dat->AloTyp == GmlLnkDat)
+   {
+      return(0);
+   }
+   else if( (dat->AloTyp == GmlEleDat) && (dat->MshTyp == GmlVertices) )
+   {
+      CrdTab = (float *)dat->CpuMem;
+      RefDat = &gml->dat[ gml->CntMat[ dat->MshTyp ][ dat->MshTyp ] ];
+      RefTab = (int *)RefDat->CpuMem;
+      UsrCrd = (float *)DatBeg;
+      UsrRef = (int *)RefBeg;
+      DatLen = ((float *)DatEnd - (float *)DatBeg) / (EndIdx - BegIdx);
+      RefLen = (RefEnd - RefBeg) / (EndIdx - BegIdx);
+
+      for(i=BegIdx;i<=EndIdx;i++)
+      {
+         for(j=0;j<3;j++)
+            CrdTab[ i * 4 + j ] = UsrCrd[ (i - BegIdx) * DatLen + j ];
+
+         CrdTab[ i * 4 + 3 ] = 0.;
+
+         if(UsrRef)
+            RefTab[i] = UsrRef[ (i - BegIdx) * RefLen ];
+      }
+   }
+   else if( (dat->AloTyp == GmlEleDat) && (dat->MshTyp > GmlVertices) )
+   {
+      EleTab = (int *)dat->CpuMem;
+      siz = TypVecSiz[ MshItmTyp[ dat->MshTyp ] ];
+      RefDat = &gml->dat[ gml->CntMat[ dat->MshTyp ][ dat->MshTyp ] ];
+      RefTab = (int *)RefDat->CpuMem;
+      UsrEle = (int *)DatBeg;
+      UsrRef = (int *)RefBeg;
+      DatLen = ((int *)DatEnd - (int *)DatBeg) / (EndIdx - BegIdx);
+      RefLen = (RefEnd - RefBeg) / (EndIdx - BegIdx);
+
+      for(i=BegIdx;i<=EndIdx;i++)
+      {
+         for(j=0; j<EleNmbNod[ dat->MshTyp ]; j++)
+            EleTab[ i * siz + j ] =  UsrEle[ (i - BegIdx) * DatLen + j ];
+
+         if(UsrRef)
+            RefTab[i] = UsrRef[ (i - BegIdx) * RefLen ];
+      }
+   }
+
+   if(EndIdx == dat->NmbLin - 1)
+      gml->MovSiz += UploadData(gml, DatIdx);
+
+   return(1);
+}
+
+
+/*----------------------------------------------------------------------------*/
 /* Copy user's data into an OpenCL buffer                                     */
 /*----------------------------------------------------------------------------*/
 
@@ -2615,3 +2692,158 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
 
    return(NgbIdx);
 }
+
+
+/*----------------------------------------------------------------------------*/
+/* Return a mesh type nunmber of lines and data index                         */
+/*----------------------------------------------------------------------------*/
+
+int GetMeshInfo(size_t GmlIdx, int typ, int *NmbLin, int *DatIdx)
+{
+   GETGMLPTR   (gml, GmlIdx);
+   CHKELETYP   (typ);
+   DatSct      *dat;
+   int         idx;
+
+   if(!(idx = gml->TypIdx[ typ ]))
+      return(0);
+
+   if(!(dat = &gml->dat[ idx ]))
+      return(0);
+
+   if(!dat->NmbLin)
+      return(0);
+
+   if(NmbLin)
+      *NmbLin = dat->NmbLin;
+
+   if(DatIdx)
+      *DatIdx = idx;
+
+   return(1);
+}
+
+
+#ifdef WITH_LIBMESHB
+
+/*----------------------------------------------------------------------------*/
+/* Convert a libMeshb keyword into a GMlib one                                */
+/*----------------------------------------------------------------------------*/
+
+static int Gmf2Gml(int kwd)
+{
+   int GmfKwdTab[ GmlMaxEleTyp ] = {
+      GmfVertices, GmfEdges, GmfTriangles, GmfQuadrilaterals,
+      GmfTetrahedra, GmfPyramids, GmfPrisms, GmfHexahedra };
+
+   for (int i=0;i<GmlMaxEleTyp;i++)
+      if(kwd == GmfKwdTab[i])
+         return(i);
+
+   return(-1);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Read a mesh file and allocate and set the requested keywords in the GMlib  */
+/*----------------------------------------------------------------------------*/
+
+int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
+{
+   GETGMLPTR   (gml, GmlIdx);
+   int         i, j, k, NmbLin, typ, ver, dim, kwd, DatIdx, NmbKwd = 0, EleSiz;
+   int         KwdTab[10][4]={0}, MshIdx = 0, *RefTab, *EleTab;
+   float       (*CrdTab)[3];
+   int64_t     InpMsh;
+   va_list     VarArg;
+
+   /*------------------------*/
+   /* PARSE USER'S ARGUMENTS */
+   /*------------------------*/
+
+   va_start(VarArg, MshNam);
+
+   while( (kwd = va_arg(VarArg, int)) && (NmbKwd < 10) )
+   {
+      typ = Gmf2Gml(kwd);
+
+      if(typ == -1)
+         continue;
+
+      KwdTab[ NmbKwd ][0] = kwd;
+      KwdTab[ NmbKwd ][1] = typ;
+      NmbKwd++;
+   }
+
+   va_end(VarArg);
+
+
+   /*--------------*/
+   /* MESH READING */
+   /*--------------*/
+
+   // Open the mesh
+   if( !(InpMsh = GmfOpenMesh(MshNam, GmfRead, &ver, &dim)) || (dim != 3) )
+   {
+      printf("Could not open file %s\n", MshNam);
+      return(0);
+   }
+
+   for(k=0;k<NmbKwd;k++)
+   {
+      // Check of the required kwd exists in the mesh file
+      if(!(NmbLin = GmfStatKwd(InpMsh, KwdTab[k][0])))
+         continue;
+
+      typ = KwdTab[k][1];
+
+      // Allocate the corresponding GMlib data type
+      if(!(DatIdx = GmlNewMeshData(GmlIdx, typ, NmbLin)))
+         continue;
+
+      KwdTab[k][2] = NmbLin;
+      KwdTab[k][3] = DatIdx;
+
+      if(typ == GmlVertices)
+      {
+         CrdTab = malloc( (NmbLin+1) * 3 * sizeof(float));
+         RefTab = malloc( (NmbLin+1)     * sizeof(int));
+
+         GmfGetBlock(InpMsh, GmfVertices, 1, NmbLin, 0, NULL, NULL,
+                     GmfFloatVec, 3, CrdTab[1],  CrdTab[ NmbLin ],
+                     GmfInt,        &RefTab[1], &RefTab[ NmbLin ]);
+
+         GmlSetDataBlock(  GmlIdx, GmlVertices, 0, NmbLin-1,
+                            CrdTab[1],  CrdTab[ NmbLin],
+                           &RefTab[1], &RefTab[ NmbLin ]);
+
+         free(CrdTab);
+         free(RefTab);
+      }
+      else if( (typ >= GmlEdges) && (typ <= GmlHexahedra) )
+      {
+         EleSiz = EleNmbNod[ typ ] + 1;
+         EleTab = malloc( (NmbLin+1) * EleSiz * sizeof(int));
+
+         GmfGetBlock(InpMsh, KwdTab[k][0], 1, NmbLin, 0, NULL, NULL,
+                     GmfIntVec, EleSiz, &EleTab[ 1 * EleSiz ],
+                     &EleTab[ NmbLin * EleSiz ]);
+
+         for(i=1;i<=NmbLin;i++)
+            for(j=0;j<EleSiz-1;j++)
+               EleTab[ i * EleSiz + j ]--;
+
+         GmlSetDataBlock(  GmlIdx, typ, 0, NmbLin-1,
+                           &EleTab[ 1 * EleSiz ], &EleTab[ NmbLin * EleSiz ],
+                           &EleTab[ 1 * EleSiz + EleSiz - 1 ],
+                           &EleTab[ NmbLin * EleSiz + EleSiz - 1 ] );
+      }
+   }
+
+   // And close the mesh
+   GmfCloseMesh(InpMsh);
+
+   return(NmbKwd);
+}
+
+#endif

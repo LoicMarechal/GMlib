@@ -47,12 +47,11 @@ typedef struct {
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int         i, j, NmbVer, NmbTet, ver = 0, dim = 0, *VerRef, (*TetTab)[5];
-   int         ParIdx, VerIdx, TetIdx, BalIdx, MidIdx, SolIdx, CalMid, OptVer;
+   int         i, j, NmbVer=0, NmbTet=0;
+   int         ParIdx, VerIdx=0, TetIdx=0, BalIdx, MidIdx, SolIdx, CalMid, OptVer;
    int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, F64Idx, F64Krn;
-   int64_t     InpMsh;
    size_t      GmlIdx;
-   float       MidTab[4], SolTab[8], TetChk = 0., VerChk = 0., (*VerTab)[3];
+   float       MidTab[4], SolTab[8], TetChk = 0., VerChk = 0.;
    float       IniSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
    double      NgbTim = 0, TetTim = 0, VerTim = 0, RedTim = 0, F64Tim = 0;
    double      res, residual;
@@ -71,74 +70,25 @@ int main(int ArgCnt, char **ArgVec)
       GpuIdx = atoi(ArgVec[1]);
 
 
-   /*--------------*/
-   /* MESH READING */
-   /*--------------*/
-
-   // Open the mesh
-   if( !(InpMsh = GmfOpenMesh("tetrahedra.meshb", GmfRead, &ver, &dim)) || (dim != 3) )
-   {
-      puts("Could not open tetrahedra.meshb");
-      puts("Please run the command in the same directory this mesh is located");
-      return(1);
-   }
-
-   // Read the number of vertices and elements and allocate the memory
-   if( !(NmbVer = GmfStatKwd(InpMsh, GmfVertices))
-   ||  !(VerTab = malloc( (NmbVer+1) * 3 * sizeof(float)))
-   ||  !(VerRef = malloc( (NmbVer+1)     * sizeof(int))) )
-   {
-      return(1);
-   }
-
-   if( !(NmbTet = GmfStatKwd(InpMsh, GmfTetrahedra))
-   ||  !(TetTab = malloc( (NmbTet+1) * 5 * sizeof(int))) )
-   {
-      return(1);
-   }
-
-   // Read the vertices
-   GmfGetBlock(InpMsh, GmfVertices, 2, NmbVer, 0, NULL, NULL,
-               GmfFloatVec, 3, VerTab[1],  VerTab[ NmbVer ],
-               GmfInt,        &VerRef[1], &VerRef[ NmbVer ]);
-
-   // Read the elements
-   GmfGetBlock(InpMsh, GmfTetrahedra, 1, NmbTet, 0, NULL, NULL,
-               GmfIntVec, 5, TetTab[1], TetTab[ NmbTet ]);
-
-   // And close the mesh
-   GmfCloseMesh(InpMsh);
-
-
-   /*---------------*/
-   /* GPU COMPUTING */
-   /*---------------*/
-
    // Init the GMLIB and compile the OpenCL source code
    if(!(GmlIdx = GmlInit(GpuIdx)))
       return(1);
 
    //GmlDebugOn(GmlIdx);
 
+   GmlImportMesh(GmlIdx, "tetrahedra.meshb", GmfVertices, GmfTetrahedra, 0);
+
+   if(!GetMeshInfo(GmlIdx, GmlVertices,   &NmbVer, &VerIdx))
+      return(1);
+
+   if(!GetMeshInfo(GmlIdx, GmlTetrahedra, &NmbTet, &TetIdx))
+      return(1);
+
+   printf("Imported %d vertices and %d tets from the mesh file\n", NmbVer, NmbTet);
+
    // Allocate a common parameters structure to pass along to every kernels
    if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), Parameters)))
       return(1);
-
-   // Create a vertices data type and transfer the data to the GPU
-   if(!(VerIdx = GmlNewMeshData(GmlIdx, GmlVertices, NmbVer)))
-      return(1);
-
-   for(i=1;i<=NmbVer;i++)
-      GmlSetDataLine(GmlIdx, VerIdx, i-1, VerTab[i][0], VerTab[i][1], VerTab[i][2], VerRef[i]);
-
-   // Do the same with the elements
-   if(!(TetIdx = GmlNewMeshData(GmlIdx, GmlTetrahedra, NmbTet)))
-      return(1);
-
-   for(i=1;i<=NmbTet;i++)
-      GmlSetDataLine(GmlIdx, TetIdx, i-1,
-                     TetTab[i][0]-1, TetTab[i][1]-1,
-                     TetTab[i][2]-1, TetTab[i][3]-1, TetTab[i][4]);
 
    // Build neighbours between tets as a user defined topological link
    NgbIdx = GmlSetNeighbours(GmlIdx, GmlTetrahedra);
@@ -310,9 +260,6 @@ int main(int ArgCnt, char **ArgVec)
    GmlFreeData(GmlIdx, MidIdx);
    GmlFreeData(GmlIdx, ParIdx);
    GmlStop(GmlIdx);
-
-   free(TetTab);
-   free(VerTab);
 
    return(0);
 }

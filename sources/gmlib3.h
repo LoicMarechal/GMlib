@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.14                           */
+/*                         GPU Meshing Library 3.17                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 11 2020                                           */
+/*   Last modification: mar 23 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -22,6 +22,10 @@
 #include <OpenCL/opencl.h>
 #else
 #include <CL/opencl.h>
+#endif
+
+#ifdef WITH_LIBMESHB
+#include <libmeshb7.h>
 #endif
 
 
@@ -76,3 +80,9 @@ int      GmlExtractEdges      (size_t);
 int      GmlExtractFaces      (size_t);
 int      GmlSetNeighbours     (size_t, int);
 int      GmlCheckFP64         (size_t);
+int      GetMeshInfo          (size_t, int, int *, int *);
+int      GmlSetDataBlock      (size_t, int, int, int, void *, void *, int *, int *);
+
+#ifdef WITH_LIBMESHB
+int      GmlImportMesh        (size_t, char *, ...);
+#endif
