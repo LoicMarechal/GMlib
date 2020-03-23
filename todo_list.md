@@ -42,7 +42,7 @@
 - Optional include of LPlib
 - Write a renumbering analyzer preprocessor
 - Call the LPlib Hilbert renumbering and renumber the whole input data
-- Provide a plugin functions mechanism available on the GPU side
+- Provide a plugin functions mechanism available on the GPU side :heavy_check_mark:
 - Develop basic geometric functions on tets, hexes, triangles , quads and edges
 - length, surface, volume and quality
 - Handle hybrid meshes with prisms and pyramids
@@ -63,10 +63,10 @@
 
 ### Exposed GPU API
 
-- `CalEdgLen(float4 ver[2]);`
-- `CalTriSrf(float4 ver[3]);`
-- `CalQadSrf(float4 ver[4]);`
-- `CalTetVol(float4 ver[4]);`
+- `CalEdgLen(float4 ver[2]);` :heavy_check_mark:
+- `CalTriSrf(float4 ver[3]);` :heavy_check_mark:
+- `CalQadSrf(float4 ver[4]);` :heavy_check_mark:
+- `CalTetVol(float4 ver[4]);` :heavy_check_mark:
 - `CalHexVol(float4 ver[8]);`
 - `CalTriQal(float4 ver[3]);`
 - `CalQadQal(float4 ver[4]);`

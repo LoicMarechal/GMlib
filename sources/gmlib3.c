@@ -29,6 +29,7 @@
 
 #include "gmlib3.h"
 #include "reduce.h"
+#include "toolkit.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -125,6 +126,7 @@ static int     DownloadData            (GmlSct *, int);
 static int     NewOclKrn               (GmlSct *, char *, char *);
 static int     GetNewDatIdx            (GmlSct *);
 static double  RunOclKrn               (GmlSct *, KrnSct *);
+static void    WriteToolkitSource      (char *, char *);
 static void    WriteUserTypedef        (char *, char *);
 static void    WriteProcedureHeader    (char *, char *, int, int, ArgSct *);
 static void    WriteKernelVariables    (char *, int, int, ArgSct *);
@@ -1739,6 +1741,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    }
 
    // Generate the kernel source code
+   WriteToolkitSource      (src, toolkit);
    WriteUserTypedef        (src, ParSrc);
    WriteProcedureHeader    (src, PrcNam, MshTyp, NmbArg, ArgTab);
    WriteKernelVariables    (src, MshTyp, NmbArg, ArgTab);
@@ -1787,6 +1790,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    src[0] = '\0';
 
    // Generate the kernel source code
+   WriteToolkitSource      (src, toolkit);
    WriteUserTypedef        (src, ParSrc);
    WriteProcedureHeader    (src, PrcNam, MshTyp, NmbArg, ArgTab);
    WriteKernelVariables    (src, MshTyp, NmbArg, ArgTab);
@@ -1817,6 +1821,16 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    return(KrnIdx);
 }
 
+
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+
+static void WriteToolkitSource(char *src, char *TlkSrc)
+{
+   strcat(src, "// GMlib MESHING AND GEOMETRICAL TOOLKIT\n");
+   strcat(src, TlkSrc);
+   strcat(src, "\n");
+}
 
 /*----------------------------------------------------------------------------*/
 /* Add the user's parameters structure definition to the source code          */
