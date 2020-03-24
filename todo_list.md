@@ -23,7 +23,7 @@
 ### Examples
 
 - Tetrahedral mesh nodes smoother
-- Tetrahedral mesh quality calculation and statistics
+- Tetrahedral mesh quality calculation and statistics :heavy_check_mark:
 - Basic iterative edge based solver with boundary conditions
 
 ### Documentation
