@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.17                           */
+/*                         GPU Meshing Library 3.18                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 23 2020                                           */
+/*   Last modification: mar 26 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -63,7 +63,7 @@ typedef struct
 {
    int            ArgIdx, MshTyp, DatIdx, LnkTyp, LnkIdx, LnkDir, CntIdx;
    int            LnkDeg, MaxDeg, NmbItm, ItmLen, ItmTyp, FlgTab;
-   const char     *nam;
+   const char     *nam, *VoyNam;
 }ArgSct;
 
 typedef struct
@@ -71,7 +71,7 @@ typedef struct
    int            AloTyp, MemAcs, MshTyp, LnkTyp, ItmTyp, RedIdx;
    int            NmbItm, ItmLen, ItmSiz, NmbLin, LinSiz;
    char           *src, use;
-   const char     *nam;
+   const char     *nam, *VoyNam;
    size_t         MemSiz;
    cl_mem         GpuMem;
    void           *CpuMem;
@@ -120,7 +120,7 @@ typedef struct
 /*----------------------------------------------------------------------------*/
 
 static int     NewData                 (GmlSct *, DatSct *);
-static int     NewBallData             (GmlSct *, int, int, char *, char *);
+static int     NewBallData             (GmlSct *, int, int, char *, char *, char *);
 static int     UploadData              (GmlSct *, int);
 static int     DownloadData            (GmlSct *, int);
 static int     NewOclKrn               (GmlSct *, char *, char *);
@@ -163,7 +163,12 @@ static const int  OclTypSiz[ GmlMaxOclTyp ] = {
    sizeof(cl_double2),
    sizeof(cl_double4),
    sizeof(cl_double8),
-   sizeof(cl_double16) };
+   sizeof(cl_double16),
+   sizeof(cl_char),
+   sizeof(cl_char2),
+   sizeof(cl_char4),
+   sizeof(cl_char8),
+   sizeof(cl_char16) };
 
 static const char *OclTypStr[ GmlMaxOclTyp ]  = {
    "int      ",
@@ -180,7 +185,12 @@ static const char *OclTypStr[ GmlMaxOclTyp ]  = {
    "double2  ",
    "double4  ",
    "double8  ",
-   "double16 " };
+   "double16 ",
+   "char     ",
+   "char2    ",
+   "char4    ",
+   "char8    ",
+   "char16   " };
 
 static const char *OclNulVec[ GmlMaxOclTyp ]  = {
    "(int){0}",
@@ -197,9 +207,15 @@ static const char *OclNulVec[ GmlMaxOclTyp ]  = {
    "(double2){0.,0.}",
    "(double4){0.,0.,0.,0.}",
    "(double8){0.,0.,0.,0.,0.,0.,0.,0.}",
-   "(double16){0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.}" };
+   "(double16){0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.}",
+   "(char){0}",
+   "(char2){0,0}",
+   "(char4){0,0,0,0}",
+   "(char8){0,0,0,0,0,0,0,0}",
+   "(char16){0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}" };
 
-static const int  TypVecSiz[ GmlMaxOclTyp ]  = {1,2,4,8,16,1,2,4,8,16,1,2,4,8,16};
+static const int  TypVecSiz[ GmlMaxOclTyp ]  = {
+   1,2,4,8,16,1,2,4,8,16,1,2,4,8,16,1,2,4,8,16 };
 
 static const int  OclVecPow[ VECPOWOCL +1 ]  = {
    GmlInt, GmlInt2, GmlInt4, GmlInt8, GmlInt16};
@@ -653,7 +669,8 @@ int GmlNewLinkData(size_t GmlIdx, int MshTyp, int LnkTyp, int NmbDat, char *nam)
 /* Build an arbitray element kind and dimension link table                    */
 /*----------------------------------------------------------------------------*/
 
-int NewBallData(GmlSct *gml, int SrcTyp, int DstTyp, char *BalNam, char *DegNam)
+int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
+                  char *BalNam, char *DegNam, char *VoyNam )
 {
    int         i, j, k, idx, cod, cpt, tmp, dir, HshKey, ItmTab[3];
    int         BalIdx, HghIdx, DegIdx, VerIdx, SrcIdx, DstIdx;
@@ -911,6 +928,7 @@ int NewBallData(GmlSct *gml, int SrcTyp, int DstTyp, char *BalNam, char *DegNam)
       BalDat->MemSiz = (size_t)BalDat->NmbLin * (size_t)BalDat->LinSiz;
       BalDat->GpuMem = BalDat->CpuMem = NULL;
       BalDat->nam    = BalNam;
+      BalDat->VoyNam = VoyNam;
 
       if(!NewData(gml, BalDat))
          return(0);
@@ -944,6 +962,7 @@ int NewBallData(GmlSct *gml, int SrcTyp, int DstTyp, char *BalNam, char *DegNam)
       HghDat->MemSiz = (size_t)HghDat->NmbLin * (size_t)HghDat->LinSiz;
       HghDat->GpuMem = HghDat->CpuMem = NULL;
       HghDat->nam    = BalNam;
+      HghDat->VoyNam = VoyNam;
 
       if(!NewData(gml, HghDat))
          return(0);
@@ -1500,8 +1519,8 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    int      FlgTab[ GmlMaxDat ], IdxTab[ GmlMaxDat ];
    int      LnkTab[ GmlMaxDat ], CntTab[ GmlMaxDat ];
    int      LnkItm, NmbItm, ItmTyp, ItmLen, LnkPos, CptPos, ArgHghPos;
-   int      NmbHgh, HghVec, HghSiz, HghTyp, HghArg = -1, HghIdx = -1;
-   char     *ParSrc, src[ GmlMaxSrcSiz ] = "\0";
+   int      RefFlg, NmbHgh, HghVec, HghSiz, HghTyp, HghArg = -1, HghIdx = -1;
+   char     *ParSrc, src[ GmlMaxSrcSiz ] = "\0", VoyNam[ GmlMaxStrSiz ];
    char     BalNam[ GmlMaxStrSiz ], DegNam[ GmlMaxStrSiz ];
    va_list  VarArg;
    DatSct   *dat, *RefDat;
@@ -1549,7 +1568,8 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
             // Generate the default link between the two kinds of entities
             sprintf(BalNam, "%s%sBal", BalTypStr[ MshTyp ], BalTypStr[ DstTyp ]);
             sprintf(DegNam, "%s%sDeg", BalTypStr[ MshTyp ], BalTypStr[ DstTyp ]);
-            NewBallData(gml, MshTyp, DstTyp, BalNam, DegNam);
+            sprintf(VoyNam, "%s%sVoy", BalTypStr[ MshTyp ], BalTypStr[ DstTyp ]);
+            NewBallData(gml, MshTyp, DstTyp, BalNam, DegNam, VoyNam);
          }
 
          LnkTab[i] = gml->LnkMat[ MshTyp ][ DstTyp ];
@@ -1638,6 +1658,15 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
          HghArg      = arg->ArgIdx;
          HghIdx      = gml->LnkHgh[ MshTyp ][ DstTyp ];
 
+         // If this uplink requires voyeurs to be set, add the proper flag
+         // to the argument and remove it from the user flag tab
+         if(FlgTab[i] & GmlVoyeurs)
+         {
+            arg->VoyNam  =  gml->dat[ arg->DatIdx ].VoyNam;
+            arg->FlgTab |=  GmlVoyeurs;
+            FlgTab[i]   &= ~GmlVoyeurs;
+         }
+
          // Variable counter argument
          arg = &ArgTab[ NmbArg ];
          arg->ArgIdx = NmbArg;
@@ -1709,13 +1738,21 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
          arg->MaxDeg = -1;
       }
 
+      if(FlgTab[i] & GmlRefFlag)
+      {
+         RefFlg = 1;
+         FlgTab[i]   &= ~GmlRefFlag;
+      }
+      else
+         RefFlg = 0;
+
       arg->NmbItm = dat->NmbItm;
       arg->ItmLen = dat->ItmLen;
       arg->ItmTyp = dat->ItmTyp;
       arg->FlgTab = FlgTab[i];
       arg->nam    = dat->nam;
 
-      if(!(FlgTab[i] & GmlRefFlag) || (CptPos != -1))
+      if(!RefFlg || (CptPos != -1))
          continue;
 
       // Create a new ref argument
@@ -1823,6 +1860,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 
 
 /*----------------------------------------------------------------------------*/
+/* Add the geometrical toolkit prototypes and source code                     */
 /*----------------------------------------------------------------------------*/
 
 static void WriteToolkitSource(char *src, char *TlkSrc)
@@ -1932,6 +1970,19 @@ static void WriteKernelVariables(char *src, int MshTyp,
          sprintf(str,  "   %s %sNul;\n", OclTypStr[ arg->ItmTyp ], arg->nam);
          strcat(src, str);
       }
+
+      // If ball or shell voyeurs are required, define a vector char
+      if(arg->FlgTab & GmlVoyeurs)
+      {
+         if(arg->NmbItm > 1)
+            sprintf( str,  "   %s %s[%d];\n",
+                     OclTypStr[ arg->ItmTyp + 15 ], arg->VoyNam, arg->NmbItm );
+         else
+            sprintf( str,  "   %s %s;\n",
+                     OclTypStr[ arg->ItmTyp + 15 ], arg->VoyNam );
+
+         strcat(src, str);
+      }
    }
 }
 
@@ -2036,11 +2087,34 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
             else
                BalSft[0] = '\0';
 
-            sprintf( str, "   %s%s%s = %s %sTab[ %s%s%s ]%s %s %s;\n",
-                     arg->nam, ArgTd2, ArgTd1,
-                     DegTst, arg->nam, LnkNam, LnkTd1, LnkTd2, ArgTd1, BalSft, DegNul);
+            // If voyeurs need to bet set, read the ball int vector, perform
+            // a logical AND to get the four rightmost bits that store the voyeur
+            // indices and convert the result to a vector char. Finaly perform
+            // a 4 bits right shift to the ball data to get the right idices
+            if(arg->FlgTab & GmlVoyeurs)
+            {
+               sprintf( str, "   %s%s = %sTab[ %s ]%s;\n",
+                        arg->nam, ArgTd1, arg->nam, LnkNam, ArgTd1 );
+               strcat(src, str);
 
-            strcat(src, str);
+               sprintf( str, "   %s%s = convert_%s(%s%s & (%s)(7));\n",
+                        arg->VoyNam, ArgTd1, OclTypStr[ arg->ItmTyp + 15 ],
+                        arg->nam, ArgTd1, OclTypStr[ arg->ItmTyp ] );
+               strcat(src, str);
+
+               sprintf( str, "   %s%s = %s%s %s;\n",
+                        arg->nam, ArgTd1, arg->nam, ArgTd1, BalSft);
+               strcat(src, str);
+            }
+            else
+            {
+               // Otherwise, read the ball data and perform the right shift on the fly
+               sprintf( str, "   %s%s%s = %s %sTab[ %s%s%s ]%s %s %s;\n",
+                        arg->nam, ArgTd2, ArgTd1,
+                        DegTst, arg->nam, LnkNam, LnkTd1, LnkTd2, ArgTd1, BalSft, DegNul);
+
+               strcat(src, str);
+            }
          }
       }
 
