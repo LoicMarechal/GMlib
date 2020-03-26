@@ -10,7 +10,7 @@
 - Write the tet and triangles shell generation :heavy_check_mark:
 - Write the ball of edges or triangles :heavy_check_mark:
 - Write the triangles and tets neighbors generation :heavy_check_mark:
-- Add the voyeurs information in all the uplink data and kernel sources
+- Add the voyeurs information in all the uplink data and kernel sources :heavy_check_mark:
 - Add a reduction internal kernel with min, max and L1 :heavy_check_mark:
 - Add single float, double float and user selectable real float :heavy_check_mark:
 - Make the GMlib reentrant :heavy_check_mark:
