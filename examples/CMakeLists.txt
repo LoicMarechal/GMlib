@@ -1,32 +1,45 @@
 
 
-#####################################################
-# CUSTOM COMMAND TO CREATE INTERMEDIARY HEADER FILES 
-# FROM OPENCL SOURCES BEFORE COMPILING THE EXECUTABLE
-#####################################################
-
-macro(compile_cl basename)
-
-add_custom_command (
-   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h
-   COMMAND cl2h ${CMAKE_CURRENT_SOURCE_DIR}/${basename}.cl ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h ${basename}
-   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${basename}.cl )
-
-endmacro(compile_cl)
-
-
 ##################
 # BUILD C EXAMPLES
 ##################
 
-set (example TetrahedraLoop)
+set (example TF_test_features)
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
-compile_cl(TetrahedraLoop)
-compile_cl(VertexGather)
+compile_cl(TF_double_precision)
+compile_cl(TF_downlink)
+compile_cl(TF_neighbours)
+compile_cl(TF_uplink)
 compile_cl(Parameters)
 add_executable(${example} ${example}.c
-               ${CMAKE_CURRENT_BINARY_DIR}/TetrahedraLoop.h
-               ${CMAKE_CURRENT_BINARY_DIR}/VertexGather.h
+               ${CMAKE_CURRENT_BINARY_DIR}/TF_double_precision.h
+               ${CMAKE_CURRENT_BINARY_DIR}/TF_downlink.h
+               ${CMAKE_CURRENT_BINARY_DIR}/TF_neighbours.h
+               ${CMAKE_CURRENT_BINARY_DIR}/TF_uplink.h
                ${CMAKE_CURRENT_BINARY_DIR}/Parameters.h)
+target_link_libraries(${example} GM.3 ${libMeshb_LIBRARIES} ${OpenCL_LIBRARIES} ${LINK_LIBRARIES})
+install (TARGETS ${example} DESTINATION share/GMlib/examples COMPONENT examples)
+
+set (example MQ_mesh_quality)
+include_directories (${CMAKE_CURRENT_BINARY_DIR})
+compile_cl(MQ_mesh_quality)
+compile_cl(Parameters)
+add_executable(${example} ${example}.c
+               ${CMAKE_CURRENT_BINARY_DIR}/MQ_mesh_quality.h
+            ${CMAKE_CURRENT_BINARY_DIR}/Parameters.h)
+target_link_libraries(${example} GM.3 ${libMeshb_LIBRARIES} ${OpenCL_LIBRARIES} ${LINK_LIBRARIES})
+install (TARGETS ${example} DESTINATION share/GMlib/examples COMPONENT examples)
+
+set (example NS_nodes_smoothing)
+include_directories (${CMAKE_CURRENT_BINARY_DIR})
+compile_cl(NS_quality)
+compile_cl(NS_scatter)
+compile_cl(NS_gather)
+compile_cl(Parameters)
+add_executable(${example} ${example}.c
+               ${CMAKE_CURRENT_BINARY_DIR}/NS_quality.h
+               ${CMAKE_CURRENT_BINARY_DIR}/NS_scatter.h
+               ${CMAKE_CURRENT_BINARY_DIR}/NS_gather.h
+            ${CMAKE_CURRENT_BINARY_DIR}/Parameters.h)
 target_link_libraries(${example} GM.3 ${libMeshb_LIBRARIES} ${OpenCL_LIBRARIES} ${LINK_LIBRARIES})
 install (TARGETS ${example} DESTINATION share/GMlib/examples COMPONENT examples)

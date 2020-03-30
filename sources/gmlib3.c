@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.18                           */
+/*                         GPU Meshing Library 3.19                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 26 2020                                           */
+/*   Last modification: mar 27 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -835,6 +835,7 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
       MaxDeg = pow(2., ceil(log2(MaxDeg)));
       HghSiz = MIN(MaxDeg, LenMatMax[ src->MshTyp ][ dst->MshTyp ]);
       SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
+      printf("set SizMatHgh[%d][%d] = %d\n",src->MshTyp,dst->MshTyp,HghSiz);
 
       if(gml->DbgFlg)
          printf(  "Width for lines 1..%d: %d, for lines %d..%d:%d\n",
@@ -1795,7 +1796,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
       printf("Generated source for kernel=%s, index=%2d\n", PrcNam, KrnIdx);
       puts(src);
    }
-
+   puts("1");
    // Store information usefull to the kernel: loop indices and arguments list
    krn = &gml->krn[ KrnIdx ];
    krn->NmbDat    = NmbArg;
@@ -1813,10 +1814,15 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 
    if(HghArg == -1)
       return(KrnIdx);
+   puts("2");
 
    // In case of uplink kernel, generate a second high degree kernel
    NmbHgh = SizMatHgh[ MshTyp ][ DstTyp ];
+   printf("get SizMatHgh[%d][%d] = %d\n",MshTyp,MshTyp,NmbHgh);
+   puts("2.2");
+   printf("%d %p %p %p\n",NmbHgh, &HghVec, &HghSiz, &HghTyp);
    GetCntVec(NmbHgh, &HghVec, &HghSiz, &HghTyp);
+   puts("2.3");
 
    // Mofify the argument containing the uplink with the high count sizes
    ArgTab[ HghArg ].DatIdx = HghIdx;
@@ -1825,6 +1831,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    ArgTab[ HghArg ].ItmLen = HghSiz;
    ArgTab[ HghArg ].ItmTyp = HghTyp;
    src[0] = '\0';
+   puts("3");
 
    // Generate the kernel source code
    WriteToolkitSource      (src, toolkit);
@@ -1834,10 +1841,12 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    WriteKernelMemoryReads  (src, MshTyp, NmbArg, ArgTab);
    WriteUserKernel         (src, KrnSrc);
    WriteKernelMemoryWrites (src, MshTyp, NmbArg, ArgTab);
+   puts("4");
 
    // And Compile it
    KrnHghIdx = NewOclKrn   (gml, src, PrcNam);
    gml->krn[ KrnIdx ].HghIdx = KrnHghIdx;
+   puts("5");
 
    // Store information usefull to the kernel: loop indices and arguments list
    krn = &gml->krn[ KrnHghIdx ];
@@ -1847,6 +1856,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 
    for(i=0;i<NmbArg;i++)
       krn->DatTab[i] = ArgTab[i].DatIdx;
+   puts("6");
 
    if(gml->DbgFlg)
    {
@@ -1974,13 +1984,7 @@ static void WriteKernelVariables(char *src, int MshTyp,
       // If ball or shell voyeurs are required, define a vector char
       if(arg->FlgTab & GmlVoyeurs)
       {
-         if(arg->NmbItm > 1)
-            sprintf( str,  "   %s %s[%d];\n",
-                     OclTypStr[ arg->ItmTyp + 15 ], arg->VoyNam, arg->NmbItm );
-         else
-            sprintf( str,  "   %s %s;\n",
-                     OclTypStr[ arg->ItmTyp + 15 ], arg->VoyNam );
-
+         sprintf(str,  "   char %s[%d];\n", arg->VoyNam, arg->NmbItm * arg->ItmLen);
          strcat(src, str);
       }
    }
@@ -1994,7 +1998,7 @@ static void WriteKernelVariables(char *src, int MshTyp,
 static void WriteKernelMemoryReads( char *src, int MshTyp,
                                     int NmbArg, ArgSct *ArgTab)
 {
-   int      i, j, k, siz;
+   int      i, j, k, l, siz;
    char     str   [ GmlMaxStrSiz ], ArgTd1[ GmlMaxStrSiz ], ArgTd2[ GmlMaxStrSiz ];
    char     LnkTd1[ GmlMaxStrSiz ], LnkTd2[ GmlMaxStrSiz ], LnkNam[ GmlMaxStrSiz ];
    char     CptNam[ GmlMaxStrSiz ], DegTst[ GmlMaxStrSiz ], DegNul[ GmlMaxStrSiz ];
@@ -2097,10 +2101,13 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
                         arg->nam, ArgTd1, arg->nam, LnkNam, ArgTd1 );
                strcat(src, str);
 
-               sprintf( str, "   %s%s = convert_%s(%s%s & (%s)(7));\n",
-                        arg->VoyNam, ArgTd1, OclTypStr[ arg->ItmTyp + 15 ],
-                        arg->nam, ArgTd1, OclTypStr[ arg->ItmTyp ] );
-               strcat(src, str);
+               for(l=0;l<arg->ItmLen;l++)
+               {
+                  sprintf( str, "   %s[%d] = %s%s.s%c & 7;\n",
+                           arg->VoyNam, j*arg->ItmLen + l,
+                           arg->nam, ArgTd1, OclHexNmb[l] );
+                  strcat(src, str);
+               }
 
                sprintf( str, "   %s%s = %s%s %s;\n",
                         arg->nam, ArgTd1, arg->nam, ArgTd1, BalSft);
