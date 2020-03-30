@@ -7,15 +7,27 @@ cmake_minimum_required (VERSION 3.0.1)
 set (GMlib_VERSION_MAJOR 3)
 set (GMlib_VERSION_MINOR 0)
 project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C)
-set (CMAKE_C_FLAGS "-O3")
+set (CMAKE_C_FLAGS "-O3 -DWITH_LIBMESHB")
+
+
+#####################################################
+# CUSTOM COMMAND TO CREATE INTERMEDIARY HEADER FILES 
+# FROM OPENCL SOURCES BEFORE COMPILING THE EXECUTABLE
+#####################################################
+
+macro(compile_cl basename)
+
+add_custom_command (
+   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h
+   COMMAND cl2h ${CMAKE_CURRENT_SOURCE_DIR}/${basename}.cl ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h ${basename}
+   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${basename}.cl )
+
+endmacro(compile_cl)
 
 
 #######################################
 # SET FILES AND DIRECTORIES TO BE BUILT
 #######################################
-
-include_directories (${PROJECT_SOURCE_DIR}/sources)
-add_subdirectory (sources)
 
 find_package(OpenCL)
 
@@ -34,12 +46,16 @@ if(libMeshb_FOUND)
    include_directories (${PROJECT_SOURCE_DIR}/examples)
    add_subdirectory (utilities)
    add_subdirectory (examples)
+   message (${libMeshb_INCLUDE_DIRS})
 else()
    message (WARNING "
    libMeshb.7 could not be found.
    Consequently, examples and utilities will not be built.
    You can download it from GitHUB at https://github.com/LoicMarechal/libMeshb")
 endif()
+
+include_directories (${PROJECT_SOURCE_DIR}/sources)
+add_subdirectory (sources)
 
 install (FILES LICENSE.txt copyright.txt DESTINATION share/GMlib)
 install (DIRECTORY sample_meshes DESTINATION share/GMlib)

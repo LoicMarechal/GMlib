@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.18                           */
+/*                         GPU Meshing Library 3.19                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 26 2020                                           */
+/*   Last modification: mar 27 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -35,8 +35,8 @@
 
 #define GmlMaxDat    100
 #define GmlMaxKrn    100
-#define GmlMaxSrcSiz 10000
-#define GmlMaxStrSiz 100
+#define GmlMaxSrcSiz 50000
+#define GmlMaxStrSiz 200
 #define MaxGpu       10
 #define GmlRefFlag   1
 #define GmlReadMode  2
