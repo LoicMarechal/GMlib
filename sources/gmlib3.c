@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 27 2020                                           */
+/*   Last modification: mar 30 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -93,6 +93,7 @@ typedef struct
    int            LnkMat[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
    int            LnkHgh[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
    int            CntMat[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
+   int            SizMatHgh[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
    int            RedKrn[ GmlMaxRed ];
    cl_uint        NmbDev;
    size_t         MemSiz, CurGrpSiz, MovSiz;
@@ -248,8 +249,6 @@ static const int LenMatBas[ GmlMaxEleTyp ][ GmlMaxEleTyp ] = {
    {8, 8, 4, 1, 4, 8, 8, 1},
    {8,16, 2, 4, 2, 8, 8, 4},
    {8,16, 0, 8, 0, 8, 8, 8} };
-
-static int SizMatHgh[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
 
 static const int LenMatMax[ GmlMaxEleTyp ][ GmlMaxEleTyp ] = {
    {0,64,16, 8,64,32,32,16},
@@ -834,8 +833,7 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
 
       MaxDeg = pow(2., ceil(log2(MaxDeg)));
       HghSiz = MIN(MaxDeg, LenMatMax[ src->MshTyp ][ dst->MshTyp ]);
-      SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
-      printf("set SizMatHgh[%d][%d] = %d\n",src->MshTyp,dst->MshTyp,HghSiz);
+      gml->SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
 
       if(gml->DbgFlg)
          printf(  "Width for lines 1..%d: %d, for lines %d..%d:%d\n",
@@ -902,8 +900,6 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
 
       // Upload the ball data to th GPU memory
       gml->MovSiz += UploadData(gml, BalIdx);
-
-      printf("Stored %d uniq entries in the link table\n", src->NmbLin * SrcNmbItm);
    }
    else if(dir == 1) // More complex case: balls and shells
    {
@@ -945,7 +941,7 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
       if(!(HghIdx = GetNewDatIdx(gml)))
          return(0);
 
-      NmbDat = SizMatHgh[ SrcTyp ][ DstTyp ];
+      NmbDat = gml->SizMatHgh[ SrcTyp ][ DstTyp ];
       GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
 
       HghDat = &gml->dat[ HghIdx ];
@@ -1658,6 +1654,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
          arg->nam    = gml->dat[ arg->DatIdx ].nam;
          HghArg      = arg->ArgIdx;
          HghIdx      = gml->LnkHgh[ MshTyp ][ DstTyp ];
+         NmbHgh      = gml->SizMatHgh[ MshTyp ][ DstTyp ];
 
          // If this uplink requires voyeurs to be set, add the proper flag
          // to the argument and remove it from the user flag tab
@@ -1796,7 +1793,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
       printf("Generated source for kernel=%s, index=%2d\n", PrcNam, KrnIdx);
       puts(src);
    }
-   puts("1");
+
    // Store information usefull to the kernel: loop indices and arguments list
    krn = &gml->krn[ KrnIdx ];
    krn->NmbDat    = NmbArg;
@@ -1814,15 +1811,9 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 
    if(HghArg == -1)
       return(KrnIdx);
-   puts("2");
 
    // In case of uplink kernel, generate a second high degree kernel
-   NmbHgh = SizMatHgh[ MshTyp ][ DstTyp ];
-   printf("get SizMatHgh[%d][%d] = %d\n",MshTyp,MshTyp,NmbHgh);
-   puts("2.2");
-   printf("%d %p %p %p\n",NmbHgh, &HghVec, &HghSiz, &HghTyp);
    GetCntVec(NmbHgh, &HghVec, &HghSiz, &HghTyp);
-   puts("2.3");
 
    // Mofify the argument containing the uplink with the high count sizes
    ArgTab[ HghArg ].DatIdx = HghIdx;
@@ -1831,7 +1822,6 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    ArgTab[ HghArg ].ItmLen = HghSiz;
    ArgTab[ HghArg ].ItmTyp = HghTyp;
    src[0] = '\0';
-   puts("3");
 
    // Generate the kernel source code
    WriteToolkitSource      (src, toolkit);
@@ -1841,12 +1831,10 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    WriteKernelMemoryReads  (src, MshTyp, NmbArg, ArgTab);
    WriteUserKernel         (src, KrnSrc);
    WriteKernelMemoryWrites (src, MshTyp, NmbArg, ArgTab);
-   puts("4");
 
    // And Compile it
    KrnHghIdx = NewOclKrn   (gml, src, PrcNam);
    gml->krn[ KrnIdx ].HghIdx = KrnHghIdx;
-   puts("5");
 
    // Store information usefull to the kernel: loop indices and arguments list
    krn = &gml->krn[ KrnHghIdx ];
@@ -1856,7 +1844,6 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 
    for(i=0;i<NmbArg;i++)
       krn->DatTab[i] = ArgTab[i].DatIdx;
-   puts("6");
 
    if(gml->DbgFlg)
    {
