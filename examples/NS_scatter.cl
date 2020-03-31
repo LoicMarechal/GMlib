@@ -20,14 +20,14 @@
    MaxEdg = max(MaxEdg, len[5]);
    MaxEdg = 0.816496 * sqrt(MaxEdg);
    ctr = (VerCrd[1] + VerCrd[2] + VerCrd[3]) * (float4)(1./3.);
-   nrm = fast_normalize(cross(edg[3], edg[5])) * (float4)(MaxEdg);
+   nrm = fast_normalize(cross(edg[4], edg[5])) * (float4)(MaxEdg);
    OptCrd[0] = ctr + nrm;
 
    MaxEdg = max(len[1], len[2]);
    MaxEdg = max(MaxEdg, len[5]);
    MaxEdg = 0.816496 * sqrt(MaxEdg);
    ctr = (VerCrd[0] + VerCrd[2] + VerCrd[3]) * (float4)(1./3.);
-   nrm = fast_normalize(cross(edg[1], edg[5])) * (float4)(MaxEdg);
+   nrm = fast_normalize(cross(edg[5], edg[2])) * (float4)(MaxEdg);
    OptCrd[1] = ctr + nrm;
 
    MaxEdg = max(len[0], len[2]);

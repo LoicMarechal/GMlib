@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 30 2020                                           */
+/*   Last modification: mar 31 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -1971,7 +1971,7 @@ static void WriteKernelVariables(char *src, int MshTyp,
       // If ball or shell voyeurs are required, define a vector char
       if(arg->FlgTab & GmlVoyeurs)
       {
-         sprintf(str,  "   char %s[%d];\n", arg->VoyNam, arg->NmbItm * arg->ItmLen);
+         sprintf(str,  "   char      %s[%d];\n", arg->VoyNam, arg->NmbItm * arg->ItmLen);
          strcat(src, str);
       }
    }
@@ -2059,7 +2059,7 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
 
             if(CptArg)
             {
-               sprintf(DegTst, "(%s <= %d) ?", CptNam, LnkArg->MaxDeg);
+               sprintf(DegTst, "(%s >= %d) ?", CptNam, k + 1);
                sprintf(DegNul, ": %sNul", arg->nam);
             }
             else

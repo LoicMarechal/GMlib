@@ -9,7 +9,7 @@
 /*   Description:       tet mesh quality improvement with nodes smoothing     */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 27 2020                                           */
-/*   Last modification: mar 30 2020                                           */
+/*   Last modification: mar 31 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -64,10 +64,10 @@ double CheckLaunch(int KrnIdx, double res)
 int main(int ArgCnt, char **ArgVec)
 {
    int         i, j, NmbVer, NmbTet;
-   int         QalIdx, QalKrn, VerIdx, TetIdx, ParIdx, OptIdx;
+   int         QalIdx, QalKrn, VerIdx, TetIdx, ParIdx, OptIdx, ResIdx;
    int         GpuIdx = 0, TetKrn, VerKrn;
    size_t      GmlIdx;
-   double      res, tim, AvgQal, MinQal;
+   double      res, tim = 0., TetTim = 0., VerTim = 0., AvgQal, OptRes;
    GmlParSct   *GmlPar;
 
 
@@ -102,12 +102,16 @@ int main(int ArgCnt, char **ArgVec)
    if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), Parameters)))
       return(1);
 
-   // Create a raw datatype to store the element middles.
-   // It does not need to be tranfered to the GPU
+   // A vector to store the tets' quality
    if(!(QalIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "qal")))
       return(1);
 
+   // Create a raw datatype to store the element middles.
    if(!(OptIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 4, GmlFlt4, "OptCrd")))
+      return(1);
+
+   // A residual vector to store the nodes' displacement
+   if(!(ResIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1, GmlFlt, "res")))
       return(1);
 
    // Assemble and compile the tet quality kernel
@@ -130,9 +134,10 @@ int main(int ArgCnt, char **ArgVec)
 
    // Assemble and compile gather coordinates kernel
    VerKrn = GmlCompileKernel( GmlIdx, NS_gather, "NS_gather",
-                              GmlVertices, 2,
-                              OptIdx, GmlReadMode | GmlVoyeurs,  NULL,
-                              VerIdx, GmlWriteMode, NULL );
+                              GmlVertices, 3,
+                              ResIdx, GmlWriteMode,               NULL,
+                              OptIdx, GmlReadMode | GmlVoyeurs,   NULL,
+                              VerIdx, GmlReadMode | GmlWriteMode, NULL );
 
    if(!VerKrn)
       return(1);
@@ -144,39 +149,46 @@ int main(int ArgCnt, char **ArgVec)
    // Launch the reduction kernel on the GPU
    res  = GmlReduceVector(GmlIdx, QalIdx, GmlSum, &AvgQal);
    tim += CheckLaunch(0, res);
+   printf("Before smoothing: mean quality=%g\n", AvgQal / NmbTet);
 
-   printf("Before smoothing: min quality=%g, mean quality=%g\n",
-         MinQal, AvgQal / NmbTet);
+   for(int itr=1; itr<=10; itr++)
+   {
+      // Launch the tetrahedra optimizer kernel on the GPU
+      res  = GmlLaunchKernel(GmlIdx, TetKrn);
+      tim += CheckLaunch(TetKrn, res);
+      TetTim += res;
 
-   // Launch the tetrahedra optimizer kernel on the GPU
-   res  = GmlLaunchKernel(GmlIdx, TetKrn);
-   tim += CheckLaunch(TetKrn, res);
+      // Launch the vertex gather kernel on the GPU
+      res  = GmlLaunchKernel(GmlIdx, VerKrn);
+      tim += CheckLaunch(VerKrn, res);
+      VerTim += res;
 
-   // Launch the vertex gather kernel on the GPU
-   res  = GmlLaunchKernel(GmlIdx, VerKrn);
-   tim += CheckLaunch(VerKrn, res);
+      // Compute the residual displacement value
+      res  = GmlReduceVector(GmlIdx, ResIdx, GmlSum, &OptRes);
+      tim += CheckLaunch(0, res);
+      printf("Smoothing step %2d: residual=%g\n", itr, OptRes);
+   }
 
    // Launch the tetrahedra quality kernel on the GPU
    res  = GmlLaunchKernel(GmlIdx, QalKrn);
    tim += CheckLaunch(QalKrn, res);
 
    // Launch the reduction kernel on the GPU
-   res  = GmlReduceVector(GmlIdx, QalIdx, GmlMin, &MinQal);
+   res  = GmlReduceVector(GmlIdx, QalIdx, GmlSum, &AvgQal);
    tim += CheckLaunch(0, res);
+   printf("After  smoothing: mean quality=%g\n", AvgQal / NmbTet);
 
 
    /*-----------------*/
    /* GET THE RESULTS */
    /*-----------------*/
 
-   printf("%d tets optimized in %g seconds\n", NmbTet, tim);
+   printf(  "%d tets optimized in %g seconds (scatter=%g, gather=%g)\n",
+            NmbTet, tim, TetTim, VerTim );
 
    printf("%ld MB used, %ld MB transfered\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,
           GmlGetMemoryTransfer(GmlIdx) / 1048576);
-
-   printf("After smoothing: min quality=%g, mean quality=%g\n",
-         MinQal, AvgQal / NmbTet);
 
 
    /*-----*/
@@ -187,6 +199,7 @@ int main(int ArgCnt, char **ArgVec)
    GmlFreeData(GmlIdx, TetIdx);
    GmlFreeData(GmlIdx, QalIdx);
    GmlFreeData(GmlIdx, OptIdx);
+   GmlFreeData(GmlIdx, ResIdx);
    GmlFreeData(GmlIdx, ParIdx);
    GmlStop(GmlIdx);
 
