@@ -29,7 +29,7 @@
 ### Documentation
 
 - Quick reference card
-- GitHub page
+- GitHub page :heavy_check_mark:
 
 ## PHASE 2
 
@@ -44,7 +44,7 @@
 - Call the LPlib Hilbert renumbering and renumber the whole input data
 - Provide a plugin functions mechanism available on the GPU side :heavy_check_mark:
 - Develop basic geometric functions on tets, hexes, triangles , quads and edges
-- length, surface, volume and quality
+- length, surface, volume and quality :heavy_check_mark:
 - Handle hybrid meshes with prisms and pyramids
 - Update the ball generation to handle hybrid meshes
 - Update the shell generation to handle hybrid meshes
@@ -63,15 +63,19 @@
 
 ### Exposed GPU API
 
-- `CalEdgLen(float4 ver[2]);` :heavy_check_mark:
-- `CalTriSrf(float4 ver[3]);` :heavy_check_mark:
-- `CalQadSrf(float4 ver[4]);` :heavy_check_mark:
-- `CalTetVol(float4 ver[4]);` :heavy_check_mark:
-- `CalHexVol(float4 ver[8]);`
-- `CalTriQal(float4 ver[3]);`
-- `CalQadQal(float4 ver[4]);`
-- `CalTetQal(float4 ver[4]);`
-- `CalHexQal(float4 ver[8]);`
+- `CalEdgLen();` :heavy_check_mark:
+- `CalTriSrf();` :heavy_check_mark:
+- `CalQadSrf();` :heavy_check_mark:
+- `CalTetVol();` :heavy_check_mark:
+- `CalPyrVol();` :heavy_check_mark:
+- `CalPriVol();` :heavy_check_mark:
+- `CalHexVol();` :heavy_check_mark:
+- `CalTriQal();` :heavy_check_mark:
+- `CalQadQal();` :heavy_check_mark:
+- `CalTetQal();` :heavy_check_mark:
+- `CalPyrQal();` :heavy_check_mark:
+- `CalPriQal();` :heavy_check_mark:
+- `CalHexQal();` :heavy_check_mark:
 
 ### Examples
 
