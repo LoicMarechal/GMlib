@@ -22,7 +22,7 @@
 
 ### Examples
 
-- Tetrahedral mesh nodes smoother
+- Tetrahedral mesh nodes smoother :heavy_check_mark:
 - Tetrahedral mesh quality calculation and statistics :heavy_check_mark:
 - Basic iterative edge based solver with boundary conditions
 
@@ -54,10 +54,10 @@
 
 ### Exposed CPU API
 
-- `IdxTab[] = GmlImportFile("file.meshb", GmfTetrahedra, GmfTriangles, GmfVertices, 0);`
-- `IdxTab[] = GmlImportFile("file.solb", GmfSolAtTetrahedra, GmfSolAtVertices, 0);`
-- `GmlExportFile("file.meshb", NmbDat, IdxTab[]);`
-- `GmlExportFile("file.solb", NmbDat, IdxTab[]);`
+- `GmlImportMesh("file.meshb", GmfTetrahedra, GmfTriangles, GmfVertices, 0);` :heavy_check_mark:
+- `GmlImportSolution("file.solb", GmfSolAtTetrahedra, GmfSolAtVertices, 0);`
+- `GmlExportMesh("file.meshb", NmbDat, IdxTab[]);`
+- `GmlExportSolution("file.solb", NmbDat, IdxTab[]);`
 - `GmlEvaluateNumbering();`
 - `GmlHilbertRenumbering();`
 
