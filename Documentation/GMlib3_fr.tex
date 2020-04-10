@@ -1,0 +1,1008 @@
+\documentclass[a4paper,12pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[francais]{babel}
+\usepackage{multirow,array}
+\usepackage{graphicx}
+\usepackage{a4wide}
+\newcommand{\HRule}{\rule{\linewidth}{1mm}}
+
+\begin{document}
+
+
+%
+%  TITRE
+%
+
+\begin{titlepage}
+
+\begin{center}
+\huge Une aide à la programmation sur GPU\\ pour le calcul scientifique
+\HRule \\
+\medskip
+{\Huge \bfseries La librairie GMlib} \\
+\HRule
+\end{center}
+
+\vspace*{\stretch{3}}
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[height=10cm]{gpu.pdf}
+\end{center}
+\end{figure}
+
+\vspace*{\stretch{1}}
+
+\begin{flushright}
+\Large Lo\"ic MAR\'ECHAL / INRIA, Projet Gamma\\
+\Large Avril 2020 \\
+\normalsize Document v2.01
+\normalsize Librairie v3.19
+\end{flushright}
+
+\end{titlepage}
+
+\clearpage
+
+\setcounter{tocdepth}{2}
+\tableofcontents
+\vfill
+
+\footnotesize{Couverture : différentes cartes graphiques ou accélératrices capables d'exécuter du code OpenCL.}
+\normalsize
+
+\clearpage
+
+
+%
+%  1 / INTRODUCTION
+%
+
+\section{Introduction}
+La {\tt GMlib} v3 est une librairie visant à grandement faciliter le portage ou développement de logiciels de calculs scientifiques utilisant des maillages non structurés comme principale donnée.
+
+Elle est basée sur le standard ouvert OpenCL, qui a pour avantage de fonctionner sur la plupart des matériels et systèmes actuels.
+OpenCL tire non seulement parti des GPU des trois principaux constructeurs, AMD, Intel et Nvidia, mais aussi des GPU intégrés des smartphones et tablettes (ARM, Imagination Technologies, etc.).
+Et en l'absence de GPU dans un appareil, il est parfaitement à même d'utiliser efficacement tous les coeurs et capacités vectorielles des CPU, ce qui en fait une technologie très générique.
+
+Mais le développement d'applications performantes et industrielles, c'est à dire, autre chose que la résolution d'un laplacien sur une grille structurée et carrée, requiert un investissement et des compétences conséquentes de la part des programmeurs.
+Il est très important de noter qu'en matière de code sur GPU, c'est le stockage, transfert et accès efficace aux données qui sont le plus problématiques et non les algorithmes, qui ne nécessitent pas tant d'adaptation par rapport aux plateformes CPU parallèles conventionnelles.
+
+C'est pourquoi l'idée sous-jacente de la {\tt GMlib} est d'abstraire autant que possible la gestion des données et de laisser le programmeur le plus libre possible sur la partie code proprement dite.
+Les GPU étant à l'origine conçus pour l'affichage graphique, il est naturel d'en utiliser le paradigme de programmation proposé par les principaux acteurs : les shaders.
+
+L'approche du graphisme sur GPU consiste à demander au programmeur de transmettre l'ensemble des données nécessaires à l'affichage à la librairie (OpenGL, Direct 3D), puis de fournir un code assez succins, appelé shader, à appliquer sur chaque entité graphique sélectionnée.
+Il est par exemple courant de fournir un ensemble de sommets, de triangles, de vecteurs normaux aux sommets, et par la suite, de demander à la librairie graphique de boucler sur les triangles tout en accédant aux coordonnées et normales de leurs sommets afin d'exécuter un code (shader) calculant la couleur et la position à l'écran de chaque pixel du triangle.
+
+Une telle approche a été reprise pour la {\tt GMlib}, mais ici les textures, projections, et effets graphiques sont remplacés par des tétraèdres, arrêtes, champs de solutions physiques, et tous les accès indirects possibles entre ces entités.
+Les types de données de maillage actuellement proposées sont : sommets, arrêtes, triangles, quadrilatères, tétraèdres, pyramides, prismes et hexaèdres ainsi que les liens implicitent qui les relient entre eux (boules, coquille, voisin) et qui sont automatiquement construits par la librairie.
+De plus, des types de données libres (entier, flottant, scalaires, tableaux, vecteur) peuvent être associés à chaque entité de maillage afin d'y stocker les données nécessaires aux calculs.
+
+Un code basé sur la {\tt GMlib} se décompose en quatre étapes : initialisations, renseignements des données, compilation des kernels et exécution de ces derniers sur GPU.
+
+Initialisation :
+On doit tout d'abord initialiser la librairie en lui fournissant le numéro du matériel qui va exécuter le kernel en OpenCL.
+Puis on dimensionne chaque type de donnée de maillage et de solution associée simplement en fournissant le nombre de chaque entité et la taille des données, c'est une phase de description des données.
+
+Renseignement des données :
+L'utilisateur doit boucler sur chaque sommet, élément, ou autre donné précédemment déclarés pour en transmettre le contenue à la {\tt GMlib}, qui elle-même se chargera de les transmettre sur la carte graphique au moment et sous la forme adéquate.
+
+Compilation des kernels :
+L'utilisateur décrit les boucles qu'il souhaite exécuter sur GPU en précisant pour chacune, la liste des entités de maillage et solutions qui lui seront nécessaires, ainsi que leur mode d'accès, lecture et/ou écriture, puis le code source du code à exécuter sur ces données et qui sera au préalable compilé par la librairie.
+Cette compilation à chaud, permet de générer un code binaire exécutable au moment même de l'exécution du logiciel, ce qui lui permet de fonctionner sur l'importe quel type de matériel (AMD, Intel, NVIDIA, etc.)
+
+Exécution des kernels :
+Une fois toutes les données définies et transmises et les codes compilés et optimisés sur l'architecture choisie, il ne reste plus qu'a lancer l'exécution de chaque kernel, autant de fois que nécessaire pour converger un calcul et en ne modifiant que quelques paramètres globaux afin de contrôler ledit calcul (coefficients, résidus, flags, etc.)
+
+\subsection{Motivation}
+Les deux principales motivations à la programmation sur GPU sont leur rapport performance/prix, bien plus intéressant que celui des CPU standards, ainsi que leur capacité d'évolution future, elle aussi bien plus grande que celle des CPU multic\oe urs qui semble être limitée à moyen terme.
+
+Il faut néanmoins être réaliste, le prix d'une carte graphique haut de gamme est très élevé et souvent assez proche de celui d'un serveur de calcul. Quant aux performances annoncées par les constructeurs ou publiées dans de nombreux articles scientifiques surfant sur l'effet de mode des GPU, ils ne sont que théoriques. De nombreux codes d'exemples servant à démontrer la puissance des GPU n'utilisent que des algorithmes et des données simplifiées non représentatifs de la réalité industrielle de la simulation numérique. De plus, ils recourent à l'astuce de comparer un code sur GPU avec son équivalent séquentiel sur CPU... Les serveurs actuels possédant 12 ou 16 c\oe urs, la comparaison GPU / CPU multic\oe urs est nettement moins favorable.
+
+Dans la pratique, le portage d'un code industriel travaillant sur des données réelles sur GPU ne saurait être plus de deux à quatre fois plus rapide qu'un bon serveur de calcul multi-c\oe urs. Ceci est déjà intéressant non seulement d'un point de vue prix, mais aussi d'encombrement (une carte d'extension contre plusieurs unités de racks) ou de consommation électrique.
+
+Le gain espéré n'étant pas si extraordinaire, il est donc important pour un développeur de ne pas investir trop de temps dans une tentative de portage. Et c'est justement le problème de la programmation sur GPU : elle est très fastidieuse et consommatrice de temps !
+
+Deux postes sont notamment lourds : la mise en forme et le transfert des structures de données de et vers le GPU, telles qu'elles soient assimilables et efficaces pour celui-ci, et le portage, l'optimisation et le débogage des algorithmes proprement dits dans le langage du GPU.
+Il a donc paru important de proposer aux développeurs une librairie simplifiant ces deux aspects dans le cadre d'applications traitant des maillages, données de base de la plupart des codes de simulations numériques. La librairie proposée, la {\tt GMlib}, fourni donc au développeur des structures de données de maillages simples à définir et transférer ainsi qu'une panoplie de codes sources de base en OpenCL permettant d'y accéder efficacement.
+
+Le mode opératoire est donc le suivant :
+
+-choisir les types de données parmi ceux proposés qui vous permettront de stocker vos données,
+-partir d'un des codes de base proposés accédant à ce type de données et y insérer vos propres calculs sur ces données.
+
+Ceci nous amène donc à parler de l'interfaçage entre vos données et la librairie, autrement dit, l'API.
+
+\subsection{API}
+
+\subsubsection*{Les kernels}
+
+\subsection{Kernels types}
+
+\subsubsection*{Kernels a accès directs}
+
+\subsubsection*{Kernels a accès indirects}
+
+\subsection{Programmation en OpenCL}
+
+
+%
+%  2 / UTILISATION
+%
+
+\section{Utilisation}
+
+\subsection{Installation et compilation}
+
+\subsection{Initialisation}
+
+\subsection{Exemple 1 : calcul d'une valeur moyenne pour chaque triangle d'un maillage}
+
+\subsection{Exemple 2 : boucle à accès mémoire indirect présentant des dépendances mémoires}
+
+
+%
+%  3 / COMMANDES
+%
+
+\section{Liste des commandes}
+
+\subsection{GmlCheckFP64}
+
+Permets de tester la présence ou non d'unités de calcul flottant en double précision.
+La norme OpenCL rend obligatoire la présence d'unités 32-bits, mais les capacités 16-bits (demi-précision) et 64-bits sont optionnelles.
+
+\subsubsection*{Syntaxe}
+{\tt flag = GmlCheckFP64(LibIdx);}
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+flag       & int    & 0 : pas de capacité de calcul flottant 64-bit, 1 : FP64 disponible \\
+\hline
+\end{tabular}
+\subsubsection*{Commentaires}
+Bien que des unités de calculs double précision soient présentent sur la plupart des GPU de jeux vidéos, leur nombre est vouent 1/4 à 1/32 du nombre d'unités 32-bits, réduisant d'autant la vitesse de calcul.
+Cette dernière est alors inférieure à celle du CPU principal !
+La capacité FP64 du GPU est alors un faux ami.
+
+\subsection{GmlCompileKernel}
+
+\subsection{GmlDebugOff}
+
+Désactive le mode de débogage (qui désactivé par défaut).
+
+\subsubsection*{Syntaxe}
+
+{\tt GmlDebugOff(LibIdx);}
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+\end{tabular}
+\subsubsection*{Commentaires}
+
+
+\subsection{GmlDebugOn}
+
+Active le mode de débogage qui permet d'afficher l'intégralité des sources compilés avec notamment les parties de lectures et écriture mémoire ajoutées par la librairie.
+
+\subsubsection*{Syntaxe}
+
+{\tt GmlDebugOn(LibIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+ & & \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+
+
+\subsection{GmlExtractEdges}
+Non implémenté.
+
+\subsubsection*{Syntaxe}
+
+{\tt DatIdx = GmlExtractEdges(LibIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+DatIdx     & int    & \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+
+
+\subsection{GmlExtractFaces}
+Non implémenté.
+
+\subsubsection*{Syntaxe}
+
+{\tt DatIdx = GmlExtractFaces(LibIdx);}
+
+\subsubsection*{paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+DatIdx     & int    & \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+
+
+\subsection{GmlFreeData}
+
+\subsubsection*{Syntaxe}
+
+Libère la mémoire occupée sur le CPU et le GPU par cette donnée.
+
+{\tt flag = GmlFreeData(LibIdx, DatIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+DatIdx     & int     & \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+flag       & int    & \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+L'étiquette sera réutilisée par de futures créations de données, donc faire attention à ne pas confondre l'ancienne et la nouvelle dans ses listes de types.
+
+
+\subsection{GmlGetDataLine}
+
+Permets de récupérer les données du GPU et de les stocker dans les variables de l'utilisateur.
+Cette procédure concerne tous les types de données, maillage, solutions et liens topologiques.
+Le nombre d'arguments est variable et l'utilisateur doit fournir un pointeur de type adéquat pour chaque scalaire composant une ligne de ce type.
+
+\subsubsection*{Syntaxe}
+
+{\tt flag = GmlGetDataLine(LibIdx, DatIdx, LinNmb, ...);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type            & description \\
+\hline
+LibIdx     & size\_t         & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+DatIdx     & int             & index de la donnée à renseigner \\
+\hline
+LinNmb     & int             & numéro de la ligne dans cette donnée \\
+\hline
+...        & int * / float * & pointeur sur un entier ou un flottant qui \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+flag       & int    & 0 : échec, 1 : succès \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+Après l'exécution d'un kernel sur le GPU, les données indiquées comme GMLWriteMode ne sont pas immédiatement transférées du GPU vers le CPU.
+C'est l'appel à GmlGetDataLine() de la première ligne de donnée qui déclenche le transfert en bloc de la totalité des lignes du champ.
+Il en découle que si vous commencez par lire les données sans commencer par la première ligne, les données retournées seront vides.
+
+
+\subsection{GmlGetMemoryTransfer}
+
+\subsubsection*{Syntaxe}
+
+Permet de connaitre à tout instant la quantité de mémoire en octets transférée de ou vers le GPU.
+
+{\tt taille = GmlGetMemoryUsage(LibIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type    & description \\
+\hline
+taille     & size\_t & \\
+\hline
+\end{tabular}
+
+
+\subsection{GmlGetMemoryUsage}
+
+Permets de connaitre la quantité de mémoire en octets actuellement utilisée par la {\tt GMlib} sur le GPU.
+
+\subsubsection*{Syntaxe}
+
+{\tt taille = GmlGetMemoryUsage(LibIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type    & description \\
+\hline
+taille     & size\_t & \\
+\hline
+\end{tabular}
+
+
+\subsection{GmlImportMesh}
+
+Cette routine est une aide (\emph{helper}) qui permet en une seule commande de lire un maillage, d'initialiser les types de données qu'il contient sur le GPU et de les transférer.
+Elle n'est présente dans la {\tt GMlib} qui si elle a été compilée avec le flag {\tt -DWITH\_LIBMESHB}.
+L'idée est de donner un nom de fichier mesh et la liste des mots clefs que vous souhaitez importer, s'ils sont présents dans le fichier.
+La procédure retourne simplement le nombre de ces mots-clefs trouvés.
+Afin d'en connaitre les index pour les manipuler par la suite, il fait appeler pour chacun d'eux la commande GetMeshInfo().
+
+\subsubsection*{Syntaxe}
+
+{\tt NmbKwd = GmlImportMesh(LibIdx, FilNam, ...);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+FilNam     & char *  & chemin d'accès complet et noms du fichier avec son extension \\
+\hline
+...        & int     & liste des mots-clefs de maillages ou solution tels que définis par la {\tt libMeshb} \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+NmbKwd     & int    & nombre de mots-clefs effectivement trouvés et lus \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+Attention à passer en arguments les étiquettes de mots-clefs définis par la {\tt libMeshb} et non par la {\tt GMlib} !
+
+
+\subsection{GmlInit}
+
+Permets d'initialiser une instance de la librairie avec une unité de calcul capable d'exécuter du code OpenCL.
+La liste de ces unités est disponible via la commande \emph{GmlListGPU}.
+Notez qu'il est possible d'ouvrir plusieurs instances de la {\tt GMlib} afin de bénéficier de la capacité de calcul des différentes unités et même d'ouvrir plusieurs instances sur la même unité, dont le temps machine sera alors partagé.
+
+\subsubsection*{Syntaxe}
+
+{\tt LibIdx = GmlInit(DevIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type   & description \\
+\hline
+DevIdx     & int    & numéro de l'unité de calcul sur laquelle exécuter tous les kernels de cette instance \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type    & description \\
+\hline
+LibIdx     & size\_t & identifiant unique de l'instance de la librairie \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+Par défaut, les systèmes rangent les unités de type CPU en premier et les GPU en dernier.
+De fait, l'unité 0 étant presque toujours un CPU, il est pertinent d'exécuter un {\tt GmlInit(0)} par défaut en l'absence d'indication de la part de l'utilisateur. Un tel choix est garanti de fonctionner sur tout système.
+
+
+\subsection{GmlLaunchKernel}
+
+Lancement de l'exécution d'un kernel déjà compilé.
+Cette procédure prend très peu de paramètres, car tout a été défini au moment de la compilation : nombre d'itération de la boucle, les données à lire ou écrire, code à compiler ainsi que le GPU ou CPU exécutant.
+Il ne reste alors qu'à donner un index d'instance de librairie et un numéro de kernel et ça démarre !
+La procédure est bloquante et ne rends la main qu'a la fin de l'exécution, mais cette une limitation imposée par la version actuelle de la {\tt GMlib} qui sera levée par la suite afin de permettre des exécutions en \emph{pipeline}.
+
+\subsubsection*{Syntaxe}
+
+{\tt temps = GmlLaunchKernel(LibIdx, KrnIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+KrnIdx     & int     & numéro du kernel à exécuter \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+temps      & double & si < 0 : code d'erreur, si >=0 : temps d'exécution en secondes \\
+\hline
+\end{tabular}
+
+
+\subsection{GmlListGPU}
+
+Cette procédure se contente d'afficher à l'écran les noms complets des unités de calculs compatibles OpenCL sur le système.
+En cas de lancement d'un logiciel en ligne de commande sans entrer d'unité de calcul GPU, il est utile d'appeler {\tt GmlListGPU()} comme message d'aide par défaut.
+
+\subsubsection*{Syntaxe}
+
+{\tt GmlListGPU();}
+
+\subsubsection*{Commentaires}
+Les systèmes rangent en général des unités de type CPU dans les premiers indices et les GPU en dernier.
+
+
+\subsection{GetMeshInfo}
+
+Permets de retrouver le numéro de datatype et le nombre de lignes à partir du simple type de donnée de maillage.
+Cela est utile après l'appel de {\tt GmlImportMesh} afin de connaitre les informations sur tous les mots-clefs importés du fichier de maillage ou solutions.
+
+\subsubsection*{Syntaxe}
+
+{\tt flag = GetMeshInfo(LibIdx, MshTyp, NmbLin, DatIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+MshTyp     & int     &  \\
+\hline
+NmbLin     & int     &  \\
+\hline
+DatIdx     & int *   &  \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+flag       & int    & \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+
+Si un des pointeurs NmbLin ou DatIdx est nul, il ne sera tout simplement pas renseigné.
+
+
+\subsection{GmlNewLinkData}
+
+Cette commande permet de créer des liens topologiques arbitraires entre deux types de données de maillage.
+Elle fonctionne de la même manière que les autres créations de données, {\tt GmlNewMeshData} et {\tt GmlNewSolutionData}, à savoir qu'on en précise le nombre de champs (des entiers) et qu'on boucle sur chaque ligne pour les renseigner.
+Mais c'est un outil extrêmement puissant, car il permet de contourner les limitations d'accès mémoire indirectes des GPU en passant par des tables d'indirection astucieusement conçues.
+
+\subsubsection*{Syntaxe}
+
+{\tt DatIdx = GmlNewLinkData(LibIdx, MshTyp, LnkTyp, NmbDat, LnkNam);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+MshTyp     & int     & étiquette de l'entité de maillage source \\
+\hline
+LnkTyp     & int     & étiquette de l'entité de maillage qui est pointée par la source \\
+\hline
+NmbDat     & int     & nombre d'entités de type LnkTyp pointées par chaque entité de type MshTyp \\
+\hline
+LnkNam     & char *  & nom donné au tableau contenant le lien tel qu'il sera transmis au code OpenCL  \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+DatIdx     & int    & étiquette de la donnée résultante \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+Ce lien topologique arbitraire est destiné à se substituer au lien par défaut généré automatiquement par la librairie.
+Il faut alors en passer l'étiquette à la place de la valeur 0 par défaut pour chaque type de donné concerné dans l'appel de compilation d'un kernel.
+
+
+\subsection{GmlNewMeshData}
+
+Création d'un type de donné de maillage, pour le moment seul l'ordre un, mais mixte est proposé.
+Le type {\tt GmlVertices} est composé des coordonnées et d'une référence et tous les autres éléments sont composés des numéros de leurs sommets et d'une référence.
+Notez qu'il ne peut y avoir qu'un seul tableau d'un type d'entité par instance de la librairie.
+Cette limitation à un maillage par instance sera levée dans les prochaines versions.
+
+\subsubsection*{Syntaxe}
+
+{\tt DatIdx = GmlNewMeshData(LibIdx, MshTyp, NmbLin);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+MshTyp     & int     & type d'entité de maillage tel que défini dans le header \\
+\hline
+NmbLin     & int     & nombre de ligne de ce tableau d'entités \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+DatIdx     & int    & étiquette du datatype alloué et à passer en argument aux autres routines \\
+\hline
+\end{tabular}
+
+
+\subsection{GmlNewParameters}
+
+Permets d'allouer une structure librement définie par l'utilisateur et contenant toute sorte de paramètres nécessaires à la communication entre le CPU et le GPU.
+Une image miroir du côté CPU et du côté GPU sera automatiquement synchronisée, avant chaque exécution de kernel, la structure sera recopiée de la mémoire CPU vers le GPU afin qu'il puisse y lire des paramètres et à la fin, la copie en mémoire GPU sera rapatriée sur le CPU afin d'y lire d'éventuels résultats de calculs ou codes d'erreurs.
+
+\subsubsection*{Syntaxe}
+
+{\tt ParDat = GmlNewParameters(LibIdx, taille, source);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+taille     & int     & c'est le sizeof(my\_struct) en octets \\
+\hline
+source     & char *  & source du code contenant la définition de la structure afin de la rendre visible côté OpenCL \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+ParDat     & void * & pointeur sur la structure allouée en mémoire CPU \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+Afin de garantir que la structure est identique du côté CPU et GPU, il est habile d'inclure sa définition dans un header coté CPU et de passer ce header comme code OpenCL à compiler via la commande {\tt GmlNewParameters}.
+Bien que la taille de la structure ne soit pas limitée, comme elle sera transférée deux fois à chaque lancement de kernel (upload / download), cela pénalisera le temps d'exécution si elle est utilisée pour transférer de gros tableaux.
+Ceci est en revanche très utile pour déboguer un code en recopiant la totalité d'un tableau problématique dans la structure afin de l'analyser du côté CPU.
+
+
+\subsection{GmlNewSolutionData}
+
+Création d'un type de donné libre associé à une entité de maillage.
+Bien qu'il y ait "solution" dans le nom, ce type est fait pour y stocker ce que l'on veut.
+On choisi le type OpenCL (entier, flottant, scalaire, vecteur) et la taille du tableau local, attention, il s'agit du nombre de variables associé à chaque entité de maillage, pas du nombre total de lignes de ce champ qui est par définition égal au nombre de lignes de l'entité de maillage auquel il fait référence.
+Il n'est pas possible de stocker des types différents, à la manière d'une structure en C, mais seulement un tableau homogène. Si vous avez besoin de mélanger des deux entiers et des quatre flottants associés à chaque triangle par exemple, il est tout à fait possible d'allouer deux {\tt SolutionData} associées aux triangles, l'une composé d'un {\tt GmlInt2} et l'autre d'un {\\ GmlFloat4}. Notez qu'il est possible de demander un tableau de {\tt 2 x GmlInt} et un autre de {\\ 4 x GmlFloat}, ce qui revient au même.
+
+\subsubsection*{Syntaxe}
+
+{\tt DatIdx = GmlNewSolutionData(LibIdx, MshTyp, NmbDat, ItmTyp, DatNam);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+MshTyp     & int     & étiquette du type de maillage auquel ce champ est associé \\
+\hline
+NmbDat     & int     & taille du tableau local \\
+\hline
+ItmTyp     & int     & type de chaque entrée du tableau tel que défini dans le header \\
+\hline
+DatNam     & char *  & nom du champ tel qu'il apparaitra du côté OpenCL \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+DatIdx     & int    & étiquette du datatype à passer aux autres routines \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+Seuls les entiers (8 et 32 bits) et les flottants (32 et 64 bits) sont disponibles pour le moment.
+Tout type est disponible sous la forme d'un scalaire ou d'un vecteur de puissance 2 allant jusqu'à 16.
+
+
+\subsection{GmlReduceVector}
+
+Réduction d'un vecteur de flottant à une seule valeur scalaire (norme).
+Le format d'entrée est imposé, il s'agit d'un tableau contenant un seul scalaire flottant simple précision par ligne.
+Les normes de vecteur sont pré codées et il n'est pas possible de définir les siennes pour l'instant, mais il sera possible ultérieurement de proposer des kernels de réduction.
+Afin de contourner ces limitations, il faut passer par un kernel intermédiaire qui va réaliser le calcul souhaiter et en stocker le résultat dans un tableau de flottant qui sera réduit par {\tt GmlReduceVector}.
+Les opérations proposées sont la somme des termes, la valeur minimum et la maximum.
+
+\subsubsection*{Syntaxe}
+
+{\tt temps = GmlReduceVector(LibIdx, DatIdx, OppCod, norme);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type     & description \\
+\hline
+LibIdx     & size\_t  & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+DatIdx     & int      & étiquette du datatype contentant le vecteur à réduire  \\
+\hline
+OppCod     & int      & code de l'opération de réduction à effectuer telle que défini dans le header \\
+\hline
+norme      & double * & valeur résiduelle \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+temps      & double & temps d'exécution en secondes \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+Les codes OpenCL des trois opérations proposées se trouvent dans le fichier reduce.cl et il est très simple de s'en inspirer afin d'y ajouter son propre calcul de norme.
+
+
+\subsection{GmlSetDataBlock}
+
+Cette procédure est similaire à {\tt GmlSetDataLine} mais transfert la totalité des lignes d'un datatype d'un seul coup au lieu d'une ligne à la fois. Cela permet d'une part de meilleures performances, mais aussi d'écrire des routines de transfert génériques à tous types de données étant donné que les paramètres ne font appel qu'à des pointeurs en mémoire et non aux valeurs, forcément différente, contenue dans chaque type de donnée.
+On indique donc, le numéro de la ligne de départ, celle de fin, et les pointeurs sur les données utilisateur de la première ligne et de la dernière à transférer.
+
+\subsubsection*{Syntaxe}
+
+{\tt flag = GmlSetDataBlock(LibIdx, TypIdx, BegIdx, EndIdx, DatBeg, DatEnd, RefBeg, RefEnd);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+TypIdx     & int     & étiquette du datatype à renseigner \\
+\hline
+BegIdx     & int     & numéro de la première ligne à envoyer \\
+\hline
+EndIdx     & int     & numéro de la dernière ligne  \\
+\hline
+DatBeg     & void *  & pointeur sur les données utilisateur de la première ligne \\
+\hline
+DatEnd     & void *  & idem sur la dernière \\
+\hline
+RefBeg     & int *   & pointeur sur la référence associé à la première ligne ou NULL s'il ne s'agit pas d'un type de donnée de maillage (solution) \\
+\hline
+RefEnd     & int *   & pointeur sur la dernière référence \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+flag       & int    & 0 : échec, 1 : succès \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+La procédure est pour l'instant bloquante, mais elle sera lancée en parallèle dans un thread à l'avenir afin de réaliser les initialisations de données en pipeline.
+De plus, il est prévu que la routine {\tt GmlImportMesh} utilise {\tt GmfReadBlock} et {\tt GmlSetDataBlock} en pipeline afin de lire, préparer et transférer les données en même temps.
+
+
+
+\subsection{GmlSetDataLine}
+
+Renseigne une ligne d'un type de donné, de maillage ou autre, afin que la librairie puisse la stocker sur CPU et GPU.
+Le nombre d'arguments dépend bien évidemment du type de la donnée.
+Cette routine permet de renseigner les données de maillage, de solutions ou bien des liens arbitraires entre types.
+Le nombre d'arguments et leur type est variable et correspond à la définition de l'entité de maillage ou du lien topologique tel que défini par l'utilisateur.
+Attention, dans le cas des données de solution, on passe un seul et unique pointeur vers la table les contenant de manière consécutive en mémoire, ceci afin de rendre génériques les routines de transfert, car la nature et la taille de ces champs varient selon le contexte du solveur.
+
+\subsubsection*{Syntaxe}
+
+{\tt flag = GmlSetDataLine(LibIdx, DatIdx, LinNmb, ...);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type      & description \\
+\hline
+LibIdx     & size\_t   & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+DatIdx     & int       & étiquette du datatype à renseigner \\
+\hline
+LinNmb     & int       & numéro de la ligne à renseigner \\
+\hline
+...        & int/float & liste variable d'arguments contenant les données de ce type de maillage ou de lien topologique ou bien un pointeur sur le tableau contenant la solution associée \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+flag       & int    & 0 : échec, 1 : succès \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+Faire très attention aux paramètres de la section variable, car le compilateur C n'a aucun moyen d'en vérifier le nombre et le type requis.
+
+
+\subsection{GmlSetNeighbours}
+
+Création d'une donnée de type lien topologique et contenant la liste des voisins entre entités du même type.
+Deux entités de dimension D sont dites voisines si elles partagent une même entité géométrique de dimension D-1 (par exemple deux tétraèdres sont voisins s'ils partagent un triangle).
+Cette liste pourrait tout à fait être créée manuellement par l'utilisateur avec un appel à {\tt GmlNewLinkData} puis en créant lui-même le tableau des voisinages et en la renseignant avec {\tt GmlSetDataBlock}.
+La procédure {\tt GmlSetNeighbours} est proposée comme \emph{helper} afin d'en faciliter la tâche et de réduire la taille des codes.
+
+\subsubsection*{Syntaxe}
+
+{\tt DatIdx = GmlSetNeighbours(LibIdx, EleIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+EleIdx     & int     & étiquette du type de donnée de maillage dont on veut construire les voisins \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+DatIdx     & int    & étiquette sur une donnée de type lien topologique \\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+Le lien topologique ainsi créé pourra être fourni à la compilation d'un kernel à la place du lien par défaut (valeur 0 du paramètre).
+
+
+\subsection{GmlStop}
+
+Libère tous les contextes et structure OpenCL, la mémoire sur le CPU et le GPU, et termine l'instance, mais pas la librairie qui peut continuer à fonctionner avec les éventuelles autres instances allouées.
+
+\subsubsection*{Syntaxe}
+
+{\tt GmlStop(LibIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+\end{tabular}
+
+
+%
+%  4 / GLOSSAIRE
+%
+
+
+\section{Glossaire}
+
+\subsection{API}
+Application programming interface, ou interface de programmation, c'est la liste des arguments et leur format à fournir afin d'appeler une procédure d'un programme ou librairie.
+
+\subsection{Compute Unit}
+Une puce GPU contient un grand nombre d'unités de calcul fonctionnant en parallèle de la même manière qu'un CPU possède plusieurs c\oe urs. Les constructeurs jouent un peu sur les mots en comptant chaque unité vectorielle capable de traiter quatre scalaires à la fois comme étant quatre unités de calculs distinctes, ce qui n'est en pratique pas tout à fait le cas. À ce compte, un CPU comme l'Intel core i7-3770 qui possède quatre c\oe urs, chacun possédant une unité vectorielle capable de traiter huit flottants simultanément, serait considéré comme une puce à 32 unités de calculs selon cette terminologie.
+
+Il est à noter que les unités de GPU sont beaucoup plus simples que celles des CPU et leur puissance de calcul par gigahertz est typiquement trois fois plus faible. Une comparaison du nombre de c\oe urs-gigahertz entre les deux architectures n'est pas non plus réaliste.
+
+\subsection{GPU}
+Graphic Processing Unit, aussi appelé GPGPU (pour General Purpose), c'est une puce adaptée aux calculs géométriques et vectoriels qui, comme son nom ne l'indique pas, est tout sauf "general purpose" !
+Ces puces se trouvent dans les cartes graphiques des deux constructeurs bien connus, AMD-ATI Radeon et NVIDIA GeForce, mais il y aussi des GPU dans la plupart de puces pour smartphones et tablettes (ARM Mali et Imagination Technologies SGX) et les consoles des jeux (IBM Cell).
+
+\subsection{Kernel}
+Nom donné à une boucle exécutée par un GPU. Celui-ci gère lui-même l'indice de boucle qu'il distribue à ses unités de calculs, l'utilisateur ne fournissant que le noyau de calcul à l'intérieur de la boucle, d'où le nom kernel.
+
+\subsection{OpenCL}
+Open Compute Langage, c'est un langage dérivé du C, avec quelques emprunts au C++, et qui a été conçu pour être indépendant de toute architecture matérielle. Il peut donc être exécuté efficacement sur des GPU, des CPU multic\oe urs, des FPGA ou tout type de matériel calculant de manière concurrente. Son objectif est d'exposer clairement l'indépendance entre les calculs afin de mieux les répartir sur les différentes unités.
+
+\subsection{Workgroup}
+C'est une portion de boucle qui est exécutée simultanément sur les différentes unités de calculs du GPU. C'est pourquoi on ne peut jamais supposer que l'itération $i$ d'une boucle sera exécutée avant l'itération $i+1$, car elles peuvent tout à fait être traitées en même temps par deux unités différentes. Ces tailles vont de 16 pour les smartphones jusqu'à 1024 pour les cartes dédiées au calcul GPU.
+
+
+%
+% BIBLIO
+%
+
+\addcontentsline{toc}{section}{Bibliographie}
+
+\begin{thebibliography}{99}
+\small
+
+\bibitem{peano_hilbert}
+	SAGAN,
+	Space-Filling Curves,
+	\emph{Springer Verlag, New York, 1994}.
+
+\bibitem{khronos}
+	Aaftab Munshi,
+	The OpenCL Specification,
+	\emph{Khronos Group, http://www.khronos.org/opencl/, 2012}.
+
+\bibitem{nvidia}
+	NVIDIA Corporation,
+	OpenCL Optimization,
+	\emph{NVIDIA Corporation, NVIDIA\_GPU\_Computing\_Webinars\_Best\_Practises\_For\_OpenCL\_Programming.pdf, 2009}.
+
+\bibitem{lohner}
+	Andrew Corrigan \& Rainald Löhner,
+	Porting of FEFLO to Multi-GPU Clusters,
+	\emph{49th AIAA Aerospace Sciences Meeting, Orlando, January 2011}.
+
+\bibitem{apple}
+	Apple Corp,
+	OpenCL Programming Guide for Mac,
+	\emph{http://developer.apple.com, 2012}.
+
+
+
+\end{thebibliography}
+
+\end{document}

@@ -2777,7 +2777,7 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
 
 
 /*----------------------------------------------------------------------------*/
-/* Return a mesh type nunmber of lines and data index                         */
+/* Return a mesh type number of lines and data index                          */
 /*----------------------------------------------------------------------------*/
 
 int GetMeshInfo(size_t GmlIdx, int typ, int *NmbLin, int *DatIdx)
