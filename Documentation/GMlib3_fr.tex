@@ -37,7 +37,7 @@
 \begin{flushright}
 \Large Lo\"ic MAR\'ECHAL / INRIA, Projet Gamma\\
 \Large Avril 2020 \\
-\normalsize Document v2.01
+\normalsize Document v2.02
 \normalsize Librairie v3.19
 \end{flushright}
 
@@ -116,13 +116,115 @@ Ceci nous amène donc à parler de l'interfaçage entre vos données et la libra
 
 \subsection{API}
 
-\subsubsection*{Les kernels}
+L'interaction avec la librairie repose sur deux éléments fondamentaux : les types de données et les codes (i.e. kernels) qui vont opérer sur celles-ci.
+Logiquement, le déroulement d'un logiciel utilisant un accélérateur GPU va se dérouler en deux phases :
 
-\subsection{Kernels types}
+\begin{itemize}
+\item l'allocation et la définition des données (maillages, champs de solutions, liens topologiques),
+\item la déclaration, la compilation et l'exécution des kernels en OpenCL
+\end{itemize}
 
-\subsubsection*{Kernels a accès directs}
+Toutes ces phases sont exécutées par le CPU hôte et seule les kernels tournent sur GPU et s'en trouveront donc accélérées.
+Dire d'un code qu'il "tourne sur GPU" est abus de langage, car les entrées-sorties, initialisation, compilation et post-traitement sont exécutés sur CPU et l'on doit parler de logiciel hybride CPU/GPU.
+Il est donc important d'optimiser toutes les phases d'initialisation, car celle-ci représente le \emph{coefficient d'Amdahl} de tout code hybride CPU/GPU.
 
-\subsubsection*{Kernels a accès indirects}
+L'interfaçage avec la {\tt Gmlib} commence donc par son initialisation en lui fournissant le numéro du périphérique de calcul sur lequel les kernels seront exécutés : {\tt LibIdx = GmlInit(2);}
+
+Sur la machine de l'auteur de ces lignes, une telle commande initialise la librairie avec la carte graphique \emph{ATI Radeon Pro 460} et l'étiquette retournée servira à communiquer avec toutes les autres commandes de la librairie par la suite.
+Notez que plusieurs instances de la librairie peuvent être ouvertes simultanément, avec le même périphérique, ou bien un autre.
+
+Remarque : une instance ne peut utiliser qu'un seul périphérique de calcul, composé lui-même de plusieurs \emph{compute units} et une seule zone mémoire, il s'agit donc de parallélisme à mémoire partagée.
+
+Si l'utilisateur souhaite combiner la puissance de plusieurs GPU, il devra implémenter la distribution des calculs entre les cartes lui-même.
+
+Ensuite il faut définir et renseigner les types de données qui seront utilisés par les calculs effectués sur le GPU.
+Cela introduit un aspect très important : l'utilisateur ne peut utiliser ses propres données en mémoire CPU (tableaux, structures, objets, etc.), mais doit obligatoirement les déclarer et le transférer à la librairie. C'est une contrainte très forte, car la nature des données offertes est assez limitée et le portage d'un code sur GPU va surtout consister à plier ses propres structures de données dans le canevas proposé par la {\tt GMlib}.
+
+Pour illustrer les processus, on va déclarer et renseigner les sommets d'un maillage que l'on vient de lire et de ranger dans le tableau {\tt crd[n][3]} et assigner à chacun une vitesse et un vecteur de déplacement aléatoire.
+
+\begin{tt}
+\begin{verbatim}
+VerIdx = GmlNewMeshData(LibIdx, GmlVertices, NmbVer);
+for(i=0;i<NmbVer;i++)
+   GmlSetDataLine(LibIdx, VerIdx, i, crd[i][0], crd[i][1], crd[i][2], 0);
+
+VitIdx = GmlNewSolutionData(LibIdx, GmlVertices, 1, GmlFlt, "vitesse");
+for(i=0;i<NmbVer;i++)
+{
+   vitesse = rand();
+   GmlSetDataLine(LibIdx, MasIdx, i, &vitesse);
+}
+
+
+DirIdx = GmlNewSolutionData(LibIdx, GmlVertices, 1, GmlFlt4, "direction");
+for(i=0;i<NmbVer;i++)
+{
+   vecteur[0] = rand();
+   vecteur[1] = rand();
+   vecteur[2] = rand();
+   vecteur[3] = 0;
+   GmlSetDataLine(LibIdx, MasIdx, i, &vecteur);
+}
+\end{verbatim}
+\end{tt}
+\normalfont
+
+On souhaite calculer sur GPU le déplacement itératif de ces sommets selon leur direction et vitesse et récupérer les coordonnées résultantes après 1000 itérations.
+
+Pour cela, nous allons tout d'abord écrire le code de déplacement d'une itération en OpenCL : il s'agit d'un kernel et il doit être placé dans un fichier indépendant, que nous appellerons iteration.cl.
+Puis on va le compiler en lui passant les données préalablement définies : les sommets qu'on souhaite envoyer sur le GPU et récupérer à la fin (\emph{Read \& Write}) et la vitesse et le déplacement qu'on souhaite envoyer, mais pas récupérer (\emph{Read}).
+
+\begin{tt}
+\begin{verbatim}
+KrnIdx = GmlCompileKernel( LibIdx,  iteration, "iteration", GmlVertices, 3,
+                           VerIdx, GmlReadMode | GmlWriteMode, NULL,
+                           VitIdx, GmlReadMode               , NULL,
+                           DirIdx, GmlReadMode               , NULL );
+\end{verbatim}
+\end{tt}
+\normalfont
+
+Et voici le fameux kernel nommé \emph{iteration.cl} : 
+
+\begin{tt}
+\begin{verbatim}
+VerCrd = VerCrd + vitesse * direction;
+\end{verbatim}
+\end{tt}
+\normalfont
+
+Ce code, on ne peux plus succin, amène de nombreuses remarques :
+
+\begin{itemize}
+\item il n'y a pas de boucle itérant de 1 à NmbVer,
+\item il ne comporte aucune définition préalable des variables utilisée,
+\item il n'y a pas d'accès aux tableaux des sommets et données associées, mais seulement des scalaires,
+\item comment sera stocké le résultat,
+\item les coordonnées et le champ de déplacement sont des vecteurs en 3-D.
+\end{itemize}
+
+\paragraph{Boucle implicite : } il y a bien un compteur de boucle qui est incrémenté de 1 à NmbVer, mais la boucle est effectué par le GPU et l'utilisateur n'a pas moyen de contrôler l'ordre de traitement des sommets. Il ne fournit que le noyau de la boucle (d'où le nom kernel), sans itérateur, et ce morceau de code sera instancié et exécuté autant de fois qu'il y a de sommets dans le maillage, mais dans un ordre non spécifié !
+
+\paragraph{Variables implicites : } les déclarations de variables locales sont effectuées par la librairie en fonction des paramètres définis lors de la compilation du kernel.
+Nous avions demandé l'accès aux coordonnées des sommets (un vecteur 3-D), à la vitesse (scalaire) et au vecteur de déplacement (vecteur 3-D) et la librairie a donc défini d'elle-même les variables du type adéquat pour recevoir toutes les données demandées de l'unique sommet en cours de traitement. Les noms des données de type maillage sont imposés par la librairie et connus (VerCrd pour les coordonnées, TriVer pour les numéros des trois sommets d'un triangle), quant aux données librement définies par l'utilisateur, elles portent le nom qu'il leur a assigné au moment de l'initialisation.
+Dans notre exemple, {\tt vitesse} est un scalaire et {\tt direction} est un vecteur.
+Le code des définitions est en fait créé par la librairie et ajouté juste avant le kernel fourni par l'utilisateur.
+
+\paragraph{Accès aux tableaux globaux : } il n'y a pas qu'un seul sommet dans le maillage et pourtant la librairie n'a défini qu'un seul vecteur {\tt VerCrd} contentant les coordonnées d'un seul sommet. Là encore, la librairie a bien défini le tableau des coordonnées ({\tt VerCrdTab[ NmbVer ]}), mais celui-ci est caché à l'utilisateur et les coordonnées du sommet en cours de traitement sont automatiquement lues avant de passer la main au kernel.
+De fait, lorsque l'unique ligne du kernel d'exemple commence à être exécutée, la librairie a déjà fait remplir les variables locales avec les données du sommet courant \emph{i} : {\tt VerCrd = VerCrdTab[i]}, {\tt vitesse = vitesseTab[i]}, {\tt direction = directionTab[i]} et il n'a pas à se soucier du transfert des variables globales vers les locales sur lesquelles il va effectuer les calculs.
+
+\paragraph{Stockage du résultat en mémoire : } de la même manière qu'avec les lectures, toutes les variables étant définie comme \emph{Write} au moment de la compilation, seront stockées dans les tableaux globaux après l'exécution du kernel utilisateur. Cette écriture est cachée et transparente. Dans l'exemple, seules les coordonnées sont accédées en écriture et la librairie rajoutera d'elle-même la ligne suivante : {\tt VerCrdTab[i] = VerCrd} afin de stocker le résultat du calcul sur ce sommet dans la mémoire du GPU, d'éventuels calculs intermédiaires étant perdus !
+
+\paragraph{Calcul vectoriel : } le langage OpenCL offre des variantes scalaires et vectorielles de tailles 2,4,8 ou 16 pour chaque type de données entières (8,16,32 ou 64 bits) et réelles (16,32 ou 64 bits) et utilise la technique du surtypage d'opérateur pour adapter des opérations aux types des opérandes. Dans notre kernel, {\tt VerCrd} et {\tt direction} sont des vecteurs 3-D et effectuer l'opération {\tt VerCrd = VerCrd + direction} va déclencher une addition vectorielle traitant les trois coordonnées simultanément.
+Que se passe-t-il alors lorsqu'on multiplie le déplacement par le scalaire contenant la vitesse ?
+Le compilateur détecte la différence de type et choisit l'opération appropriée, dans le cas présent, il va utiliser la fonction multipliant tous les termes d'un vecteur par un scalaire.
+
+
+\subsection*{Les types de données}
+
+\subsection*{Kernels a accès directs}
+
+\subsection*{Kernels a accès indirects}
 
 \subsection{Programmation en OpenCL}
 
