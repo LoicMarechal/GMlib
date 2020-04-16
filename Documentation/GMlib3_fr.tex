@@ -148,15 +148,14 @@ VerIdx = GmlNewMeshData(LibIdx, GmlVertices, NmbVer);
 for(i=0;i<NmbVer;i++)
    GmlSetDataLine(LibIdx, VerIdx, i, crd[i][0], crd[i][1], crd[i][2], 0);
 
-VitIdx = GmlNewSolutionData(LibIdx, GmlVertices, 1, GmlFlt, "vitesse");
+VitIdx = GmlNewSolutionData(LibIdx, GmlVertices, 1, GmlFlt, "Vitesse");
 for(i=0;i<NmbVer;i++)
 {
    vitesse = rand();
    GmlSetDataLine(LibIdx, MasIdx, i, &vitesse);
 }
 
-
-DirIdx = GmlNewSolutionData(LibIdx, GmlVertices, 1, GmlFlt4, "direction");
+DirIdx = GmlNewSolutionData(LibIdx, GmlVertices, 1, GmlFlt4, "Direction");
 for(i=0;i<NmbVer;i++)
 {
    vecteur[0] = rand();
@@ -188,7 +187,7 @@ Et voici le fameux kernel nommé \emph{iteration.cl} :
 
 \begin{tt}
 \begin{verbatim}
-VerCrd = VerCrd + vitesse * direction;
+VerCrd = VerCrd + VerVitesse * VerDirection;
 \end{verbatim}
 \end{tt}
 \normalfont
@@ -220,11 +219,88 @@ Que se passe-t-il alors lorsqu'on multiplie le déplacement par le scalaire cont
 Le compilateur détecte la différence de type et choisit l'opération appropriée, dans le cas présent, il va utiliser la fonction multipliant tous les termes d'un vecteur par un scalaire.
 
 
-\subsection*{Les types de données}
+\subsection{Les types de données}
 
-\subsection*{Kernels a accès directs}
+L'utilisateur étant contraint à utiliser uniquement les types de données proposés, il est donc très important de bien en comprendre le fonctionnement et tous les usages possibles.
+Les types se regroupent en trois catégories : les données des maillages (sommets, arêtes, triangles, etc.), les champs de solutions libres (des tableaux, scalaires ou vecteurs associés à chaque entité d'un type de maillage) et enfin les liens topologiques, de loin les plus complexes, qui permettent des accès indirects efficaces entres différents types (boules des points, voisinages par face, coquille d'arêtes).
 
-\subsection*{Kernels a accès indirects}
+\paragraph{Types de données de maillage :} elles permettent de représenter tout maillage hybride à l'ordre un, les ordres deux et trois étant prévus pour une version ultérieure. Sont donc proposés les types classiques, Vertices, Edges, Triangles, Quadrilaterals, Tetrahedra, Pyramids, Prisms et Hexahedra. Les sommets (Vertices) sont composés de trois flottants et d'un entier pour stocker les coordonnées et la référence physique, et tous les éléments sont composés de 2 à 8 entiers pour stocker les numéros de sommets ainsi qu'un entier supplémentaire pur la référence.
+Remarque : tous les indices de tableaux vont de 0 à n-1.
+Leur allocation se fait avec la commande {\tt GmlNewMeshData}, en spécifiant simplement le nombre d'entités souhaitées dans le maillage. Notez qu'une instance de la librairie ne peut comporter qu'un seul tableau d'un même type de maillage, il n'est donc pas possible d'allouer deux tableaux de triangles par exemple.
+Leur renseignement se fait ensuite avec la commande {\tt GmlSetDataLine}, en précisant le type de la donnée, le numéro de l'entité (de 0 à n-1), puis un nombre variable d'arguments correspondant au sommet de l'élément en question.
+L'exemple suivant alloue et renseigne trois sommets :
+
+\begin{tt}
+\begin{verbatim}
+VerIdx = GmlNewMeshData(LibIdx, GmlVertices, 3);
+GmlSetDataLine(LibIdx, VerIdx, 0, 1.5, 2.3, 1.0, 8);
+GmlSetDataLine(LibIdx, VerIdx, 1, 9.2, 8.3, 1.0, 6);
+GmlSetDataLine(LibIdx, VerIdx, 2, 6.3, 1.6, 2.3, 0);
+\end{verbatim}
+\end{tt}
+\normalfont
+
+\paragraph{Les champs associés : } ils permettent d'associer des données librement à toutes les entités d'un type de maillage donné. Il ne peut y avoir qu'un seul type de donnée OpenCL dans un champ, mais ce type peut être vectoriel (taille de 2 à 16) et peut même être composé d'un tableau de vecteur.
+Les types scalaires proposés sont : byte, int, float et double ainsi que leurs déclinaisons vectorielles.
+Chaque type de solution est associé à un type de maillage précis, mais il est possible de déclarer autant de champs associés pour chaque type de donnée de maillage ce qui permet de simuler l’équivalent d'une structure hybride, chaque champ stockant un type OpenCL différent.
+L'allocation se fait avec la commande {\tt GmlNewSolutionData}, en spécifiant le type de maillage auquel ce champ de solution est associé, la taille du tableau local associé à une entité de maillage (= 1 pour un scalaire), ainsi que le type de la donnée (GmlByte, GmlInt16, GmlFloat4, etc.) et le nom sous lequel apparaitra la variable déclarée automatiquement.
+Les données sont renseignées avec la commande {\tt GmlSetDataLine}, mais dans ce cas, on ne passe pas toutes les valeurs des champs explicitement, mais seulement un pointeur sur un tableau contenant la totalité du champ associé à cette entité et qui sera recopié dans la structure interne de la librairie.
+L'exemple suivant alloue et renseigne un tableau de deux flottants pour chacun des trois sommets alloués précédemment :
+
+\begin{tt}
+\begin{verbatim}
+float vec[2];
+VecIdx = GmlNewSolutionData(LibIdx, GmlVertices, 2, GmlFlt, "masse_vitesse");
+vec = {1.2, -6.3};
+GmlSetDataLine(LibIdx, VecIdx, 0, &vec);
+vec = {0.3,  5.2};
+GmlSetDataLine(LibIdx, VecIdx, 1, &vec);
+vec = {3.4, -0.1};
+GmlSetDataLine(LibIdx, VecIdx, 2, &vec);
+\end{verbatim}
+\end{tt}
+\normalfont
+
+\paragraph{Les liens topologiques : } c'est l'entité la plus complexe à appréhender et manipuler, mais aussi la plus puissante, grâce à elle, et un peu d'imagination, on peut contourner l'essentiel des limitations imposées par le calcul GPU.
+Un lien topologique permet de lier un type de maillage source et un type de destination, par exemple lier les triangles vers les tétraèdres, ce qui consiste à fournir les indices des deux tétraèdres pour chaque triangle. Un tel tableau serait associé aux triangles (la source) et serait composé de deux entiers par triangles (un maximum de deux tétraèdres peut partager un même triangle). Les liens ne sont pas commutatifs, car inverser les triangles et les tétraèdres revient à donner pour chaque tétraèdre (la source), la liste des quatre triangles qui constituent ses faces.
+Ces liens topologiques vont être utilisés dans les kernels à accès mémoire indirect, voir section xxx, et permettront d'accéder aux données associées aux tétraèdres dans une boucle sur les triangles, pour reprendre notre premier exemple.
+Un des points forts de la {\tt GMlib} est qu'elle va automatiquement construire les liens standards entre tous les types de données, et ce au moment de la compilation d'un kernel. Par exemple, si on demander une boucle sur les arrêtes, et que des données à lires sont associées à des triangles, la coquille des triangles pour chaque arête sera construite.
+L'utilisateur ne sera amené à créer ses propres liens topologiques que pour effectuer des accès mémoires indirects spécifiques à son algorithme, par exemple, donner les deux triangles "upwind" et "downwind" pour chaque arête dans un solveur fluide. Dans un tel cas en 2-D, si l'utilisateur demandait une boucle sur les arêtes et voulait lire des données de calculs associées aux triangles, la librairie construirait le lien topologique naturel partant des arêtes pour pointer sur les triangles : il s'agirait des deux triangles partageant une même arête, et ce n'est pas ce dont le solveur a besoin !
+Dans ce cas, il sera de la responsabilité de l'utilisateur d'allouer un type de donnée topologique avec la commande {\tt GmlNewLinkData} en précisant les étiquettes des types sources et destination ainsi que le nombre de liens pour chaque source, car vous pourriez avoir envie de créer une table donnant pour chaque sommet les indices des 180 pyramides les plus proches, pourquoi pas ?
+L'allocation et le remplissage sont similaires aux champs associés :
+
+\begin{tt}
+\begin{verbatim}
+int pyramides[ NmbVer ][ 180 ];
+PyrIdx = GmlNewLinkData(LibIdx, GmlVertices, GmlPyramides, 180, "Gizeh");
+for(i=0;i<NmbVer;i++)
+   GmlSetDataLine(LibIdx, PyrIdx, pyramides[i]);
+\end{verbatim}
+\end{tt}
+\normalfont
+
+Remarque : le lien inverse de sommet vers pyramides, soit une pyramide vers ses cinq sommets, n'est rien d'autre que le tableau des éléments pyramidaux lui-même. De fait, toutes les données de maillages ne sont que des liens entre des couples type/numéro.
+
+\subsection{Kernels a accès directs}
+C'est le type de Kernel le plus simple, comme tout kernel, il ne boucle que sur les éléments d'un seul type, et n'accède en lecture ou en écriture qu'à des données relatives au type d'élément de la boucle. Si on boucle sur les sommets et accès à un champ de solution qui leur est associée, tous les tableaux sont accédé via l'indice de boucle principal, il n'y a donc aucune indirection mémoire. C'est aussi le type de Kernel le plus efficace, car il utilise à 100\% la bande passante de la mémoire du GPU étant donné que les tableaux sont lus linéairement.
+Dans l'exemple introductif de la section xxx, les deux types de solutions alloués sont relatifs aux sommets et le kernel d'une ligne boucle sur les sommets et accède aux coordonnées en lecture et écriture et aux types de solutions en lecture.
+
+\begin{tt}
+\begin{verbatim}
+VerCrd = VerCrd + VerVitesse * VerDirection;
+\end{verbatim}
+\end{tt}
+\normalfont
+
+Dans ce kernel, à chaque itération de la boucle, de 0 à NmbVer, les coordonnées, la vitesse et le vecteur de direction sont tous lus de manière cachée par libraire qui y accède via l'indice de boucle principal $i$. Dans les faits, un GPU transférant tout d'abord à mémoire par blocs (32 ou 64 entiers consécutifs) vers la cache et accédant ensuite à cette dernière, l'accès à la case {\tt vitesse[0]} va déclencher la lecture de {\tt vitesse[0..31]}, puis les accès suivants, de 1 à 31, ne couteront que le prix d'un accès au cache.
+
+Dans cette configuration, le nommage des variables automatique est évidant, elles portent le nom court du type de maillage de la boucle principale auquel est concaténé le nom de la variable accédée. Dans notre exemple, la boucle portant sur les GmlVertices (nom court \emph{Ver}), et on accède aux coordonnées (\emph{Crd}), à la vitesse (\emph{Vitesse}) et au vecteur de direction (\emph{Direction}), ce qui donne les noms automatiques suivants : \emph{VerCrd}, \emph{VerVitesse} et \emph{VerDirection}, élémentaire !
+
+Remarque : les accès directs aux données peuvent être fait en mode lecture, ou écriture, ou bien les deux en même temps
+
+\subsection{Kernels a accès indirects}
+
+\subsection{Paire de Kernels scatter / gather}
 
 \subsection{Programmation en OpenCL}
 
