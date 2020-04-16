@@ -39,6 +39,8 @@ else()
    message (FATAL_ERROR "OpenCL libary could not be found.")
 endif()
 
+include_directories (${PROJECT_SOURCE_DIR}/sources)
+
 find_package(libMeshb 7)
 
 if(libMeshb_FOUND)
@@ -46,7 +48,7 @@ if(libMeshb_FOUND)
    include_directories (${PROJECT_SOURCE_DIR}/examples)
    add_subdirectory (utilities)
    add_subdirectory (examples)
-   message (${libMeshb_INCLUDE_DIRS})
+   message (STATUS "LibMeshb include directory: " ${libMeshb_INCLUDE_DIRS})
 else()
    message (WARNING "
    libMeshb.7 could not be found.
@@ -54,7 +56,6 @@ else()
    You can download it from GitHUB at https://github.com/LoicMarechal/libMeshb")
 endif()
 
-include_directories (${PROJECT_SOURCE_DIR}/sources)
 add_subdirectory (sources)
 
 install (FILES LICENSE.txt copyright.txt DESTINATION share/GMlib)
