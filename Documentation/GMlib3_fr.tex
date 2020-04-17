@@ -299,6 +299,76 @@ Dans cette configuration, le nommage des variables automatique est évidant, ell
 Remarque : les accès directs aux données peuvent être fait en mode lecture, ou écriture, ou bien les deux en même temps
 
 \subsection{Kernels a accès indirects}
+C'est ici que les choses deviennent un peu plus sérieuses.
+Un kernel est dit à accès indirect lorsqu'il est amené à lire des données associées à un type de maillage différent de celui de la boucle. Dans un tel cas, les accès mémoires prennent la forme {\tt a = u[v[i]]} et non plus {\tt a = u[i]} comme c'est le cas dans les accès directs. De tels accès sont nettement plus lents pour deux raisons. Tout d'abord il faut effectuer deux accès mémoire pour obtenir une seule valeur au final, le GPU lit d'abord {\tt tmp = v[i]}, puis lit {\tt a = u[ tmp ]}. Enfin et surtout, les accès successifs à {\tt a = u[ tmp ]} ne sont pas consécutifs en mémoire lorsqu'on incrémente {\tt i} car les contenus de {\tt v[i]} sont totalement inconnus au moment de la compilation et dépendent uniquement de la numérotation des éléments et sommets du maillage. Afin de limiter le problème, on recourt à deux méthodes, la renumérotation du maillage par une courn=be de Hilbert afin d'améliorer l'efficacité de la mémoire cache, ainsi qu'a la vectorisation des liens montants (boules de points, coquilles d'arêtes), par nature irréguliers (cf xxx).
+Le développement de ces kernels est totalement transparent pour l'utilisateur, car la librairie va se charger de lire le tableau d'indirection, puis les données demandées. Dans le cas d'une boucle sur les triangles (Tri), si on souhaite accéder aux coordonnées des sommets (Crd), la librairie va d'elle-même définir et remplir un tableau (TriVer[3]) de trois vecteurs contenant les coordonnées des trois sommets du triangle.
+à titre d'illustration, voici un code bouclant sur les triangles et calculant leur barycentre :
+
+\begin{tt}
+\begin{verbatim}
+KrnIdx = GmlCompileKernel( LibIdx,  barycentre, "barycentre", GmlTriangles, 3,
+                           VerIdx, GmlReadMode , NULL,
+                           TriIdx, GmlReadMode , NULL,
+                           BarIdx, GmlWriteMode, NULL );
+\end{verbatim}
+\end{tt}
+\normalfont
+
+Et voici le fameux kernel : 
+
+\begin{tt}
+\begin{verbatim}
+Bar = (TriCrd[0] + TriCrd[1] + TriCrd[3]) / 3.;
+\end{verbatim}
+\end{tt}
+\normalfont
+
+La variable {\tt Bar} est un unique vecteur de coordonné, car il est relatif au triangle, l'élément de la boucle alors que la variable {\tt TriCrd} est un tableau de taille 3, car elle relatives aux sommets dont un triangle est composé de trois.
+Comme vous pouvez le constater, il n'est nul besoin d'accéder explicitement aux numéros des trois sommets du triangle, ceci a été effectué par la librairie juste avant de passer la main au kernel de l'utilisateur. Un lien topologique est donc une structure complètement muette.
+Ce qui peut être perturbant, c'est que la même commande de compilation du kernel, mais avec {\tt GmlEdges} à la place de {\tt GmlTriangles} va produire un code différent !
+En effet, la variable contenant les coordonnées l'appellera alors {\tt EdgCrd[2]} et sa taille sera de deux au lieu de trois.
+On parle alors de variable et de programmation contextuelle.
+Une fois maitrisée ce concept, il est possible d'accéder indirectement (en lecture seulement) à n'importe quel type de données (maillage ou solution) associées à des types de maillage complètement différents du type de la boucle, car tous les cas possibles sont gérés par la {\tt GMlib}.
+
+\paragraph{Liens topologiques descendants, transverses et montants :} un lien est descendant si le type de la boucle est de dimension strictement supérieure au type accédé indirectement (triangle vers les arêtes), transverse si les deux types sont de même dimension (triangle vers les triangles ou quadrilatères voisins) et montant si la dimension du type indirect est strictement supérieure au type de boucle (boucle sur les sommets et accès aux triangles de leurs boules).
+
+\paragraph{Lien descendant :} ce premier type est trivial, il s'agit le plus souvent de boucler sur un élément et d'accéder aux données associées à ses sommets. Dans ce cas, la table d'indirection est la liste des noeuds composant chaque élément et la librairie n'a qu'à la transmettre telle quelle au GPU.
+
+\paragraph{Lien transverse :} le second type, présente une petite finesse, par défaut, si on boucle sur le triangle et accède à des données relatives aux triangles, il s'agit tout simplement d'un accès direct comme vu à la section xxx. Mais il est possible de fournir un tableau de lien topologique spécifique au moment de la compilation du kernel, comme au tableau des voisins par arêtes. Dans ce cas, on va boucler sur les triangles et accéder à des données relatives au triangle en cours de traitement ainsi qu'à ses trois voisins.
+Le code suivant va récupérer les barycentres des triangles calculés à l'exemple précédent afin de déterminer la distance maximum entre le centre d'un triangle et celui de ses trois voisins.
+
+\begin{tt}
+\begin{verbatim}
+NgbIdx = GmlSetNeighbours(LibIdx, GmlTriangles);
+DisIdx = GmlNewSolutionData(LibIdx, GmlTriangles, 1, GmlFlt, "distance");
+KrnIdx = GmlCompileKernel( LibIdx,  distance, "distance", GmlTriangles, 2,
+                           BarIdx, GmlReadMode , NgbIdx,
+                           DisIdx, GmlWriteMode, NULL );
+\end{verbatim}
+\end{tt}
+\normalfont
+
+Et voici kernel correspondant :
+
+\begin{tt}
+\begin{verbatim}
+float 1d, d2, d3;
+d1 = fast_distance(TriBar[0], TriBar[1]);
+d2 = fast_distance(TriBar[0], TriBar[2]);
+d3 = fast_distance(TriBar[0], TriBar[3]);
+distance = min(d1, d2);
+distance = min(distance, d3);
+\end{verbatim}
+\end{tt}
+\normalfont
+
+Ici, le tableau {\tt TriBar[4]} est nommé de la sorte, car on boucle sur les triangles (Tri) et on accède à leurs barycentres (Bar), mais il y a quatre barycentres lus pour chaque triangle : le premier est celui du triangle pointé par l'indice de boucle et les trois suivants sont ceux de ses voisins. Ici encore, il s'agit de variables vectorielles et une seule ligne de ces calculs traite les trois composantes des coordonnées.
+
+\paragraph{Lien montant :} enfin le dernier type est aussi le plus complexe, car les liens montants présentent l'inconvénient majeur d'être de taille variable, chose que détestent les GPU, qui ne sont efficaces qu'avec des tailles régulières et de puissance de 2. En effet, si le nombre de sommets d'un triangle est toujours égal à trois, le nombre de triangles partageant un même sommet est variable et dépend de la topologie du maillage. Afin de traiter ces cas efficacement, un système complexe est mis en place par la {\tt GMlib}. Tout d'abord la commande de renumérotation de Hilbert, nécessaire pour obtenir de bonnes performances d'accès mémoire, propose un mode spécifique au GPU et va ordonner les sommets du maillage selon leur degré croissant. Ainsi, tous les premiers sommets ayant un degré inférieur ou égal à 8 auront leur boule de triangle stockée dans un vecteur de cette taille (avec d'éventuelles valeurs nulles), puis les boules des sommets suivants seront stockées sur des vecteurs de taille 16 et ainsi de suite. Tout ceci est transparent pour l'utilisateur qui pourra connaitre le degré du sommet en cours avec la variable automatique {\tt VerTriDeg}, (Vertex' triangles degree).
+Remarque : une variable accédée indirectement via un lien montant pourra être nulle du fait que les vecteurs sont alignés sur des puissances de deux et que le degré réel peut être inférieur.
+Pour rester dans la même thématique, nous allons cette fois-ci boucler sur les sommets, accéder aux barycentres des triangles de la boule, et relaxer les coordonnées du sommet vers la moyenne des barycentres, pourquoi pas ?
+
+
 
 \subsection{Paire de Kernels scatter / gather}
 
