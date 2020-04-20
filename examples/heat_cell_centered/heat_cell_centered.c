@@ -14,8 +14,7 @@
 #include <gmlib3.h>
 
 #include "param.h"
-#include "scatter.h"
-#include "gather.h"
+#include "flux.h"
 
 typedef struct
 {
@@ -41,8 +40,8 @@ void WriteSolution(char *out_fn, int NmbTet, float *Sol)
 int main(int ArgCnt, char **ArgVec)
 {
    int i, j, NmbVer = 0, NmbTri = 0, NmbTet = 0;
-   int ParIdx, VerIdx = 0, TriIdx = 0, TetIdx = 0, BalIdx, MidIdx, SolIdx, FlxIdx, CalMid, ScatterIdx, GatherIdx, OptVer;
-   int GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, F64Idx, F64Krn;
+   int ParIdx, VerIdx = 0, TriIdx = 0, TetIdx = 0, BalIdx, MidIdx, SolIdx, FlxIdx, CalMid, GatherIdx, OptVer;
+   int GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, FlxKrn, F64Idx, F64Krn;
    size_t GmlIdx;
    float MidTab[4], SolTab[8], TetChk = 0., VerChk = 0.;
    float IniSol[1] = {10.};
@@ -73,25 +72,31 @@ int main(int ArgCnt, char **ArgVec)
    printf("Imported %d vertices, %d triangles and %d tets from the mesh file\n", NmbVer, NmbTri, NmbTet);
 
    GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), param);
+   SolIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "Sol");
    NgbIdx = GmlSetNeighbours(GmlIdx, GmlTetrahedra);
-   SolIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 2, GmlFlt, "Sol");
-   // FlxIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "Flx");
+   FlxIdx = GmlNewSolutionData(GmlIdx, GmlTriangles, 1, GmlFlt, "Flx");
+   ResIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "Res");
 
    for (i = 0; i < NmbTet; i++)
       GmlSetDataLine(GmlIdx, SolIdx, i, &IniSol);
 
-   ResIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "Res");
+   FlxKrn = GmlCompileKernel(GmlIdx, flux, "flux", GmlTriangles, 2,
+                             FlxIdx, GmlWriteMode, NULL,
+                             SolIdx, GmlReadMode, NULL);
 
-   // ScatterIdx = GmlCompileKernel(GmlIdx, scatter, "scatter",
-   //                               GmlTetrahedra, 2,
-   //                               SolIdx, GmlReadMode, NULL,
-   //                               FlxIdx, GmlWriteMode, NULL);
+   // FlxKrn = GmlCompileKernel(GmlIdx, flux, "flux", GmlTetrahedra, 2,
+   //                           FlxIdx, GmlReadMode, NULL,
+   //                           SolIdx, GmlWriteMode, NULL);
 
-   GatherIdx = GmlCompileKernel(GmlIdx, gather, "gather", GmlTriangles, 2,
-                                SolIdx, GmlWriteMode, NULL,
-                                TriIdx, GmlReadMode | GmlVoyeurs, NULL);
+   // FlxKrn = GmlCompileKernel(GmlIdx, flux, "flux", GmlTriangles, 2,
+   //                           FlxIdx, GmlWriteMode, NULL,
+   //                           SolIdx, GmlReadMode, NULL);
 
-   res = GmlLaunchKernel(GmlIdx, GatherIdx);
+   // GatherIdx = GmlCompileKernel(GmlIdx, gather, "gather", GmlTriangles, 2,
+   //                              SolIdx, GmlWriteMode, NULL,
+   //                              TriIdx, GmlReadMode | GmlVoyeurs, NULL);
+
+   res = GmlLaunchKernel(GmlIdx, FlxKrn);
 
    // Flx = malloc(NmbTet * sizeof(float));
    // for (i = 0; i < NmbTet; i++)
