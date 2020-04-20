@@ -29,7 +29,7 @@
 #include "TF_downlink.h"
 #include "TF_uplink.h"
 #include "TF_double_precision.h"
-#include "TF_flux.h"
+// #include "TF_flux.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -119,9 +119,9 @@ int main(int ArgCnt, char **ArgVec)
    if(!(ResIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "ResVec")))
       return(1);
 
-   FlxKrn = GmlCompileKernel( GmlIdx, TF_flux, "TF_flux",GmlTriangles, 2,
-                              FlxIdx, GmlWriteMode, NULL,
-                              MidIdx, GmlReadMode,  NULL );
+   // FlxKrn = GmlCompileKernel( GmlIdx, TF_flux, "TF_flux",GmlTriangles, 2,
+   //                            FlxIdx, GmlWriteMode, NULL,
+   //                            MidIdx, GmlReadMode,  NULL );
 
    if(GmlCheckFP64(GmlIdx))
    {

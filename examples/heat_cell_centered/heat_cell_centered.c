@@ -63,7 +63,7 @@ int main(int ArgCnt, char **ArgVec)
    if (!(GmlIdx = GmlInit(GpuIdx)))
       return (1);
 
-   // GmlDebugOn(GmlIdx);
+   GmlDebugOn(GmlIdx);
 
    GmlImportMesh(GmlIdx, "../sample_meshes/tetrahedra.meshb", GmfVertices, GmfTetrahedra, GmfTriangles, 0);
    GetMeshInfo(GmlIdx, GmlVertices, &NmbVer, &VerIdx);
