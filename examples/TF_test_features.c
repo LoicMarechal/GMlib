@@ -29,6 +29,7 @@
 #include "TF_downlink.h"
 #include "TF_uplink.h"
 #include "TF_double_precision.h"
+#include "TF_flux.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -48,9 +49,9 @@ typedef struct {
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int         i, j, NmbVer=0, NmbTet=0;
-   int         ParIdx, VerIdx=0, TetIdx=0, BalIdx, MidIdx, SolIdx, CalMid, OptVer;
-   int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, F64Idx, F64Krn;
+   int         i, j, NmbVer=0, NmbTri=0, NmbTet=0, CalMid, OptVer, FlxIdx;
+   int         ParIdx, VerIdx=0, TriIdx=0, TetIdx=0, BalIdx, MidIdx, SolIdx;
+   int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, F64Idx, F64Krn, FlxKrn;
    size_t      GmlIdx;
    float       MidTab[4], SolTab[8], TetChk = 0., VerChk = 0.;
    float       IniSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
@@ -77,9 +78,13 @@ int main(int ArgCnt, char **ArgVec)
 
    //GmlDebugOn(GmlIdx);
 
-   GmlImportMesh(GmlIdx, "../sample_meshes/tetrahedra.meshb", GmfVertices, GmfTetrahedra, 0);
+   GmlImportMesh( GmlIdx, "../sample_meshes/tetrahedra.meshb",
+                  GmfVertices, GmfTriangles, GmfTetrahedra, 0 );
 
    if(!GetMeshInfo(GmlIdx, GmlVertices,   &NmbVer, &VerIdx))
+      return(1);
+
+   if(!GetMeshInfo(GmlIdx, GmlTriangles,   &NmbTri, &TriIdx))
       return(1);
 
    if(!GetMeshInfo(GmlIdx, GmlTetrahedra, &NmbTet, &TetIdx))
@@ -107,9 +112,16 @@ int main(int ArgCnt, char **ArgVec)
    if(!(MidIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt4, "TetMid")))
       return(1);
 
+   if(!(FlxIdx = GmlNewSolutionData(GmlIdx, GmlTriangles, 1, GmlFlt, "Flx")))
+      return(1);
+
    // Allocate a residual vector
    if(!(ResIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "ResVec")))
       return(1);
+
+   FlxKrn = GmlCompileKernel( GmlIdx, TF_flux, "TF_flux",GmlTriangles, 2,
+                              FlxIdx, GmlWriteMode, NULL,
+                              MidIdx, GmlReadMode,  NULL );
 
    if(GmlCheckFP64(GmlIdx))
    {

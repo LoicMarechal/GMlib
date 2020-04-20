@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 31 2020                                           */
+/*   Last modification: apr 20 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -744,8 +744,17 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
       printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
                lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
 
-   SrcNmbItm = NmbTpoLnk[ SrcTyp ][ lnk.HshTyp ];
-   DstNmbItm = NmbTpoLnk[ DstTyp ][ lnk.HshTyp ];
+   // Workaround to avoid reading the number of neighbours
+   // in case a type is pointing to itself
+   if(SrcTyp != lnk.HshTyp)
+      SrcNmbItm = NmbTpoLnk[ SrcTyp ][ lnk.HshTyp ];
+   else
+      SrcNmbItm = 1;
+
+   if(DstTyp != lnk.HshTyp)
+      DstNmbItm = NmbTpoLnk[ DstTyp ][ lnk.HshTyp ];
+   else
+      DstNmbItm = 1;
 
    SrcLen = ItmNmbVer[ SrcTyp ];
    DstLen = ItmNmbVer[ DstTyp ];
