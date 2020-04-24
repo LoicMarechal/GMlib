@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.19                           */
+/*                         GPU Meshing Library 3.21                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: apr 20 2020                                           */
+/*   Last modification: apr 24 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -668,13 +668,13 @@ int GmlNewLinkData(size_t GmlIdx, int MshTyp, int LnkTyp, int NmbDat, char *nam)
 /* Build an arbitray element kind and dimension link table                    */
 /*----------------------------------------------------------------------------*/
 
-int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
-                  char *BalNam, char *DegNam, char *VoyNam )
+static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
+                        char *BalNam, char *DegNam, char *VoyNam )
 {
-   int         i, j, k, idx, cod, cpt, tmp, dir, HshKey, ItmTab[3];
+   int         i, j, k, idx, cod[4], cpt, tmp, dir, HshKey, ItmTab[4];
    int         BalIdx, HghIdx, DegIdx, VerIdx, SrcIdx, DstIdx;
    int         EleSiz, VecSiz, BalSiz, MaxSiz, HghSiz = 0;
-   int         *EleTab, *BalTab, *DegTab, *HghTab;
+   int         *EleTab, *BalTab, *DegTab, *HghTab, *PtrInt;
    int         MaxDeg = 0, MaxPos = 0, DegTot = 0, VecCnt, ItmTyp, NmbDat;
    int         SrcNmbItm, SrcLen, DstNmbItm, DstLen, *SrcNod, *DstNod, *EleNod;
    const char  *SrcNam, *DstNam;
@@ -728,7 +728,7 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
       lnk.TabSiz = src->NmbLin * NmbTpoLnk[ SrcTyp ][ SrcTyp ] / 2;
 
       if(gml->DbgFlg)
-         printf(  "Building %s neighbours through %s\n",
+         printf(  "Building %s neighbours between %s\n",
                   SrcNam, BalTypStr[ NgbTyp[ SrcTyp ] ] );
    }
 
@@ -736,9 +736,9 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
    lnk.DatLen = ItmNmbVer[ lnk.HshTyp ];
    lnk.KeyLen = HshLenTab[ lnk.DatLen ];
    lnk.NmbDat = lnk.TabSiz;
-   lnk.NxtDat = 1;
+   lnk.NxtDat = 0;
    lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
-   lnk.DatTab = malloc(lnk.TabSiz * sizeof(BucSct));
+   lnk.DatTab = malloc(lnk.NmbDat * sizeof(BucSct));
 
    if(gml->DbgFlg)
       printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
@@ -756,8 +756,8 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
    else
       DstNmbItm = 1;
 
-   SrcLen = ItmNmbVer[ SrcTyp ];
-   DstLen = ItmNmbVer[ DstTyp ];
+   SrcLen = src->ItmLen;
+   DstLen = dst->ItmLen;
 
    // Add destination entities to the hash table
    for(i=0;i<dst->NmbLin;i++)
@@ -780,7 +780,7 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
    // Allocate and fill a GPU data type to store the degrees in case uf uplink
    if(dir == 1)
    {
-      // Firsdt allocate the GPU datatype
+      // First allocate the GPU datatype
       if(!(DegIdx = GetNewDatIdx(gml)))
          return(0);
 
@@ -831,22 +831,38 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
       BalSiz = LenMatBas[ src->MshTyp ][ dst->MshTyp ];
       MaxSiz = LenMatMax[ src->MshTyp ][ dst->MshTyp ];
 
-      for(i=0;i<src->NmbLin;i++)
+      if(BalSiz == MaxSiz)
       {
-         if(!MaxPos && (DegTab[i] > BalSiz))
-            MaxPos = i;
+         for(i=0;i<src->NmbLin;i++)
+            DegTot += DegTab[i];
 
-         DegTot += DegTab[i];
-         MaxDeg = MAX(MaxDeg, DegTab[i]);
+         MaxDeg = BalSiz;
+         HghSiz = 0;
+         MaxPos = src->NmbLin;
+         gml->SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = 0;
+
+         if(gml->DbgFlg)
+            printf("Constant width uplink: %d\n", BalSiz);
       }
+      else
+      {
+         for(i=0;i<src->NmbLin;i++)
+         {
+            if(!MaxPos && (DegTab[i] > BalSiz))
+               MaxPos = i;
 
-      MaxDeg = pow(2., ceil(log2(MaxDeg)));
-      HghSiz = MIN(MaxDeg, LenMatMax[ src->MshTyp ][ dst->MshTyp ]);
-      gml->SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
+            DegTot += DegTab[i];
+            MaxDeg = MAX(MaxDeg, DegTab[i]);
+         }
 
-      if(gml->DbgFlg)
-         printf(  "Width for lines 1..%d: %d, for lines %d..%d:%d\n",
-                  MaxPos, BalSiz, MaxPos+1, src->NmbLin, MaxDeg);
+         MaxDeg = pow(2., ceil(log2(MaxDeg)));
+         HghSiz = MIN(MaxDeg, LenMatMax[ src->MshTyp ][ dst->MshTyp ]);
+         gml->SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
+
+         if(gml->DbgFlg)
+            printf(  "Width for lines 1..%d: %d, for lines %d..%d:%d\n",
+                     MaxPos, BalSiz, MaxPos+1, src->NmbLin, MaxDeg);
+      }
    }
 
    // Build downlinks and neighbours
@@ -868,7 +884,7 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
       BalDat->ItmTyp = ItmTyp;
       BalDat->NmbItm = VecCnt;
       BalDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
-      BalDat->ItmLen = 1;
+      BalDat->ItmLen = NmbDat;
       BalDat->NmbLin = src->NmbLin;
       BalDat->LinSiz = BalDat->NmbItm * BalDat->ItmSiz;
       BalDat->MemSiz = (size_t)BalDat->NmbLin * (size_t)BalDat->LinSiz;
@@ -880,6 +896,7 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
 
       // fetch the pointed items from the hash table and store them as downlinks
       gml->LnkMat[ SrcTyp ][ DstTyp ] = BalIdx;
+      bal = &gml->dat[ gml->LnkMat[ src->MshTyp ][ dst->MshTyp ] ];
       BalTab = bal->CpuMem;
 
       for(i=0;i<src->NmbLin;i++)
@@ -889,19 +906,22 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
          for(j=0;j<SrcNmbItm;j++)
          {
             idx = i * SrcNmbItm + j;
+
+            ItmTab[0]=ItmTab[1]=ItmTab[2]=ItmTab[3]=0;
             GetItmNod(EleNod, SrcTyp, lnk.HshTyp, j, ItmTab);
             HshKey = CalHshKey(&lnk, ItmTab);
+            PtrInt = &BalTab[ i * BalDat->ItmLen + j ];
 
-            if((cpt = GetHsh(&lnk, HshKey, i, j, ItmTab, &cod)))
+            if((cpt = GetHsh(&lnk, HshKey, i, j, ItmTab, cod)))
             {
-               if(dir == 1)
-                  BalTab[ i * BalDat->ItmSiz + j ] = cod >> 4;
+               if(dir == -1)
+                  BalTab[ i * BalDat->ItmLen + j ] = cod[0] >> 4;
                else
                {
                   if(cpt != 2)
-                     BalTab[ i * BalDat->ItmSiz + j ] = 0;
-                  else if( ((cod >> 4) != i) || ((cod & 7) != j) )
-                     BalTab[ i * BalDat->ItmSiz + j ] = cod;
+                     BalTab[ i * BalDat->ItmLen + j ] = 0;
+                  else if( ((cod[0] >> 4) != i) || ((cod[0] & 7) != j) )
+                     BalTab[ i * BalDat->ItmLen + j ] = cod[0];
                }
             }
          }
@@ -947,42 +967,49 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
       bal = &gml->dat[ gml->LnkMat[ src->MshTyp ][ dst->MshTyp ] ];
 
       // Allocate the high vector ball table
-      if(!(HghIdx = GetNewDatIdx(gml)))
-         return(0);
+      if(HghSiz)
+      {
+         if(!(HghIdx = GetNewDatIdx(gml)))
+            return(0);
 
-      NmbDat = gml->SizMatHgh[ SrcTyp ][ DstTyp ];
-      GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
+         NmbDat = gml->SizMatHgh[ SrcTyp ][ DstTyp ];
+         GetCntVec(NmbDat, &VecCnt, &VecSiz, &ItmTyp);
 
-      HghDat = &gml->dat[ HghIdx ];
+         HghDat = &gml->dat[ HghIdx ];
 
-      HghDat->AloTyp = GmlLnkDat;
-      HghDat->MshTyp = SrcTyp;
-      HghDat->LnkTyp = DstTyp;
-      HghDat->MemAcs = GmlInout;
-      HghDat->ItmTyp = ItmTyp;
-      HghDat->NmbItm = VecCnt;
-      HghDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
-      HghDat->ItmLen = 1;
-      HghDat->NmbLin = gml->NmbEle[ SrcTyp ] - MaxPos;
-      HghDat->LinSiz = HghDat->NmbItm * HghDat->ItmSiz;
-      HghDat->MemSiz = (size_t)HghDat->NmbLin * (size_t)HghDat->LinSiz;
-      HghDat->GpuMem = HghDat->CpuMem = NULL;
-      HghDat->nam    = BalNam;
-      HghDat->VoyNam = VoyNam;
+         HghDat->AloTyp = GmlLnkDat;
+         HghDat->MshTyp = SrcTyp;
+         HghDat->LnkTyp = DstTyp;
+         HghDat->MemAcs = GmlInout;
+         HghDat->ItmTyp = ItmTyp;
+         HghDat->NmbItm = VecCnt;
+         HghDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
+         HghDat->ItmLen = 1;
+         HghDat->NmbLin = gml->NmbEle[ SrcTyp ] - MaxPos;
+         HghDat->LinSiz = HghDat->NmbItm * HghDat->ItmSiz;
+         HghDat->MemSiz = (size_t)HghDat->NmbLin * (size_t)HghDat->LinSiz;
+         HghDat->GpuMem = HghDat->CpuMem = NULL;
+         HghDat->nam    = BalNam;
+         HghDat->VoyNam = VoyNam;
 
-      if(!NewData(gml, HghDat))
-         return(0);
+         if(!NewData(gml, HghDat))
+            return(0);
 
-      if(gml->DbgFlg)
-         printf(  "Allocate a hash table with %d lines of %d width vectors\n",
-                  HghDat->NmbLin, NmbDat);
+         if(gml->DbgFlg)
+            printf(  "Allocate a hash table with %d lines of %d width vectors\n",
+                     HghDat->NmbLin, NmbDat);
 
-      gml->LnkHgh[ SrcTyp ][ DstTyp ] = HghIdx;
-      hgh = &gml->dat[ gml->LnkHgh[ src->MshTyp ][ dst->MshTyp ] ];
+         gml->LnkHgh[ SrcTyp ][ DstTyp ] = HghIdx;
+         hgh = &gml->dat[ gml->LnkHgh[ src->MshTyp ][ dst->MshTyp ] ];
+      }
 
       // Fill both ball tables at the same time
       BalTab = bal->CpuMem;
-      HghTab = hgh->CpuMem;
+
+      if(HghSiz)
+         HghTab = hgh->CpuMem;
+      else
+         HghTab = NULL;
 
       if(gml->DbgFlg)
          puts("Fetching balls from the hash table and filling both low and high degree tables");
@@ -996,8 +1023,9 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
 
          GetItmNod(EleNod, SrcTyp, lnk.HshTyp, 0, ItmTab);
          HshKey = CalHshKey(&lnk, ItmTab);
+         //printf("src %d, item %d %d %d, hsh key %d\n",i,ItmTab[0],ItmTab[1],ItmTab[2],HshKey);
 
-         if(i <= MaxPos)
+         if(!HghTab || (i <= MaxPos))
             GetHsh(&lnk, HshKey, i, 0, ItmTab, &BalTab[ i * BalSiz ]);
          else
             GetHsh(&lnk, HshKey, i, 0, ItmTab, &HghTab[ (i - MaxPos) * HghSiz ]);
@@ -1008,8 +1036,10 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
 
       // Upload the ball data to th GPU memory
       gml->MovSiz += UploadData(gml, BalIdx);
-      gml->MovSiz += UploadData(gml, HghIdx);
       gml->MovSiz += UploadData(gml, DegIdx);
+
+      if(HghSiz)
+         gml->MovSiz += UploadData(gml, HghIdx);
 
       if(gml->DbgFlg)
       {
@@ -1018,13 +1048,18 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
                   BalTypStr[ SrcTyp ], BalTypStr[ DstTyp ] );
          printf(  "low degree ranging from 1 to %d, occupency = %g%%\n",
                   MaxPos, (float)(100 * DegTot) / (float)(MaxPos * BalSiz) );
-         printf(  "high degree entities = %d\n", src->NmbLin - MaxPos);
+
+         if(HghSiz)
+            printf(  "high degree entities = %d\n", src->NmbLin - MaxPos);
+
          printf(  "Allocated degree     data: index=%2d, size=%zu bytes\n",
                   DegIdx, DegDat->MemSiz );
          printf(  "Allocated short ball data: index=%2d, size=%zu bytes\n",
                   BalIdx, BalDat->MemSiz );
-         printf(  "Allocated long ball  data: index=%2d, size=%zu bytes\n",
-                  HghIdx, HghDat->MemSiz );
+
+         if(HghSiz)
+            printf(  "Allocated long ball  data: index=%2d, size=%zu bytes\n",
+                     HghIdx, HghDat->MemSiz );
       }
    }
 
@@ -1042,7 +1077,7 @@ int NewBallData(  GmlSct *gml, int SrcTyp, int DstTyp,
 static void GetItmNod(  int *EleNod, int EleTyp,
                         int ItmTyp, int ItmIdx, int *ItmTab )
 {
-   int i, j, tmp, NmbVer = ItmNmbVer[ ItmTyp ];
+   int i, j, tmp;
 
    // Copy the hashed entity's vertices to the return table
    switch(ItmTyp)
@@ -1062,14 +1097,19 @@ static void GetItmNod(  int *EleNod, int EleTyp,
 
       case GmlTriangles :
       {
+         //puts("TRI");
          for(i=0;i<3;i++)
+         {
+            //printf("acces node %d\n", ItmFacNod[ EleTyp ][ ItmIdx ][i]);
             ItmTab[i] = EleNod[ ItmFacNod[ EleTyp ][ ItmIdx ][i] ];
+         }
 
          // Sort the vertices to speed-up further comparison
          for(i=0;i<3;i++)
             for(j=i+1;j<3;j++)
                if(ItmTab[i] > ItmTab[j])
                {
+                  //printf("swap %d %d\n",i,j);
                   tmp       = ItmTab[i];
                   ItmTab[i] = ItmTab[j];
                   ItmTab[j] = tmp;
@@ -1135,15 +1175,16 @@ static void AddHsh(  HshTabSct *lnk, int HshKey, int EleIdx,
    buc->EleIdx = EleIdx;
    buc->ItmIdx = ItmIdx;
    buc->NxtDat = nxt;
+
+   for(i=0;i<lnk->DatLen;i++)
+      buc->nod[i] = ItmTab[i];
+
    lnk->NxtDat++;
 
    if(nxt)
       lnk->NmbMis++;
    else
       lnk->NmbHit++;
-
-   for(i=0;i<lnk->DatLen;i++)
-      buc->nod[i] = ItmTab[i];
 }
 
 
@@ -1563,6 +1604,14 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
       if(MshTypDim[ SrcTyp ] > MshTypDim[ DstTyp ])
       {
          // Downlink
+         if(!gml->LnkMat[ MshTyp ][ dat->MshTyp ])
+         {
+            // Generate the default link between the two kinds of entities
+            sprintf(BalNam, "%s%sLnk", BalTypStr[ MshTyp ], BalTypStr[ DstTyp ]);
+            sprintf(DegNam, "%s%sDeg", BalTypStr[ MshTyp ], BalTypStr[ DstTyp ]);
+            NewBallData(gml, MshTyp, DstTyp, BalNam, DegNam, NULL);
+         }
+
          LnkTab[i] = gml->LnkMat[ MshTyp ][ DstTyp ];
          CntTab[i] = 0;
       }
@@ -1818,7 +1867,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    for(i=0;i<NmbArg;i++)
       krn->DatTab[i] = ArgTab[i].DatIdx;
 
-   if(HghArg == -1)
+   if(HghArg == -1 || !HghIdx)
       return(KrnIdx);
 
    // In case of uplink kernel, generate a second high degree kernel
@@ -2559,6 +2608,7 @@ void GmlDebugOff(size_t GmlIdx)
 
 
 /*----------------------------------------------------------------------------*/
+/* Check the 64-bit floating point extension GPU's capacity                   */
 /*----------------------------------------------------------------------------*/
 
 int GmlCheckFP64(size_t GmlIdx)
@@ -2683,11 +2733,253 @@ int GmlExtractEdges(size_t GmlIdx)
 
 
 /*----------------------------------------------------------------------------*/
+/* Build the list of inner faces and add them to the existing boundary ones   */
 /*----------------------------------------------------------------------------*/
 
 int GmlExtractFaces(size_t GmlIdx)
 {
-   return(0);
+   int         i, j, i0, i1, i2, i3, typ, idx, cpt = 0, TriIdx, QadIdx, HshKey;
+   int         NmbFac, NmbTri = 0, NmbQad = 0, OldNmbTri, OldNmbQad;
+   int         EleSiz, NmbEle, EleLen, *EleNod, *MshNod, FacNod[4], IdxLst[4];
+   int         ref, *QadRefTab, *TriRefTab;
+   DatSct      *dat;
+   BucSct      *buc;
+   HshTabSct   TriHsh, QadHsh;
+
+   GETGMLPTR(gml, GmlIdx);
+
+   // Count the number of inner and surface triangles and quads
+   for(typ=GmlTriangles; typ<GmlMaxEleTyp; typ++)
+      if((idx = gml->TypIdx[ typ ]))
+      {
+         NmbTri += gml->dat[ idx ].NmbLin * ItmNmbTri[ typ ];
+         NmbQad += gml->dat[ idx ].NmbLin * ItmNmbQad[ typ ];
+      }
+
+   // Setup a triangle hash table
+   if(NmbTri)
+   {
+      memset(&TriHsh, 0, sizeof(HshTabSct));
+      TriHsh.HshTyp = GmlTriangles;
+      TriHsh.TabSiz = NmbTri;
+      TriHsh.DatLen = ItmNmbVer[ TriHsh.HshTyp ];
+      TriHsh.KeyLen = HshLenTab[ TriHsh.DatLen ];
+      TriHsh.NmbDat = TriHsh.TabSiz;
+      TriHsh.NxtDat = 1;
+      TriHsh.HshTab = calloc(TriHsh.TabSiz, sizeof(int));
+      TriHsh.DatTab = malloc(TriHsh.TabSiz * sizeof(BucSct));
+      NmbTri = 0;
+
+      if(gml->DbgFlg)
+         printf(  "Triangle hash table: heads=%d, storage=%d, hash keys=%d\n",
+                  (int)TriHsh.TabSiz, TriHsh.DatLen, TriHsh.KeyLen);
+   }
+
+   // Setup a quad hash table
+   if(NmbQad)
+   {
+      memset(&QadHsh, 0, sizeof(HshTabSct));
+      QadHsh.HshTyp = GmlQuadrilaterals;
+      QadHsh.TabSiz = NmbQad;
+      QadHsh.DatLen = ItmNmbVer[ QadHsh.HshTyp ];
+      QadHsh.KeyLen = HshLenTab[ QadHsh.DatLen ];
+      QadHsh.NmbDat = QadHsh.TabSiz;
+      QadHsh.NxtDat = 1;
+      QadHsh.HshTab = calloc(QadHsh.TabSiz, sizeof(int));
+      QadHsh.DatTab = malloc(QadHsh.TabSiz * sizeof(BucSct));
+      NmbQad = 0;
+
+      if(gml->DbgFlg)
+         printf(  "Quad hash table: heads=%d, storage=%d, hash keys=%d\n",
+                  (int)QadHsh.TabSiz, QadHsh.DatLen, QadHsh.KeyLen);
+   }
+
+   // Loop over each element of each type
+   for(typ=GmlTriangles+1; typ<GmlMaxEleTyp; typ++)
+   {
+      if(!gml->TypIdx[ typ ])
+         continue;
+
+      // Get the nodes pointer, table width and the number of faces
+      dat = &gml->dat[ gml->TypIdx[ typ ] ];
+      MshNod = (int *)dat->CpuMem;
+      EleLen = dat->ItmLen;
+      NmbFac = ItmNmbFac[ typ ];
+
+      // Add faces to the dedicated hash table
+      for(i=0;i<dat->NmbLin;i++)
+      {
+         EleNod = &MshNod[ i * EleLen ];
+
+         for(j=0;j<NmbFac;j++)
+         {
+            // Add a triangle to the hash table
+            if(ItmFacDeg[ typ ][j] == 3)
+            {
+               // Get its nodes and hash key
+               GetItmNod(EleNod, typ, TriHsh.HshTyp, j, FacNod);
+               HshKey = CalHshKey(&TriHsh, FacNod);
+
+               // If it is not in the hash table, add it
+               if(!GetHsh(&TriHsh, HshKey, i, j, FacNod, NULL))
+               {
+                  AddHsh(&TriHsh, HshKey, i, j, FacNod);
+                  NmbTri++;
+               }
+            }
+            else if(ItmFacDeg[ typ ][j] == 4)
+            {
+               // Add a quad to the hash table
+               GetItmNod(EleNod, typ, QadHsh.HshTyp, j, FacNod);
+               HshKey = CalHshKey(&QadHsh, FacNod);
+
+               // If it is not in the hash table, add it
+               if(!GetHsh(&QadHsh, HshKey, i, j, FacNod, NULL))
+               {
+                  AddHsh(&QadHsh, HshKey, i, j, FacNod);
+                  NmbQad++;
+               }
+            }
+            else
+               continue;
+         }
+      }
+   }
+
+   if(gml->DbgFlg && NmbTri)
+      printf(  "Hashed %lld triangles: occupency=%lld%%, collisions=%g\n",
+               TriHsh.NxtDat-1, (100LL * TriHsh.NmbHit) / TriHsh.TabSiz,
+               (double)TriHsh.NmbMis / (double)TriHsh.TabSiz );
+
+   if(gml->DbgFlg && NmbQad)
+      printf(  "Hashed %lld quads: occupency=%lld%%, collisions=%g\n",
+               QadHsh.NxtDat-1, (100LL * QadHsh.NmbHit) / QadHsh.TabSiz,
+               (double)QadHsh.NmbMis / (double)QadHsh.TabSiz );
+
+   // Setup a new triangle data type
+   if(NmbTri)
+   {
+      // If there are surface triangles, save their references
+      GetMeshInfo(GmlIdx, GmlTriangles, &OldNmbTri, &TriIdx);
+      TriRefTab = malloc(OldNmbTri * sizeof(int));
+      assert(TriRefTab);
+
+      for(i=0;i<OldNmbTri;i++)
+         GmlGetDataLine(GmlIdx, TriIdx, i, &i0, &i1, &i2, &TriRefTab[i]);
+
+      // Then free the existing triangle data type
+      // and allocate a new one with the increased size
+      GmlFreeData(GmlIdx, TriIdx);
+      TriIdx = GmlNewMeshData(GmlIdx, GmlTriangles, NmbTri);
+      NmbTri = 0;
+   }
+
+   // Setup a new quad data type
+   if(NmbQad)
+   {
+      // If there are surface quads, save their references
+      GetMeshInfo(GmlIdx, GmlQuadrilaterals, &OldNmbQad, &QadIdx);
+      QadRefTab = malloc(OldNmbQad * sizeof(int));
+      assert(QadRefTab);
+
+      for(i=0;i<OldNmbQad;i++)
+         GmlGetDataLine(GmlIdx, QadIdx, i, &i0, &i1, &i2, &i3, &QadRefTab[i]);
+
+      // Then free the existing quad data type
+      // and allocate a new one with the increased size
+      GmlFreeData(GmlIdx, QadIdx);
+      QadIdx = GmlNewMeshData(GmlIdx, GmlQuadrilaterals, NmbQad);
+      NmbQad = 0;
+   }
+
+   // Loop over all kinds of elements and setup the faces
+   for(typ=GmlTriangles; typ<GmlMaxEleTyp; typ++)
+   {
+      if(!gml->TypIdx[ typ ])
+         continue;
+
+      // Get the nodes pointer, table width and the number of faces
+      dat = &gml->dat[ gml->TypIdx[ typ ] ];
+      MshNod = (int *)dat->CpuMem;
+      EleLen = dat->ItmLen;
+      NmbFac = ItmNmbFac[ typ ];
+
+      // Get edges from the hash table
+      for(i=0;i<dat->NmbLin;i++)
+      {
+         EleNod = &MshNod[ i * EleLen ];
+
+         for(j=0;j<NmbFac;j++)
+         {
+            // Get a triangle to the hash table
+            if(ItmFacDeg[ typ ][j] == 3)
+            {
+               // Get its nodes and hash key
+               GetItmNod(EleNod, typ, TriHsh.HshTyp, j, FacNod);
+               HshKey = CalHshKey(&TriHsh, FacNod);
+
+               // If it is in the hash table, send its data to the GMlib
+               if(GetHsh(&TriHsh, HshKey, i, j, FacNod, IdxLst) != 1)
+                  continue;
+
+               if(IdxLst[0] >> 4 != i)
+                  continue;
+
+               ref = (typ == GmlTriangles) ? TriRefTab[i] : 0;
+
+               GmlSetDataLine(GmlIdx, TriIdx, NmbTri,
+                              FacNod[0], FacNod[1], FacNod[2], ref);
+
+               NmbTri++;
+            }
+            else if(ItmFacDeg[ typ ][j] == 4)
+            {
+               // Get the quad's nodes and hash key
+               GetItmNod(EleNod, typ, QadHsh.HshTyp, j, FacNod);
+               HshKey = CalHshKey(&QadHsh, FacNod);
+
+               // If it is in the hash table, send its data to the GMlib
+               if(GetHsh(&QadHsh, HshKey, i, j, FacNod, IdxLst) != 1)
+                  continue;
+
+               if(IdxLst[0] >> 4 != i)
+                  continue;
+
+               ref = (typ == GmlQuadrilaterals) ? QadRefTab[i] : 0;
+
+               GmlSetDataLine(GmlIdx, QadIdx, NmbQad,
+                              FacNod[0], FacNod[1], FacNod[2], FacNod[3], ref);
+
+               NmbQad++;
+            }
+            else
+               continue;
+         }
+      }
+   }
+
+   // Cleanup hash and ref tables
+   if(NmbTri)
+   {
+      free(TriRefTab);
+      free(TriHsh.HshTab);
+      free(TriHsh.DatTab);
+
+      if(gml->DbgFlg)
+         printf("Hashed, setup and transfered %d triangles to the GMlib.\n", NmbTri);
+   }
+
+   if(NmbQad)
+   {
+      free(QadHsh.HshTab);
+      free(QadHsh.DatTab);
+
+      if(gml->DbgFlg)
+         printf("Hashed, setup and transfered %d quads to the GMlib.\n", NmbQad);
+   }
+
+   // As there are two resulting values, return the sum instead of the data index
+   return(NmbTri + NmbQad);
 }
 
 
