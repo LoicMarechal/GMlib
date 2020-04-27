@@ -1,8 +1,12 @@
-// SolExt = 0.5f * SolTet[0] + 0.5f * SolTet[1];
+//SolExt = 0.5f * (SolTet[0] + SolTet[1]);
 
-// /* Boundary conditions treatment. */
-// if (TriRef == 1) SolExt = 1.f;
-// if (TriRef == 2) SolExt = 2.f;
-// if (TriRef == 3) SolExt = 0.f;
+/* Boundary conditions treatment. */
 
-SolExt = (float) TriRef;
+//float RefVal[6] = {0.0, 1.0, 2.0, 0.0, 0.0, 0.0};
+//SolExt = RefVal[ TriRef ];
+
+
+float val = 0.;
+if(TriRef == 1) val = 1.;
+if(TriRef == 2) val = 2.;
+SolExt = val;
