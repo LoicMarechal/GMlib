@@ -139,11 +139,12 @@ int main(int argc, char *argv[])
    // /* Begin resolution. */
    // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &InitRes);
    Time = GmlLaunchKernel(GmlIdx, SolExtKrn);
+   printf("run time = %g\n", Time);
+
    for (i = 0; i < NbrTri; i++)
    {
       GmlGetDataLine(GmlIdx, SolExtIdx, i, Tmp);
-      if (Tmp[0] > 0.1)
-         printf("SolExt %.12f\n", Tmp[0]);
+      //printf("SolExt[%d] = %.12f\n", i, Tmp[0]);
    }
 
    // Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
