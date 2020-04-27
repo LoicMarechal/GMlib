@@ -1380,9 +1380,9 @@ int GmlSetDataLine(size_t GmlIdx, int idx, int lin, ...)
 int GmlGetDataLine(size_t GmlIdx, int idx, int lin, ...)
 {
    GETGMLPTR(gml, GmlIdx);
-   DatSct   *dat = &gml->dat[ idx ];
+   DatSct   *dat = &gml->dat[ idx ], *RefDat;
    char     *adr = (void *)dat->CpuMem;
-   int      i;
+   int      i, *EleTab, siz, *RefTab, *tab, RefIdx = 0, *UsrDat;
    float    *GpuCrd;
    double   *UsrCrd;
    va_list  VarArg;
@@ -1405,6 +1405,23 @@ int GmlGetDataLine(size_t GmlIdx, int idx, int lin, ...)
          UsrCrd = va_arg(VarArg, double *);
          *UsrCrd = (double)GpuCrd[ lin*dat->LinSiz + i ];
       }
+   }
+   else if( (dat->AloTyp == GmlEleDat) && (dat->MshTyp > GmlVertices) )
+   {
+      EleTab = (int *)dat->CpuMem;
+      siz = TypVecSiz[ MshItmTyp[ dat->MshTyp ] ];
+      RefIdx = gml->RefIdx[ dat->MshTyp ];
+      RefDat = &gml->dat[ RefIdx ];
+      RefTab = (int *)RefDat->CpuMem;
+
+      for(i=0;i<EleNmbNod[ dat->MshTyp ];i++)
+      {
+         UsrDat = va_arg(VarArg, int *);
+         *UsrDat = EleTab[ lin * siz + i ];
+      }
+
+      UsrDat = va_arg(VarArg, int *);
+      *UsrDat = RefTab[ lin ];
    }
 
    va_end(VarArg);
@@ -2746,7 +2763,7 @@ int GmlExtractFaces(size_t GmlIdx)
    int         i, j, i0, i1, i2, i3, typ, idx, cpt = 0, TriIdx, QadIdx, HshKey;
    int         NmbFac, NmbTri = 0, NmbQad = 0, OldNmbTri, OldNmbQad;
    int         EleSiz, NmbEle, EleLen, *EleNod, *MshNod, FacNod[4], IdxLst[4];
-   int         ref, *QadRefTab, *TriRefTab;
+   int         ref, (*QadTab)[5], (*TriTab)[4];
    DatSct      *dat;
    BucSct      *buc;
    HshTabSct   TriHsh, QadHsh;
@@ -2800,7 +2817,7 @@ int GmlExtractFaces(size_t GmlIdx)
    }
 
    // Loop over each element of each type
-   for(typ=GmlTriangles+1; typ<GmlMaxEleTyp; typ++)
+   for(typ=GmlTriangles; typ<GmlMaxEleTyp; typ++)
    {
       if(!gml->TypIdx[ typ ])
          continue;
@@ -2861,22 +2878,42 @@ int GmlExtractFaces(size_t GmlIdx)
                QadHsh.NxtDat-1, (100LL * QadHsh.NmbHit) / QadHsh.TabSiz,
                (double)QadHsh.NmbMis / (double)QadHsh.TabSiz );
 
-   // Setup a new triangle data type
+   // Setup a new triangle data type and transfer the old data
    if(NmbTri)
    {
       // If there are surface triangles, save their references
       GetMeshInfo(GmlIdx, GmlTriangles, &OldNmbTri, &TriIdx);
-      TriRefTab = malloc(OldNmbTri * sizeof(int));
-      assert(TriRefTab);
+
+      TriTab = malloc(OldNmbTri * 4 * sizeof(int));
+      assert(TriTab);
 
       for(i=0;i<OldNmbTri;i++)
-         GmlGetDataLine(GmlIdx, TriIdx, i, &i0, &i1, &i2, &TriRefTab[i]);
+          GmlGetDataLine(GmlIdx, TriIdx, i, &TriTab[i][0], &TriTab[i][1],
+                        &TriTab[i][2], &TriTab[i][3]);
 
       // Then free the existing triangle data type
       // and allocate a new one with the increased size
       GmlFreeData(GmlIdx, TriIdx);
       TriIdx = GmlNewMeshData(GmlIdx, GmlTriangles, NmbTri);
       NmbTri = 0;
+
+      for(i=0;i<OldNmbTri;i++)
+      {
+         GetItmNod(TriTab[i], GmlTriangles, GmlTriangles, 0, FacNod);
+         HshKey = CalHshKey(&TriHsh, FacNod);
+
+         // If it is in the hash table, send its data to the GMlib
+         if(GetHsh(&TriHsh, HshKey, i, j, FacNod, IdxLst) != 1)
+            continue;
+
+         if(IdxLst[0] >> 4 != i)
+            continue;
+
+         GmlSetDataLine(GmlIdx, TriIdx, NmbTri, FacNod[0],
+                        FacNod[1], FacNod[2], TriTab[i][3]);
+
+         NmbTri++;
+      }
    }
 
    // Setup a new quad data type
@@ -2884,11 +2921,12 @@ int GmlExtractFaces(size_t GmlIdx)
    {
       // If there are surface quads, save their references
       GetMeshInfo(GmlIdx, GmlQuadrilaterals, &OldNmbQad, &QadIdx);
-      QadRefTab = malloc(OldNmbQad * sizeof(int));
-      assert(QadRefTab);
+      QadTab = malloc(OldNmbQad * 5 * sizeof(int));
+      assert(QadTab);
 
       for(i=0;i<OldNmbQad;i++)
-         GmlGetDataLine(GmlIdx, QadIdx, i, &i0, &i1, &i2, &i3, &QadRefTab[i]);
+         GmlGetDataLine(GmlIdx, QadIdx, i, &QadTab[i][0], &QadTab[i][1],
+                        &QadTab[i][2], &QadTab[i][3], &QadTab[i][4]);
 
       // Then free the existing quad data type
       // and allocate a new one with the increased size
@@ -2898,7 +2936,7 @@ int GmlExtractFaces(size_t GmlIdx)
    }
 
    // Loop over all kinds of elements and setup the faces
-   for(typ=GmlTriangles; typ<GmlMaxEleTyp; typ++)
+   for(typ=GmlTetrahedra; typ<=GmlHexahedra; typ++)
    {
       if(!gml->TypIdx[ typ ])
          continue;
@@ -2930,10 +2968,8 @@ int GmlExtractFaces(size_t GmlIdx)
                if(IdxLst[0] >> 4 != i)
                   continue;
 
-               ref = (typ == GmlTriangles) ? TriRefTab[i] : 0;
-
-               GmlSetDataLine(GmlIdx, TriIdx, NmbTri,
-                              FacNod[0], FacNod[1], FacNod[2], ref);
+               GmlSetDataLine(GmlIdx, TriIdx, NmbTri, FacNod[0],
+                              FacNod[1], FacNod[2], 0);
 
                NmbTri++;
             }
@@ -2950,10 +2986,8 @@ int GmlExtractFaces(size_t GmlIdx)
                if(IdxLst[0] >> 4 != i)
                   continue;
 
-               ref = (typ == GmlQuadrilaterals) ? QadRefTab[i] : 0;
-
-               GmlSetDataLine(GmlIdx, QadIdx, NmbQad,
-                              FacNod[0], FacNod[1], FacNod[2], FacNod[3], ref);
+               GmlSetDataLine(GmlIdx, QadIdx, NmbQad, FacNod[0],
+                              FacNod[1], FacNod[2], FacNod[3], 0);
 
                NmbQad++;
             }
@@ -2966,7 +3000,7 @@ int GmlExtractFaces(size_t GmlIdx)
    // Cleanup hash and ref tables
    if(NmbTri)
    {
-      free(TriRefTab);
+      free(TriTab);
       free(TriHsh.HshTab);
       free(TriHsh.DatTab);
 
@@ -2976,6 +3010,7 @@ int GmlExtractFaces(size_t GmlIdx)
 
    if(NmbQad)
    {
+      free(QadTab);
       free(QadHsh.HshTab);
       free(QadHsh.DatTab);
 
