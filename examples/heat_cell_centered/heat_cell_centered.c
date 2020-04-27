@@ -3,7 +3,7 @@
 /*   Description:       Cell-centered heat equation solver                    */
 /*   Author:            Julien VANHAREN                                       */
 /*   Creation date:     apr 15 2020                                           */
-/*   Last modification: apr 15 2020                                           */
+/*   Last modification: apr 27 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -14,7 +14,11 @@
 #include <gmlib3.h>
 
 #include "param.h"
-#include "flux.h"
+#include "sol_ext.h"
+#include "grd_tet.h"
+#include "grd_ext.h"
+#include "flx_bal.h"
+#include "tim_int.h"
 
 typedef struct
 {
@@ -22,158 +26,187 @@ typedef struct
    float res;
 } GmlParSct;
 
-void WriteSolution(char *out_fn, int NmbTet, float *Sol)
+void Write_SolTet(char *out_fn, int NbrTet, float *SolTet)
 {
    int64_t fid;
-   int iTet, NmbTyp = 1, TypTab[1] = {GmfSca};
+   int Ver = 1, Dim = 3;
+   int NmbTyp = 1, TypTab[1] = {GmfSca};
 
-   fid = GmfOpenMesh(out_fn, GmfWrite, 1, 3);
-   if (NmbTet)
-   {
-      GmfSetKwd(fid, GmfSolAtTetrahedra, NmbTet, NmbTyp, TypTab);
-      for (iTet = 0; iTet < NmbTet; iTet++)
-         GmfSetLin(fid, GmfSolAtTetrahedra, &(Sol[iTet]));
-   }
+   fid = GmfOpenMesh(out_fn, GmfWrite, Ver, Dim);
+   GmfSetKwd(fid, GmfSolAtTetrahedra, NbrTet, NmbTyp, TypTab);
+   GmfSetBlock(fid, GmfSolAtTetrahedra, 1, NbrTet, 0, NULL, NULL,
+               GmfFloat, &SolTet[0], &SolTet[NbrTet - 1]);
    GmfCloseMesh(fid);
 }
 
-int main(int ArgCnt, char **ArgVec)
+void Heat_Init(int argc, char *argv[], size_t *GmlIdx)
 {
-   int i, j, NmbVer = 0, NmbTri = 0, NmbTet = 0;
+   int dbg = 0, GpuIdx;
+
+   if (argc == 1)
+   {
+      puts("Cell-centered heat equation solver");
+      puts("Choose the GPU index from the following list:");
+      GmlListGPU();
+      exit(EXIT_SUCCESS);
+   }
+   else
+      GpuIdx = atoi(argv[1]);
+   if (argc == 3)
+      dbg = 1;
+   if (!(*GmlIdx = GmlInit(GpuIdx)))
+      exit(EXIT_SUCCESS);
+   if (dbg)
+      GmlDebugOn(*GmlIdx);
+}
+
+int main(int argc, char *argv[])
+{
+   int i, j, NmbItr = 0, NbrVer = 0, NbrTri = 0, NbrTet = 0;
    int ParIdx, VerIdx = 0, TriIdx = 0, TetIdx = 0, BalIdx, MidIdx, SolIdx, FlxIdx, CalMid, GatherIdx, OptVer;
    int GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, FlxKrn, F64Idx, F64Krn;
    size_t GmlIdx;
    float MidTab[4], SolTab[8], TetChk = 0., VerChk = 0.;
-   float IniSol[1] = {10.};
+   float Ini[4] = {0., 0., 0., 0.};
    double NgbTim = 0, TetTim = 0, VerTim = 0, RedTim = 0, F64Tim = 0;
-   double res, residual;
-   float *Flx;
+   double res, FlxTim = 0., GtrTim = 0., ResTim = 0.;
+   float *Sol, *XGrdTet;
    GmlParSct *GmlPar;
 
-   if (ArgCnt == 1)
-   {
-      puts("Cell-centered heat equation solver");
-      puts("Choose GPU_index from the following list:");
-      GmlListGPU();
-      exit(0);
-   }
-   else
-      GpuIdx = atoi(ArgVec[1]);
+   int n;
+   int SolTetIdx, GrdTetIdx, SolExtIdx, GrdExtIdx, RhsIdx;
+   int SolExtKrn, GrdTetKrn, GrdExtKrn, FlxBalKrn, TimKrn;
+   double Time, InitRes, Res;
+   float *SolTet, Tmp[4];
 
-   if (!(GmlIdx = GmlInit(GpuIdx)))
-      return (1);
+   /* Library initialization. */
+   Heat_Init(argc, argv, &GmlIdx);
 
-   // GmlDebugOn(GmlIdx);
+   /* Import mesh and print statistics. */
+   GmlImportMesh(GmlIdx, "../sample_meshes/tetrahedra.meshb", GmfVertices, GmfTriangles, GmfTetrahedra);
+   GetMeshInfo(GmlIdx, GmlVertices, &NbrVer, &VerIdx);
+   GetMeshInfo(GmlIdx, GmlTetrahedra, &NbrTet, &TetIdx);
+   GetMeshInfo(GmlIdx, GmlTriangles, &NbrTri, &TriIdx);
+   printf("+++ Imported %d vertices, %d triangles and %d tetrahedra from the mesh file\n", NbrVer, NbrTri, NbrTet);
 
-   GmlImportMesh(GmlIdx, "../sample_meshes/tetrahedra.meshb", GmfVertices, GmfTetrahedra, GmfTriangles, 0);
-   GetMeshInfo(GmlIdx, GmlVertices, &NmbVer, &VerIdx);
-   GetMeshInfo(GmlIdx, GmlTetrahedra, &NmbTet, &TetIdx);
-   GetMeshInfo(GmlIdx, GmlTriangles, &NmbTri, &TriIdx);
-   printf("Imported %d vertices, %d triangles and %d tets from the mesh file\n", NmbVer, NmbTri, NmbTet);
+   /* Extract all faces connectivity. */
+   // GmlExtractFaces(GmlIdx);
+   // GetMeshInfo(GmlIdx, GmlTriangles, &NbrTri, &TriIdx);
+   // printf("+++ %d triangles extracted from the volume\n", NbrTri);
 
+   /* Define the paramters. */
    GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), param);
-   SolIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "Sol");
-   NgbIdx = GmlSetNeighbours(GmlIdx, GmlTetrahedra);
-   FlxIdx = GmlNewSolutionData(GmlIdx, GmlTriangles, 1, GmlFlt, "Flx");
-   ResIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "Res");
 
-   for (i = 0; i < NmbTet; i++)
-      GmlSetDataLine(GmlIdx, SolIdx, i, &IniSol);
+   /* Fields declaration. */
+   SolTetIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "SolTet");
+   GrdTetIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt4, "GrdTet");
+   SolExtIdx = GmlNewSolutionData(GmlIdx, GmlTriangles, 1, GmlFlt, "SolExt");
+   GrdExtIdx = GmlNewSolutionData(GmlIdx, GmlTriangles, 1, GmlFlt4, "GrdExt");
+   RhsIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "Rhs");
 
-   FlxKrn = GmlCompileKernel(GmlIdx, flux, "flux", GmlTriangles, 2,
-                             FlxIdx, GmlWriteMode, NULL,
-                             SolIdx, GmlReadMode, NULL);
+   /* Fields initialization. */
+   for (i = 0; i < NbrTet; i++)
+   {
+      GmlSetDataLine(GmlIdx, SolTetIdx, i, &Ini);
+      GmlSetDataLine(GmlIdx, GrdTetIdx, i, &Ini);
+   }
+   for (i = 0; i < NbrTri; i++)
+   {
+      GmlSetDataLine(GmlIdx, SolExtIdx, i, &Ini);
+      GmlSetDataLine(GmlIdx, GrdExtIdx, i, &Ini);
+   }
 
-   // FlxKrn = GmlCompileKernel(GmlIdx, flux, "flux", GmlTetrahedra, 2,
-   //                           FlxIdx, GmlReadMode, NULL,
-   //                           SolIdx, GmlWriteMode, NULL);
+   /* Kernels compilation. */
+   SolExtKrn = GmlCompileKernel(GmlIdx, sol_ext, "sol_ext", GmlTriangles, 3,
+                                TriIdx, GmlReadMode | GmlRefFlag, NULL,
+                                SolTetIdx, GmlReadMode, NULL,
+                                SolExtIdx, GmlWriteMode, NULL);
+   // GrdTetKrn = GmlCompileKernel(GmlIdx, grd_tet, "grd_tet", GmlTetrahedra, 3,
+   //                              VerIdx, GmlReadMode, NULL,
+   //                              SolExtIdx, GmlReadMode, NULL,
+   //                              GrdTetIdx, GmlWriteMode, NULL);
+   // GrdExtKrn = GmlCompileKernel(GmlIdx, grd_ext, "grd_ext", GmlTriangles, 3,
+   //                              TriIdx, GmlReadMode | GmlRefFlag, NULL,
+   //                              GrdTetIdx, GmlReadMode, NULL,
+   //                              GrdExtIdx, GmlWriteMode, NULL);
+   // FlxBalKrn = GmlCompileKernel(GmlIdx, flx_bal, "flx_bal", GmlTetrahedra, 3,
+   //                              VerIdx, GmlReadMode, NULL,
+   //                              GrdExtIdx, GmlReadMode, NULL,
+   //                              RhsIdx, GmlWriteMode, NULL);
+   // TimKrn = GmlCompileKernel(GmlIdx, tim_int, "tim_int", GmlTetrahedra, 2,
+   //                           RhsIdx, GmlReadMode, NULL,
+   //                           SolTetIdx, GmlWriteMode, NULL);
+   // /* Begin resolution. */
+   // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &InitRes);
+   Time = GmlLaunchKernel(GmlIdx, SolExtKrn);
+   for (i = 0; i < NbrTri; i++)
+   {
+      GmlGetDataLine(GmlIdx, SolExtIdx, i, Tmp);
+      if (Tmp[0] > 0.1)
+         printf("SolExt %.12f\n", Tmp[0]);
+   }
 
-   // FlxKrn = GmlCompileKernel(GmlIdx, flux, "flux", GmlTriangles, 2,
-   //                           FlxIdx, GmlWriteMode, NULL,
-   //                           SolIdx, GmlReadMode, NULL);
+   // Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
+   // Time = GmlLaunchKernel(GmlIdx, GrdExtKrn);
+   // Time = GmlLaunchKernel(GmlIdx, FlxBalKrn);
+   // Time = GmlLaunchKernel(GmlIdx, TimKrn);
+   // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
+   // printf("+++ Iteration %4d: residual = %.12f\n", n, Res / InitRes);
 
-   // GatherIdx = GmlCompileKernel(GmlIdx, gather, "gather", GmlTriangles, 2,
-   //                              SolIdx, GmlWriteMode, NULL,
-   //                              TriIdx, GmlReadMode | GmlVoyeurs, NULL);
-
-   res = GmlLaunchKernel(GmlIdx, FlxKrn);
-
-   // Flx = malloc(NmbTet * sizeof(float));
-   // for (i = 0; i < NmbTet; i++)
-   //    GmlGetDataLine(GmlIdx, FlxIdx, i, &(Flx[i]));
-   // printf("After GPU %.3f\n", Flx[0]);
-
-   // WriteSolution("output.sol", NmbTet, Flx);
-
-   //    if (res < 0)
-   //    {
-   //       printf("Launch kernel %d failled with error: %g\n", CalMid, res);
-   //       exit(0);
-   //    }
-
-   //    TetTim += res;
-
-   //    // Launch the vertex kernel on the GPU
-   //    res = GmlLaunchKernel(GmlIdx, OptVer);
-
-   //    if (res < 0)
-   //    {
-   //       printf("Launch kernel %d failled with error: %g\n", OptVer, res);
-   //       exit(0);
-   //    }
-
-   //    VerTim += res;
-
-   //    // Launch the reduction kernel on the GPU
-   //    res = GmlReduceVector(GmlIdx, ResIdx, GmlSum, &residual);
-
-   //    if (res < 0)
-   //    {
-   //       printf("Launch reduction kernel failled with error: %g\n", res);
-   //       exit(0);
-   //    }
-
-   //    RedTim += res;
-   //    printf("Iteration: %3d, residual: %g\n", i, residual);
-   // }
-
-   // /*-----------------*/
-   // /* GET THE RESULTS */
-   // /*-----------------*/
-
-   // // Get back the MidTet data from the GPU memory and compute a checksum
-   // for (i = 0; i < NmbTet; i++)
+   // do
    // {
-   //    GmlGetDataLine(GmlIdx, MidIdx, i, MidTab);
-   //    TetChk += MidTab[0] + MidTab[1] + MidTab[2];
-   // }
+   //    // LOOP OVER THE TRIANGLES
+   //    res = GmlLaunchKernel(GmlIdx, FlxKrn);
 
-   // // Get back the SolAtVer data from the GPU memory and compute a checksum
-   // for (i = 0; i < NmbVer; i++)
-   // {
-   //    GmlGetDataLine(GmlIdx, SolIdx, i, SolTab);
-   //    VerChk += SolTab[0] + SolTab[1] + SolTab[2] + SolTab[3];
-   // }
+   //    if(res < 0)
+   //    {
+   //       printf("Error %d in flux kernel\n", (int)res);
+   //       exit(1);
+   //    }
 
-   // printf("%d tets processed in %g seconds, FP64=%g, ngb access=%g, scater=%g, gather=%g, reduction=%g\n",
-   //        NmbTet, F64Tim + NgbTim + TetTim + VerTim + RedTim, F64Tim, NgbTim, TetTim, VerTim, RedTim);
+   //    FlxTim += res;
 
-   // printf("%ld MB used, %ld MB transfered\n",
-   //        GmlGetMemoryUsage(GmlIdx) / 1048576,
-   //        GmlGetMemoryTransfer(GmlIdx) / 1048576);
+   //    // LOOP OVER THE TRETRAHEDRA
+   //    res = GmlLaunchKernel(GmlIdx, GatherIdx);
 
-   // printf("MidTet checksum = %g, SolAtVer checksum = %g\n",
-   //        TetChk / NmbTet, VerChk / NmbVer);
+   //    if(res < 0)
+   //    {
+   //       printf("Error %d in gather kernel\n", (int)res);
+   //       exit(2);
+   //    }
 
-   // /*-----*/
-   // /* END */
-   // /*-----*/
+   //    GtrTim += res;
 
-   // GmlFreeData(GmlIdx, VerIdx);
-   // GmlFreeData(GmlIdx, TetIdx);
-   // GmlFreeData(GmlIdx, MidIdx);
-   // GmlFreeData(GmlIdx, ParIdx);
-   // GmlStop(GmlIdx);
+   //    // COMPUTE THE RESIDUAL
+   //    res = GmlReduceVector(GmlIdx, SolIdx, GmlSum, &residual_i);
 
-   return (0);
+   //    if(res < 0)
+   //    {
+   //       printf("Error %d in reduction kernel\n", (int)res);
+   //       exit(3);
+   //    }
+
+   //    ResTim += res;
+
+   //    printf("\rIteration %4d: residual=%g", NmbItr, residual_i / InitRes);
+   //    fflush(stdout);
+   // }while(NmbItr++ < 1000 && (residual_i / InitRes > .0001));
+
+   // printf("\nTotal run time = %gs (flux=%g, gather=%g, residual=%g)\n",
+   //          FlxTim + GtrTim + ResTim, FlxTim, GtrTim, ResTim);
+
+   SolTet = malloc(NbrTet * sizeof(float));
+   XGrdTet = malloc(NbrTet * sizeof(float));
+   for (i = 0; i < NbrTet; i++)
+   {
+      GmlGetDataLine(GmlIdx, SolTetIdx, i, &SolTet[i]);
+      GmlGetDataLine(GmlIdx, GrdTetIdx, i, Tmp);
+      XGrdTet[i] = Tmp[0];
+   }
+   Write_SolTet("solution.solb", NbrTet, SolTet);
+   Write_SolTet("gradx.solb", NbrTet, XGrdTet);
+   free(SolTet);
+   free(XGrdTet);
+
+   return 0;
 }
