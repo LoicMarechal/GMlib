@@ -90,9 +90,9 @@ int main(int argc, char *argv[])
    printf("+++ Imported %d vertices, %d triangles and %d tetrahedra from the mesh file\n", NbrVer, NbrTri, NbrTet);
 
    /* Extract all faces connectivity. */
-   // GmlExtractFaces(GmlIdx);
-   // GetMeshInfo(GmlIdx, GmlTriangles, &NbrTri, &TriIdx);
-   // printf("+++ %d triangles extracted from the volume\n", NbrTri);
+   GmlExtractFaces(GmlIdx);
+   GetMeshInfo(GmlIdx, GmlTriangles, &NbrTri, &TriIdx);
+   printf("+++ %d triangles extracted from the volume\n", NbrTri);
 
    /* Define the paramters. */
    GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), param);
@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
    for (i = 0; i < NbrTri; i++)
    {
       GmlGetDataLine(GmlIdx, SolExtIdx, i, Tmp);
-      printf("SolExt[%d] = %.12f\n", i, Tmp[0]);
+      //printf("SolExt[%d] = %.12f\n", i, Tmp[0]);
    }
 
    // Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
