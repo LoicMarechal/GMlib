@@ -14,16 +14,19 @@
 #include <gmlib3.h>
 
 #include "param.h"
+#include "ini_tet.h"
 #include "sol_ext.h"
 #include "grd_tet.h"
 #include "grd_ext.h"
 #include "flx_bal.h"
 #include "tim_int.h"
 
-typedef struct
-{
-   int foo;
-   float res;
+enum BC_TYPE { DIRICHLET, NEUMANN };
+typedef struct {
+  int Cnt;
+  int BoCo[6];
+  int BoCo_Ref[6];
+  float BoCo_Val[6];
 } GmlParSct;
 
 void Write_SolTet(char *out_fn, int NbrTet, float *SolTet)
@@ -74,7 +77,7 @@ int main(int argc, char *argv[])
    GmlParSct *GmlPar;
 
    int n;
-   int SolTetIdx, GrdTetIdx, SolExtIdx, GrdExtIdx, RhsIdx;
+   int IniTetKrn, SolTetIdx, GrdTetIdx, SolExtIdx, GrdExtIdx, RhsIdx;
    int SolExtKrn, GrdTetKrn, GrdExtKrn, FlxBalKrn, TimKrn;
    double Time, InitRes, Res;
    float *SolTet, Tmp[4];
@@ -82,8 +85,18 @@ int main(int argc, char *argv[])
    /* Library initialization. */
    Heat_Init(argc, argv, &GmlIdx);
 
+   /* Define boundary conditions. */
+   GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), param);
+   GmlPar->Cnt = 0;
+   for (i = 0; i < 6; i++)
+      GmlPar->BoCo[i] = DIRICHLET;
+   for (i = 0; i < 6; i++)
+      GmlPar->BoCo_Ref[i] = i + 1;
+   for (i = 0; i < 6; i++)
+      GmlPar->BoCo_Val[i] = 1.234;
+
    /* Import mesh and print statistics. */
-   GmlImportMesh(GmlIdx, "../sample_meshes/tetrahedra.meshb", GmfVertices, GmfTriangles, GmfTetrahedra);
+   GmlImportMesh(GmlIdx, "../sample_meshes/cube.meshb", GmfVertices, GmfTriangles, GmfTetrahedra);
    GetMeshInfo(GmlIdx, GmlVertices, &NbrVer, &VerIdx);
    GetMeshInfo(GmlIdx, GmlTetrahedra, &NbrTet, &TetIdx);
    GetMeshInfo(GmlIdx, GmlTriangles, &NbrTri, &TriIdx);
@@ -94,9 +107,6 @@ int main(int argc, char *argv[])
    GetMeshInfo(GmlIdx, GmlTriangles, &NbrTri, &TriIdx);
    printf("+++ %d triangles extracted from the volume\n", NbrTri);
 
-   /* Define the paramters. */
-   GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), param);
-
    /* Fields declaration. */
    SolTetIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "SolTet");
    GrdTetIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt4, "GrdTet");
@@ -104,19 +114,10 @@ int main(int argc, char *argv[])
    GrdExtIdx = GmlNewSolutionData(GmlIdx, GmlTriangles, 1, GmlFlt4, "GrdExt");
    RhsIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "Rhs");
 
-   /* Fields initialization. */
-   for (i = 0; i < NbrTet; i++)
-   {
-      GmlSetDataLine(GmlIdx, SolTetIdx, i, &Ini);
-      GmlSetDataLine(GmlIdx, GrdTetIdx, i, &Ini);
-   }
-   for (i = 0; i < NbrTri; i++)
-   {
-      GmlSetDataLine(GmlIdx, SolExtIdx, i, &Ini);
-      GmlSetDataLine(GmlIdx, GrdExtIdx, i, &Ini);
-   }
-
    /* Kernels compilation. */
+   IniTetKrn = GmlCompileKernel(GmlIdx, ini_tet, "ini_tet", GmlTetrahedra, 2,
+                                VerIdx, GmlReadMode, NULL,
+                                SolTetIdx, GmlWriteMode, NULL);
    SolExtKrn = GmlCompileKernel(GmlIdx, sol_ext, "sol_ext", GmlTriangles, 3,
                                 TriIdx, GmlReadMode | GmlRefFlag, NULL,
                                 SolTetIdx, GmlReadMode, NULL,
@@ -136,24 +137,23 @@ int main(int argc, char *argv[])
    // TimKrn = GmlCompileKernel(GmlIdx, tim_int, "tim_int", GmlTetrahedra, 2,
    //                           RhsIdx, GmlReadMode, NULL,
    //                           SolTetIdx, GmlWriteMode, NULL);
-   // /* Begin resolution. */
-   // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &InitRes);
+
+   Time = GmlLaunchKernel(GmlIdx, IniTetKrn);
    Time = GmlLaunchKernel(GmlIdx, SolExtKrn);
-   printf("run time = %g\n", Time);
-
-   for (i = 0; i < NbrTri; i++)
-   {
-      GmlGetDataLine(GmlIdx, SolExtIdx, i, Tmp);
-      //printf("SolExt[%d] = %.12f\n", i, Tmp[0]);
-   }
-
    // Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
-   // Time = GmlLaunchKernel(GmlIdx, GrdExtKrn);
-   // Time = GmlLaunchKernel(GmlIdx, FlxBalKrn);
-   // Time = GmlLaunchKernel(GmlIdx, TimKrn);
-   // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
-   // printf("+++ Iteration %4d: residual = %.12f\n", n, Res / InitRes);
 
+   /* Begin resolution. */
+   // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &InitRes);
+   // for (n = 1; n <= 1; n++)
+   // {
+   //    Time = GmlLaunchKernel(GmlIdx, SolExtKrn);
+   //    Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
+   //    // Time = GmlLaunchKernel(GmlIdx, GrdExtKrn);
+   //    // Time = GmlLaunchKernel(GmlIdx, FlxBalKrn);
+   //    // Time = GmlLaunchKernel(GmlIdx, TimKrn);
+   //    // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
+   //    // printf("+++ Iteration %4d Residual = %.12f\n", n, Res / InitRes);
+   // }
    // do
    // {
    //    // LOOP OVER THE TRIANGLES
@@ -196,18 +196,27 @@ int main(int argc, char *argv[])
    // printf("\nTotal run time = %gs (flux=%g, gather=%g, residual=%g)\n",
    //          FlxTim + GtrTim + ResTim, FlxTim, GtrTim, ResTim);
 
-   SolTet = malloc(NbrTet * sizeof(float));
-   XGrdTet = malloc(NbrTet * sizeof(float));
-   for (i = 0; i < NbrTet; i++)
+   // printf("Boundary triangles %d\n", GmlPar->Cnt);
+
+   for (i = 0; i < NbrTri; i++)
    {
-      GmlGetDataLine(GmlIdx, SolTetIdx, i, &SolTet[i]);
-      GmlGetDataLine(GmlIdx, GrdTetIdx, i, Tmp);
-      XGrdTet[i] = Tmp[0];
+      GmlGetDataLine(GmlIdx, SolExtIdx, i, Tmp);
+      if (Tmp[0] > 1.235 || Tmp[0] < 1.233)
+         printf("SolExt %.12f iTri %d\n", Tmp[0], i);
    }
-   Write_SolTet("solution.solb", NbrTet, SolTet);
-   Write_SolTet("gradx.solb", NbrTet, XGrdTet);
-   free(SolTet);
-   free(XGrdTet);
+
+   // SolTet = malloc(NbrTet * sizeof(float));
+   // XGrdTet = malloc(NbrTet * sizeof(float));
+   // for (i = 0; i < NbrTet; i++)
+   // {
+   //    GmlGetDataLine(GmlIdx, SolTetIdx, i, &SolTet[i]);
+   //    GmlGetDataLine(GmlIdx, GrdTetIdx, i, Tmp);
+   //    XGrdTet[i] = Tmp[0];
+   // }
+   // Write_SolTet("solution.solb", NbrTet, SolTet);
+   // Write_SolTet("gradx.solb", NbrTet, XGrdTet);
+   // free(SolTet);
+   // free(XGrdTet);
 
    return 0;
 }
