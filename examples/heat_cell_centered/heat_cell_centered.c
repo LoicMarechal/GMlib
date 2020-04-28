@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
    Heat_Init(argc, argv, &GmlIdx);
 
    /* Import mesh and print statistics. */
-   GmlImportMesh(GmlIdx, "../sample_meshes/tetrahedra.meshb", GmfVertices, GmfTriangles, GmfTetrahedra);
+   GmlImportMesh(GmlIdx, "../../sample_meshes/tetrahedra.meshb", GmfVertices, GmfTriangles, GmfTetrahedra);
    GetMeshInfo(GmlIdx, GmlVertices, &NbrVer, &VerIdx);
    GetMeshInfo(GmlIdx, GmlTetrahedra, &NbrTet, &TetIdx);
    GetMeshInfo(GmlIdx, GmlTriangles, &NbrTri, &TriIdx);
