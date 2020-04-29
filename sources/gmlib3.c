@@ -736,7 +736,7 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
    lnk.DatLen = ItmNmbVer[ lnk.HshTyp ];
    lnk.KeyLen = HshLenTab[ lnk.DatLen ];
    lnk.NmbDat = lnk.TabSiz;
-   lnk.NxtDat = 0;
+   lnk.NxtDat = 1;
    lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
    lnk.DatTab = malloc(lnk.NmbDat * sizeof(BucSct));
 
@@ -1023,6 +1023,28 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
 
          GetItmNod(EleNod, SrcTyp, lnk.HshTyp, 0, ItmTab);
          HshKey = CalHshKey(&lnk, ItmTab);
+
+         if(i==33535 || i==33544 || i==33549)
+         {
+            int tmp[4]={-1,-1,-1,-1};
+            printf("\n\ntri %d: %d %d %d -> %d %d %d\n",i,EleNod[0],EleNod[1],EleNod[2],ItmTab[0],ItmTab[1],ItmTab[2]);
+            printf("key=%d, get hsh = %d\n",HshKey,GetHsh(&lnk, HshKey, i, 0, ItmTab, &tmp[0]));
+            if(tmp[0] != -1)
+               tmp[0] = tmp[0] >> 4;
+            if(tmp[1] != -1)
+               tmp[1] = tmp[1] >> 4;
+            printf("tetras: %d %d\n", tmp[0], tmp[1]);
+            if(tmp[0] >= 0)
+            {
+               EleNod = &DstNod[ tmp[0] * DstLen ];
+               printf("tet 0: %d %d %d %d\n", EleNod[0], EleNod[1], EleNod[2], EleNod[3]);
+            }
+            if(tmp[1] >= 0)
+            {
+               EleNod = &DstNod[ tmp[1] * DstLen ];
+               printf("tet 1: %d %d %d %d\n", EleNod[0], EleNod[1], EleNod[2], EleNod[3]);
+            }
+         }
 
          if(!HghTab || (i <= MaxPos))
             GetHsh(&lnk, HshKey, i, 0, ItmTab, &BalTab[ i * BalSiz ]);
