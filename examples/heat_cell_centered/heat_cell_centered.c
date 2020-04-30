@@ -21,12 +21,16 @@
 #include "flx_bal.h"
 #include "tim_int.h"
 
-enum BC_TYPE { DIRICHLET, NEUMANN };
-typedef struct {
-  int Cnt;
-  int BoCo[6];
-  int BoCo_Ref[6];
-  float BoCo_Val[6];
+enum BC_TYPE
+{
+   DIRICHLET,
+   NEUMANN
+};
+typedef struct
+{
+   int BoCo[6];
+   int BoCo_Ref[6];
+   float BoCo_Val[6];
 } GmlParSct;
 
 void Write_SolTet(char *out_fn, int NbrTet, float *SolTet)
@@ -70,14 +74,14 @@ int main(int argc, char *argv[])
    int GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, FlxKrn, F64Idx, F64Krn;
    size_t GmlIdx;
    float MidTab[4], SolTab[8], TetChk = 0., VerChk = 0.;
-   float Ini[4] = {0., 0., 0., 0.};
+   float Zero[4] = {0.f, 0.f, 0.f, 0.f};
    double NgbTim = 0, TetTim = 0, VerTim = 0, RedTim = 0, F64Tim = 0;
    double res, FlxTim = 0., GtrTim = 0., ResTim = 0.;
-   float *Sol, *XGrdTet;
+   float *Sol, *XGrdTet, *YGrdTet, *ZGrdTet, *Laplacian;
    GmlParSct *GmlPar;
 
    int n;
-   int IniTetKrn, SolTetIdx, GrdTetIdx, SolExtIdx, GrdExtIdx, RhsIdx;
+   int IniTetKrn, SolTetIdx, SolTetTmpIdx, GrdTetIdx, SolExtIdx, GrdExtIdx, RhsIdx;
    int SolExtKrn, GrdTetKrn, GrdExtKrn, FlxBalKrn, TimKrn;
    double Time, InitRes, Res;
    float *SolTet, Tmp[4];
@@ -87,13 +91,18 @@ int main(int argc, char *argv[])
 
    /* Define boundary conditions. */
    GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), param);
-   GmlPar->Cnt = 0;
-   for (i = 0; i < 6; i++)
-      GmlPar->BoCo[i] = DIRICHLET;
+   GmlPar->BoCo[0] = NEUMANN;
+   GmlPar->BoCo[1] = NEUMANN;
+   GmlPar->BoCo[2] = NEUMANN;
+   GmlPar->BoCo[3] = DIRICHLET;
+   GmlPar->BoCo[4] = DIRICHLET;
+   GmlPar->BoCo[5] = NEUMANN;
    for (i = 0; i < 6; i++)
       GmlPar->BoCo_Ref[i] = i + 1;
    for (i = 0; i < 6; i++)
-      GmlPar->BoCo_Val[i] = 1.234;
+      GmlPar->BoCo_Val[i] = 0.;
+   GmlPar->BoCo_Val[3] = +0.5f;
+   GmlPar->BoCo_Val[4] = -0.5f;
 
    /* Import mesh and print statistics. */
    GmlImportMesh(GmlIdx, "../sample_meshes/cube.meshb", GmfVertices, GmfTriangles, GmfTetrahedra);
@@ -109,10 +118,24 @@ int main(int argc, char *argv[])
 
    /* Fields declaration. */
    SolTetIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "SolTet");
+   SolTetTmpIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "SolTetTmp");
    GrdTetIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt4, "GrdTet");
    SolExtIdx = GmlNewSolutionData(GmlIdx, GmlTriangles, 1, GmlFlt, "SolExt");
    GrdExtIdx = GmlNewSolutionData(GmlIdx, GmlTriangles, 1, GmlFlt4, "GrdExt");
    RhsIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "Rhs");
+   
+   for (i = 0; i < NbrTet; i++)
+   {
+      GmlSetDataLine(GmlIdx, SolTetIdx, i, Zero);
+      GmlSetDataLine(GmlIdx, SolTetTmpIdx, i, Zero);
+      GmlSetDataLine(GmlIdx, GrdTetIdx, i, Zero);
+      GmlSetDataLine(GmlIdx, RhsIdx, i, Zero);
+   }
+   for (i = 0; i < NbrTri; i++)
+   {
+      GmlSetDataLine(GmlIdx, SolExtIdx, i, Zero);
+      GmlSetDataLine(GmlIdx, GrdExtIdx, i, Zero);
+   }
 
    /* Kernels compilation. */
    IniTetKrn = GmlCompileKernel(GmlIdx, ini_tet, "ini_tet", GmlTetrahedra, 2,
@@ -122,38 +145,36 @@ int main(int argc, char *argv[])
                                 TriIdx, GmlReadMode | GmlRefFlag, NULL,
                                 SolTetIdx, GmlReadMode, NULL,
                                 SolExtIdx, GmlWriteMode, NULL);
-   // GrdTetKrn = GmlCompileKernel(GmlIdx, grd_tet, "grd_tet", GmlTetrahedra, 3,
-   //                              VerIdx, GmlReadMode, NULL,
-   //                              SolExtIdx, GmlReadMode, NULL,
-   //                              GrdTetIdx, GmlWriteMode, NULL);
-   // GrdExtKrn = GmlCompileKernel(GmlIdx, grd_ext, "grd_ext", GmlTriangles, 3,
-   //                              TriIdx, GmlReadMode | GmlRefFlag, NULL,
-   //                              GrdTetIdx, GmlReadMode, NULL,
-   //                              GrdExtIdx, GmlWriteMode, NULL);
-   // FlxBalKrn = GmlCompileKernel(GmlIdx, flx_bal, "flx_bal", GmlTetrahedra, 3,
-   //                              VerIdx, GmlReadMode, NULL,
-   //                              GrdExtIdx, GmlReadMode, NULL,
-   //                              RhsIdx, GmlWriteMode, NULL);
-   // TimKrn = GmlCompileKernel(GmlIdx, tim_int, "tim_int", GmlTetrahedra, 2,
-   //                           RhsIdx, GmlReadMode, NULL,
-   //                           SolTetIdx, GmlWriteMode, NULL);
+   GrdTetKrn = GmlCompileKernel(GmlIdx, grd_tet, "grd_tet", GmlTetrahedra, 3,
+                                VerIdx, GmlReadMode, NULL,
+                                SolExtIdx, GmlReadMode, NULL,
+                                GrdTetIdx, GmlWriteMode, NULL);
+   GrdExtKrn = GmlCompileKernel(GmlIdx, grd_ext, "grd_ext", GmlTriangles, 3,
+                                TriIdx, GmlReadMode | GmlRefFlag, NULL,
+                                GrdTetIdx, GmlReadMode, NULL,
+                                GrdExtIdx, GmlWriteMode, NULL);
+   FlxBalKrn = GmlCompileKernel(GmlIdx, flx_bal, "flx_bal", GmlTetrahedra, 3,
+                                VerIdx, GmlReadMode, NULL,
+                                GrdExtIdx, GmlReadMode, NULL,
+                                RhsIdx, GmlWriteMode, NULL);
+   TimKrn = GmlCompileKernel(GmlIdx, tim_int, "tim_int", GmlTetrahedra, 3,
+                             RhsIdx, GmlReadMode, NULL,
+                             SolTetIdx, GmlReadMode, NULL,
+                             SolTetTmpIdx, GmlWriteMode, NULL);
 
+   /* Solution initialization. */
    Time = GmlLaunchKernel(GmlIdx, IniTetKrn);
-   Time = GmlLaunchKernel(GmlIdx, SolExtKrn);
-   // Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
-
    /* Begin resolution. */
-   // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &InitRes);
-   // for (n = 1; n <= 1; n++)
-   // {
-   //    Time = GmlLaunchKernel(GmlIdx, SolExtKrn);
-   //    Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
-   //    // Time = GmlLaunchKernel(GmlIdx, GrdExtKrn);
-   //    // Time = GmlLaunchKernel(GmlIdx, FlxBalKrn);
-   //    // Time = GmlLaunchKernel(GmlIdx, TimKrn);
-   //    // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
-   //    // printf("+++ Iteration %4d Residual = %.12f\n", n, Res / InitRes);
-   // }
+   for (n = 1; n <= 1; n++)
+   {
+      Time = GmlLaunchKernel(GmlIdx, SolExtKrn);
+      Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
+      Time = GmlLaunchKernel(GmlIdx, GrdExtKrn);
+      Time = GmlLaunchKernel(GmlIdx, FlxBalKrn);
+      Time = GmlLaunchKernel(GmlIdx, TimKrn);
+      // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
+      // printf("+++ Iteration %4d Residual = %.12f\n", n, Res);
+   }
    // do
    // {
    //    // LOOP OVER THE TRIANGLES
@@ -198,25 +219,30 @@ int main(int argc, char *argv[])
 
    // printf("Boundary triangles %d\n", GmlPar->Cnt);
 
-   for (i = 0; i < NbrTri; i++)
+   SolTet = malloc(NbrTet * sizeof(float));
+   XGrdTet = malloc(NbrTet * sizeof(float));
+   YGrdTet = malloc(NbrTet * sizeof(float));
+   ZGrdTet = malloc(NbrTet * sizeof(float));
+   Laplacian = malloc(NbrTet * sizeof(float));
+   for (i = 0; i < NbrTet; i++)
    {
-      GmlGetDataLine(GmlIdx, SolExtIdx, i, Tmp);
-      if (Tmp[0] > 1.235 || Tmp[0] < 1.233)
-         printf("SolExt %.12f iTri %d\n", Tmp[0], i);
+      // GmlGetDataLine(GmlIdx, SolTetIdx, i, &SolTet[i]);
+      GmlGetDataLine(GmlIdx, SolTetTmpIdx, i, &SolTet[i]);
+      GmlGetDataLine(GmlIdx, GrdTetIdx, i, Tmp);
+      XGrdTet[i] = Tmp[0];
+      YGrdTet[i] = Tmp[1];
+      ZGrdTet[i] = Tmp[2];
+      GmlGetDataLine(GmlIdx, RhsIdx, i, Tmp);
+      Laplacian[i] = Tmp[0];
    }
-
-   // SolTet = malloc(NbrTet * sizeof(float));
-   // XGrdTet = malloc(NbrTet * sizeof(float));
-   // for (i = 0; i < NbrTet; i++)
-   // {
-   //    GmlGetDataLine(GmlIdx, SolTetIdx, i, &SolTet[i]);
-   //    GmlGetDataLine(GmlIdx, GrdTetIdx, i, Tmp);
-   //    XGrdTet[i] = Tmp[0];
-   // }
-   // Write_SolTet("solution.solb", NbrTet, SolTet);
-   // Write_SolTet("gradx.solb", NbrTet, XGrdTet);
-   // free(SolTet);
-   // free(XGrdTet);
+   Write_SolTet("solution.solb", NbrTet, SolTet);
+   Write_SolTet("gradx.solb", NbrTet, XGrdTet);
+   Write_SolTet("grady.solb", NbrTet, YGrdTet);
+   Write_SolTet("gradz.solb", NbrTet, ZGrdTet);
+   Write_SolTet("laplacian.solb", NbrTet, Laplacian);
+   free(SolTet);
+   free(XGrdTet);
+   free(Laplacian);
 
    return 0;
 }
