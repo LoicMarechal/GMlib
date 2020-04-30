@@ -101,8 +101,8 @@ int main(int argc, char *argv[])
       GmlPar->BoCo_Ref[i] = i + 1;
    for (i = 0; i < 6; i++)
       GmlPar->BoCo_Val[i] = 0.;
-   GmlPar->BoCo_Val[3] = +0.5f;
-   GmlPar->BoCo_Val[4] = -0.5f;
+   GmlPar->BoCo_Val[3] = +300.f;
+   GmlPar->BoCo_Val[4] = +250.f;
 
    /* Import mesh and print statistics. */
    GmlImportMesh(GmlIdx, "../sample_meshes/cube.meshb", GmfVertices, GmfTriangles, GmfTetrahedra);
@@ -157,23 +157,22 @@ int main(int argc, char *argv[])
                                 VerIdx, GmlReadMode, NULL,
                                 GrdExtIdx, GmlReadMode, NULL,
                                 RhsIdx, GmlWriteMode, NULL);
-   TimKrn = GmlCompileKernel(GmlIdx, tim_int, "tim_int", GmlTetrahedra, 3,
+   TimKrn = GmlCompileKernel(GmlIdx, tim_int, "tim_int", GmlTetrahedra, 2,
                              RhsIdx, GmlReadMode, NULL,
-                             SolTetIdx, GmlReadMode, NULL,
-                             SolTetTmpIdx, GmlWriteMode, NULL);
+                             SolTetIdx, GmlReadMode | GmlWriteMode, NULL);
 
    /* Solution initialization. */
-   Time = GmlLaunchKernel(GmlIdx, IniTetKrn);
+   // Time = GmlLaunchKernel(GmlIdx, IniTetKrn);
    /* Begin resolution. */
-   for (n = 1; n <= 1; n++)
+   for (n = 1; n <= 10000; n++)
    {
       Time = GmlLaunchKernel(GmlIdx, SolExtKrn);
       Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
       Time = GmlLaunchKernel(GmlIdx, GrdExtKrn);
       Time = GmlLaunchKernel(GmlIdx, FlxBalKrn);
       Time = GmlLaunchKernel(GmlIdx, TimKrn);
-      // Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
-      // printf("+++ Iteration %4d Residual = %.12f\n", n, Res);
+      Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
+      printf("+++ Iteration %4d Residual = %.12f\n", n, Res);
    }
    // do
    // {
@@ -226,8 +225,8 @@ int main(int argc, char *argv[])
    Laplacian = malloc(NbrTet * sizeof(float));
    for (i = 0; i < NbrTet; i++)
    {
-      // GmlGetDataLine(GmlIdx, SolTetIdx, i, &SolTet[i]);
-      GmlGetDataLine(GmlIdx, SolTetTmpIdx, i, &SolTet[i]);
+      GmlGetDataLine(GmlIdx, SolTetIdx, i, &SolTet[i]);
+      // GmlGetDataLine(GmlIdx, SolTetTmpIdx, i, &SolTet[i]);
       GmlGetDataLine(GmlIdx, GrdTetIdx, i, Tmp);
       XGrdTet[i] = Tmp[0];
       YGrdTet[i] = Tmp[1];
