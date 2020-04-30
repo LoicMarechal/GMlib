@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: apr 27 2020                                           */
+/*   Last modification: apr 29 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -49,7 +49,7 @@ enum memory_type     {GmlInternal, GmlInput, GmlOutput, GmlInout};
 
 typedef struct
 {
-   int            EleIdx, ItmIdx, NxtDat, nod[4];
+   int            EleTyp, EleIdx, ItmIdx, NxtDat, nod[4];
 }BucSct;
 
 typedef struct
@@ -138,8 +138,8 @@ static void    GetCntVec               (int , int *, int *, int *);
 static int     BldLnk                  (GmlSct *, int, int);
 static void    GetItmNod               (int *, int, int, int, int *);
 static int     CalHshKey               (HshTabSct *, int *);
-static void    AddHsh                  (HshTabSct *, int, int, int, int *);
-static int     GetHsh                  (HshTabSct *, int, int, int, int *, int *);
+static void    AddHsh                  (HshTabSct *, int, int, int, int, int *);
+static int     GetHsh                  (HshTabSct *, int, int, int, int *, int *, int *);
 
 
 /*----------------------------------------------------------------------------*/
@@ -736,7 +736,7 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
    lnk.DatLen = ItmNmbVer[ lnk.HshTyp ];
    lnk.KeyLen = HshLenTab[ lnk.DatLen ];
    lnk.NmbDat = lnk.TabSiz;
-   lnk.NxtDat = 0;
+   lnk.NxtDat = 1;
    lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
    lnk.DatTab = malloc(lnk.NmbDat * sizeof(BucSct));
 
@@ -768,7 +768,7 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
       {
          GetItmNod(EleNod, DstTyp, lnk.HshTyp, j, ItmTab);
          HshKey = CalHshKey(&lnk, ItmTab);
-         AddHsh(&lnk, HshKey, i, j, ItmTab);
+         AddHsh(&lnk, HshKey, DstTyp, i, j, ItmTab);
       }
    }
 
@@ -823,7 +823,7 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
             idx = i * SrcNmbItm + j;
             GetItmNod(EleNod, SrcTyp, lnk.HshTyp, j, ItmTab);
             HshKey = CalHshKey(&lnk, ItmTab);
-            DegTab[ idx ] = GetHsh(&lnk, HshKey, i, j, ItmTab, NULL);
+            DegTab[ idx ] = GetHsh(&lnk, HshKey, i, j, ItmTab, NULL, NULL);
          }
       }
 
@@ -912,7 +912,7 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
             HshKey = CalHshKey(&lnk, ItmTab);
             PtrInt = &BalTab[ i * BalDat->ItmLen + j ];
 
-            if((cpt = GetHsh(&lnk, HshKey, i, j, ItmTab, cod)))
+            if((cpt = GetHsh(&lnk, HshKey, i, j, ItmTab, cod, NULL)))
             {
                if(dir == -1)
                   BalTab[ i * BalDat->ItmLen + j ] = cod[0] >> 4;
@@ -920,7 +920,7 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
                {
                   if(cpt != 2)
                      BalTab[ i * BalDat->ItmLen + j ] = 0;
-                  else if( ((cod[0] >> 4) != i) || ((cod[0] & 7) != j) )
+                  else if( ((cod[0] >> 4) != i) || ((cod[0] & 15) != j) )
                      BalTab[ i * BalDat->ItmLen + j ] = cod[0];
                }
             }
@@ -1025,9 +1025,9 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
          HshKey = CalHshKey(&lnk, ItmTab);
 
          if(!HghTab || (i <= MaxPos))
-            GetHsh(&lnk, HshKey, i, 0, ItmTab, &BalTab[ i * BalSiz ]);
+            GetHsh(&lnk, HshKey, i, 0, ItmTab, &BalTab[ i * BalSiz ], NULL);
          else
-            GetHsh(&lnk, HshKey, i, 0, ItmTab, &HghTab[ (i - MaxPos) * HghSiz ]);
+            GetHsh(&lnk, HshKey, i, 0, ItmTab, &HghTab[ (i - MaxPos) * HghSiz ], NULL);
       }
 
       if(gml->DbgFlg)
@@ -1151,8 +1151,8 @@ static int CalHshKey(HshTabSct *lnk, int *ItmTab)
 /* Add a pair element/entity to the hash table and handle any collision       */
 /*----------------------------------------------------------------------------*/
 
-static void AddHsh(  HshTabSct *lnk, int HshKey, int EleIdx,
-                     int ItmIdx, int *ItmTab )
+static void AddHsh(  HshTabSct *lnk, int HshKey, int EleTyp,
+                     int EleIdx, int ItmIdx, int *ItmTab )
 {
    int i, nxt;
    BucSct *buc;
@@ -1166,6 +1166,7 @@ static void AddHsh(  HshTabSct *lnk, int HshKey, int EleIdx,
    nxt = lnk->HshTab[ HshKey ];
    lnk->HshTab[ HshKey ] = lnk->NxtDat;
    buc = &lnk->DatTab[ lnk->NxtDat ];
+   buc->EleTyp = EleTyp;
    buc->EleIdx = EleIdx;
    buc->ItmIdx = ItmIdx;
    buc->NxtDat = nxt;
@@ -1187,7 +1188,7 @@ static void AddHsh(  HshTabSct *lnk, int HshKey, int EleIdx,
 /*----------------------------------------------------------------------------*/
 
 static int GetHsh(   HshTabSct *lnk, int HshKey, int EleIdx,
-                     int ItmIdx, int *ItmTab, int *UsrTab )
+                     int ItmIdx, int *ItmTab, int *UsrTab, int *TypTab )
 {
    int i, flg, deg = 0;
    BucSct *buc;
@@ -1212,6 +1213,9 @@ static int GetHsh(   HshTabSct *lnk, int HshKey, int EleIdx,
       {
          if(UsrTab)
             UsrTab[ deg ] = (buc->EleIdx << 4) | buc->ItmIdx;
+
+         if(TypTab)
+            TypTab[ deg ] = buc->EleTyp;
 
          deg++;
       }
@@ -2694,10 +2698,10 @@ int GmlExtractEdges(size_t GmlIdx)
             GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
             HshKey = CalHshKey(&lnk, ItmTab);
 
-            if(GetHsh(&lnk, HshKey, i, j, ItmTab, NULL))
+            if(GetHsh(&lnk, HshKey, i, j, ItmTab, NULL, NULL))
                continue;
 
-            AddHsh(&lnk, HshKey, i, j, ItmTab);
+            AddHsh(&lnk, HshKey, typ, i, j, ItmTab);
             cpt++;
          }
       }
@@ -2732,7 +2736,7 @@ int GmlExtractEdges(size_t GmlIdx)
             HshKey = CalHshKey(&lnk, ItmTab);
             cod = 0;
 
-            if(!GetHsh(&lnk, HshKey, i, j, ItmTab, &cod))
+            if(!GetHsh(&lnk, HshKey, i, j, ItmTab, &cod, NULL))
                continue;
 
             if(cod >> 4 != i)
@@ -2763,7 +2767,7 @@ int GmlExtractFaces(size_t GmlIdx)
    int         i, j, i0, i1, i2, i3, typ, idx, cpt = 0, TriIdx, QadIdx, HshKey;
    int         NmbFac, NmbTri = 0, NmbQad = 0, OldNmbTri, OldNmbQad;
    int         EleSiz, NmbEle, EleLen, *EleNod, *MshNod, FacNod[4], IdxLst[4];
-   int         ref, (*QadTab)[5], (*TriTab)[4];
+   int         ref, (*QadTab)[5], (*TriTab)[4], TypTab[4];
    DatSct      *dat;
    BucSct      *buc;
    HshTabSct   TriHsh, QadHsh;
@@ -2843,9 +2847,9 @@ int GmlExtractFaces(size_t GmlIdx)
                HshKey = CalHshKey(&TriHsh, FacNod);
 
                // If it is not in the hash table, add it
-               if(!GetHsh(&TriHsh, HshKey, i, j, FacNod, NULL))
+               if(!GetHsh(&TriHsh, HshKey, i, j, FacNod, NULL, NULL))
                {
-                  AddHsh(&TriHsh, HshKey, i, j, FacNod);
+                  AddHsh(&TriHsh, HshKey, typ, i, j, FacNod);
                   NmbTri++;
                }
             }
@@ -2856,9 +2860,9 @@ int GmlExtractFaces(size_t GmlIdx)
                HshKey = CalHshKey(&QadHsh, FacNod);
 
                // If it is not in the hash table, add it
-               if(!GetHsh(&QadHsh, HshKey, i, j, FacNod, NULL))
+               if(!GetHsh(&QadHsh, HshKey, i, j, FacNod, NULL, NULL))
                {
-                  AddHsh(&QadHsh, HshKey, i, j, FacNod);
+                  AddHsh(&QadHsh, HshKey, typ, i, j, FacNod);
                   NmbQad++;
                }
             }
@@ -2903,7 +2907,7 @@ int GmlExtractFaces(size_t GmlIdx)
          HshKey = CalHshKey(&TriHsh, FacNod);
 
          // If it is in the hash table, send its data to the GMlib
-         if(GetHsh(&TriHsh, HshKey, i, j, FacNod, IdxLst) != 1)
+         if(GetHsh(&TriHsh, HshKey, i, j, FacNod, IdxLst, NULL) != 1)
             continue;
 
          if(IdxLst[0] >> 4 != i)
@@ -2933,6 +2937,24 @@ int GmlExtractFaces(size_t GmlIdx)
       GmlFreeData(GmlIdx, QadIdx);
       QadIdx = GmlNewMeshData(GmlIdx, GmlQuadrilaterals, NmbQad);
       NmbQad = 0;
+
+      for(i=0;i<OldNmbQad;i++)
+      {
+         GetItmNod(QadTab[i], GmlQuadrilaterals, GmlQuadrilaterals, 0, FacNod);
+         HshKey = CalHshKey(&QadHsh, FacNod);
+
+         // If it is in the hash table, send its data to the GMlib
+         if(GetHsh(&QadHsh, HshKey, i, j, FacNod, IdxLst, NULL) != 1)
+            continue;
+
+         if(IdxLst[0] >> 4 != i)
+            continue;
+
+         GmlSetDataLine(GmlIdx, QadIdx, NmbQad, FacNod[0],
+                        FacNod[1], FacNod[2], FacNod[3], QadTab[i][3]);
+
+         NmbQad++;
+      }
    }
 
    // Loop over all kinds of elements and setup the faces
@@ -2962,10 +2984,10 @@ int GmlExtractFaces(size_t GmlIdx)
                HshKey = CalHshKey(&TriHsh, FacNod);
 
                // If it is in the hash table, send its data to the GMlib
-               if(GetHsh(&TriHsh, HshKey, i, j, FacNod, IdxLst) != 1)
+               if(GetHsh(&TriHsh, HshKey, i, j, FacNod, IdxLst, TypTab) != 1)
                   continue;
 
-               if(IdxLst[0] >> 4 != i)
+               if( (IdxLst[0] >> 4 != i) || (TypTab[0] != typ) )
                   continue;
 
                GmlSetDataLine(GmlIdx, TriIdx, NmbTri, FacNod[0],
@@ -2980,10 +3002,10 @@ int GmlExtractFaces(size_t GmlIdx)
                HshKey = CalHshKey(&QadHsh, FacNod);
 
                // If it is in the hash table, send its data to the GMlib
-               if(GetHsh(&QadHsh, HshKey, i, j, FacNod, IdxLst) != 1)
+               if(GetHsh(&QadHsh, HshKey, i, j, FacNod, IdxLst, TypTab) != 1)
                   continue;
 
-               if(IdxLst[0] >> 4 != i)
+               if( (IdxLst[0] >> 4 != i) || (TypTab[0] != typ) )
                   continue;
 
                GmlSetDataLine(GmlIdx, QadIdx, NmbQad, FacNod[0],
@@ -3076,7 +3098,7 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
       {
          GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
          HshKey = CalHshKey(&lnk, ItmTab);
-         AddHsh(&lnk, HshKey, i, j, ItmTab);
+         AddHsh(&lnk, HshKey, typ, i, j, ItmTab);
       }
    }
 
@@ -3096,7 +3118,7 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
       {
          GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
          HshKey = CalHshKey(&lnk, ItmTab);
-         cpt = GetHsh(&lnk, HshKey, i, j, ItmTab, cod);
+         cpt = GetHsh(&lnk, HshKey, i, j, ItmTab, cod, NULL);
          TetNgb[j] = 0;
 
          for(k=0;k<cpt;k++)

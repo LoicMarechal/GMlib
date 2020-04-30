@@ -1,4 +1,7 @@
+enum BC_TYPE { DIRICHLET, NEUMANN };
 typedef struct {
-   int   foo;
-   float res;
-}GmlParSct;
+  int Cnt;
+  int BoCo[6];
+  int BoCo_Ref[6];
+  float BoCo_Val[6];
+} GmlParSct;
