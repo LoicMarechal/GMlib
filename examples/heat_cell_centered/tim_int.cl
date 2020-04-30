@@ -1,1 +1,0 @@
-SolTet = SolTet + 0.01 * Rhs;
