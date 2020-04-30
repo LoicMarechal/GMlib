@@ -1,12 +1,14 @@
-//SolExt = 0.5f * (SolTet[0] + SolTet[1]);
+int i;
+
+SolExt = 0.5f * (SolTet[0] + SolTet[1]);
 
 /* Boundary conditions treatment. */
+for (i = 0; i < 6; i++)
+  if (GmlPar->BoCo[i] == DIRICHLET && GmlPar->BoCo_Ref[i] == TriRef)
+    SolExt = 1.234;
 
-float RefVal[6] = {0.0, 1.0, 2.0, 0.0, 0.0, 0.0};
-SolExt = RefVal[ TriRef ];
+// if(TriRef == 1) SolExt = 1.;
+// if(TriRef == 2) SolExt = 2.;
+// if(TriRef == 3) SolExt = 0.;
 
-
-//float val = 0.;
-//if(TriRef == 1) val = 1.;
-//if(TriRef == 2) val = 2.;
-//SolExt = val;
+// if (TriRef > 0) GmlPar->Cnt = GmlPar->Cnt + 1;

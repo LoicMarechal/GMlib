@@ -37,7 +37,7 @@
 \begin{flushright}
 \Large Lo\"ic MAR\'ECHAL / INRIA, Projet Gamma\\
 \Large Avril 2020 \\
-\normalsize Document v2.02
+\normalsize Document v2.03
 \normalsize Librairie v3.19
 \end{flushright}
 
@@ -427,7 +427,72 @@ Bien que des unités de calculs double précision soient présentent sur la plup
 Cette dernière est alors inférieure à celle du CPU principal !
 La capacité FP64 du GPU est alors un faux ami.
 
+
 \subsection{GmlCompileKernel}
+
+\subsubsection*{Syntaxe}
+
+{\tt KrnIdx = GmlCompileKernel(LibIdx, OclSrc, PrcNam, MshTyp, NmbDat, ...);}
+
+Voici certainement la plus complexe des procédures de la librairie !
+
+Son rôle est de créer un exécutable compatible avec la carte graphique sélectionnée à partir d'un source OpenCL en ASCII, d'un type d’éléments pour la boucle principale et d'une liste de données à accéder en lecture ou écriture, directement ou indirectement.
+
+Les paramètres essentiels sont le type de la donnée de maillage sur laquelle boucler et qui va déterminer le mode d'accès aux autres données de maillage ou de solution qui vont suivre.
+Le paramètre suivant étant le nombre de données utilisateurs auquel le kernel pourra accéder et pour chacune d'entre elles devront être précisés les modes d'accès à la mémoire et d'éventuelles options dont voici le détail.
+
+Pour chaque type de donnée, on fournit le numéro de l'étiquette.
+Le mode d'accès de la donnée, direct ou indirect via une table topologique, est déterminé en fonction du type de donné de la boucle et celui de la donnée accédée.
+
+Dans le cas où la donnée est de dimension égale, il s'agit d'un accès direct et la donnée utilisateur sera composée d'une seule entrée : par exemple, si on boucle sur les triangles et qu'on accède à un champ de solution contenant la normale de chaque triangle, la donnée générée correspondante sera du type {\tt float4 TriNrm}, car on traite un seul triangle par itération de la boucle et un triangle ne possède qu'une seule normale stockée dans un {\tt float4}.
+
+Dans le cas où la donnée accédée est de dimension inférieure, la donnée sera alors présentée sous forme d'un tableau dont la taille est égale au nombre d'entités du type accédé qui composent le type de maillage de la boucle principale. Par exemple, si on boucle sur les triangles et qu'on accède à un champ de solution stockant la normale à chaque sommet, comme il y a trois sommets par triangle, le type sera défini comme ceci : {\tt float4 TriVerNrm[3]} car il y a trois normales stockées chacune sur un vecteur de type {\tt float4}.
+
+Dans le cas où la donnée accédée est de dimension supérieure, il s'agit d'un kernel montant (boule ou coquille), et là aussi la donnée sera présentée sous forme d'un tableau dont la dimension sera variable et définie séparément pour chaque entité de la boucle. Si cette fois-ci on boucle sur les sommets et accède aux normales associées aux triangles, le champ sera défini comme ceci : {\tt VerTriNrm[ VerTriDeg ]}, et la variable {\tt VerTriDeg} sera définie à la volée pour chaque sommet.
+
+De plus, il est possible de court-circuiter le système de lien topologique par défaut et de fournir son propre tableau de lien ad hoc, comme le tableau des voisins par exemple.
+Si l'om souhaite boucler sur les tétraèdres et accéder à un champ de solution associé aux tétraèdres de l'itération de la boucle, mais aussi de ses quatre voisins potentiels, on peut générer cette table avec la commande {\tt GmlSetNeighbours()} et la passer en paramètre de lien topologique à la création du kernel.
+
+L'exemple suivant va illustrer la différence entre tous ces types d'accès en partant du même type de donnée.
+Imaginons que nous partons d'un maillage composé de sommets, de triangles, de tétraèdres et d'un champ associé à chaque triangle et contenant son aire. Nous allons accéder en lecture aux aires des triangles, mais en bouclant sur les sommets dans un premier kernel, puis sur les tétraèdres dans un deuxième, sur les triangles dans un troisième et enfin sur les triangles et leurs voisins dans le dernier. Vous constaterez que le type de donnée contenant l'aire, portant défini comme un simple scalaire, change complètement selon les kernels !
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+OclSrc     & char *  & pointeur dur une chaine de caractères contenant le source OpenCL du kernel à compiler \\
+\hline
+PrcNam     & char *  & pointeur sur une chaine contenant le nom de la procédure telle qu'elle apparaitra dans les kernel OpenCL générés \\
+\hline
+MshTyp     & int     & type de donnée sur lequel le kernel va boucler : cette information est capitale, car elle va déterminer les types, dimensionnements et modes d'accès mémoires de toutes les données utilisateurs qui seront accédées par le kernel \\
+\hline
+NmbTyp     & int     & nombre de types de données qui seront lues et/ou écrites par le kernel, pour chaque donnée on attend le jeu de trois paramètres suivants : \\
+\hline
+DatIdx     & int     & étiquette du type de donnée à accéder \\
+\hline
+flags      & int     & liste de flags concaténés à l'aide de l'opérateur logique \emph{ou}, représenté par une barre ({\tt |} en C, tel que {\tt GmlReadMode}, {\tt GmlWriteMode}, {\tt GmlRefFlag} et {\tt GmlVoyeurs} \\
+\hline
+LnkIdx     & int     & index d'un type de lien topologique spécifique à suivre pour accéder aux données, si cette valeur est nulle, la librairie passera par un lien construit par défaut. \\
+\hline
+\end{tabular}
+
+\medskip
+
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type   & description \\
+\hline
+DatIdx     & int    & numéro de la nouvelle étiquette de kernel\\
+\hline
+\end{tabular}
+
+\subsubsection*{Commentaires}
+
 
 \subsection{GmlDebugOff}
 
@@ -480,7 +545,9 @@ Retour     & type   & description \\
 
 
 \subsection{GmlExtractEdges}
-Non implémenté.
+Cette procédure construit la table des arêtes uniques présentes dans tout le volume.
+Pour ce faire, elle analyse la totalité des éléments de dimension 1 (arêtes), 2 (faces) et 3 (volumes) afin d'en extraire les arêtes.
+Si une table d'arêtes avait déjà été renseignée, mais n'était pas complète, ne comportant que certaines arêtes caractéristiques du maillage par exemple, celle-ci est conservée et les nouvelles arêtes sont ajoutées à la suite de la table. Dans ce cas, l'étiquette du type de donnée arrête aura changé, car l'ancienne table est libérée et recopiée dans la nouvelle. Cette nouvelle étiquette est la valeur de retour de la procédure ({\tt NewEdgIdx = GmlExtractEdges(LibIdx)}).
 
 \subsubsection*{Syntaxe}
 
@@ -502,15 +569,21 @@ LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
 \hline
 Retour     & type   & description \\
 \hline
-DatIdx     & int    & \\
+DatIdx     & int    & numéro de la nouvelle étiquette de donnée d'arête\\
 \hline
 \end{tabular}
 
 \subsubsection*{Commentaires}
+La numérotation des arêtes ainsi générée peut ne pas être optimale, car celles-ci ayant été générées en bouclant consécutivement sur les éléments, la numérotation des arrêtes suit globalement celles des autres éléments volumiques, mais n'est pas aussi optimale qu'une vraie renumérotation via une SFC comme Hilbert.
+De plus, ces arêtes n'ont pas été triées selon leur degré de coquille ce qui a pour conséquence de consommer plus de mémoire et de temps de lecture dans le cas d'un kernel montant arête vers tétraèdres par exemple.
+Les arêtes seront toutes stockées dans la zone à haut degré, soit 32, dans le cas des coquilles de tétraèdres, alors que la moyenne est à 6.
+Dans une telle situation, il faut envisager de renuméroter les arêtes selon leur degré et une courbe de Hilbert afin d’optimiser l'exécution d'un kernel d'arrêtes vers tétraèdres.
 
 
 \subsection{GmlExtractFaces}
-Non implémenté.
+Cette procédure construit la table des faces uniques présentes dans tout le volume, triangulaire ou quadrilatéral.
+Pour ce faire, elle analyse la totalité des éléments de dimension 2 (faces) et 3 (volumes) afin d'en extraire les faces.
+Si une table de face avait déjà été renseignée, mais n'était pas complète, ne comportant que faces frontières par exemple, celle-ci sont conservées et les nouvelles faces sont ajoutées à la suite de la table. Dans ce cas, les étiquètes des types de données triangles et quadrilatère auront changés, car les anciennes tables auront été libérées et recopiées dans les nouvelles. Contrairement à l'extraction d'arêtes, la valeur de retour de la procédure est la somme des triangles et quadrilatères du maillage. Afin de récupérer les nouvelles étiquettes des types de données {\tt GmlTriangles} et {\tt GmlQuadriaterals}, il faut passer par la commande {\tt GmlMeshInfo()}.
 
 \subsubsection*{Syntaxe}
 
@@ -532,11 +605,13 @@ LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
 \hline
 Retour     & type   & description \\
 \hline
-DatIdx     & int    & \\
+DatIdx     & int    & somme des triangles et quadrilatères du maillage \\
 \hline
 \end{tabular}
 
 \subsubsection*{Commentaires}
+Comme pour les arêtes, la numérotation des faces ne sera pas optimale et seulement dérivée de celle des éléments de volume.
+Néanmoins, il n'y a pas de problème de degré des liens montant vers les éléments de volume, car celui-ci est fixé à deux voisins de part et d'autre de chaque face.
 
 
 \subsection{GmlFreeData}
