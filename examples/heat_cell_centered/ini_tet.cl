@@ -1,4 +1,4 @@
 float4 Mid;
 
 Mid = 0.25f * (VerCrd[0] + VerCrd[1] + VerCrd[2] + VerCrd[3]);
-SolTet = 1.234f;// Mid[0] + 0.5f;
+SolTet = Mid[0]; 

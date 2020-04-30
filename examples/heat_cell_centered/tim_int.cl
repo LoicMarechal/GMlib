@@ -1,1 +1,2 @@
-SolTet = SolTet + 0.01 * Rhs;
+SolTetTmp = SolTet + 0 * Rhs;
+// SolTet = SolTetTmp;
