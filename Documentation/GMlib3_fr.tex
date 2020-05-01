@@ -36,8 +36,8 @@
 
 \begin{flushright}
 \Large Lo\"ic MAR\'ECHAL / INRIA, Projet Gamma\\
-\Large Avril 2020 \\
-\normalsize Document v2.03
+\Large Mai 2020 \\
+\normalsize Document v2.04
 \normalsize Librairie v3.19
 \end{flushright}
 
@@ -59,41 +59,37 @@
 %  1 / INTRODUCTION
 %
 
+
 \section{Introduction}
-La {\tt GMlib} v3 est une librairie visant à grandement faciliter le portage ou développement de logiciels de calculs scientifiques utilisant des maillages non structurés comme principale donnée.
+La {\tt GMlib} v3 est une librairie visant à grandement faciliter le portage ou le développement sur GPU de logiciels de calculs scientifiques utilisant des maillages non structurés comme principale donnée.
 
 Elle est basée sur le standard ouvert OpenCL, qui a pour avantage de fonctionner sur la plupart des matériels et systèmes actuels.
-OpenCL tire non seulement parti des GPU des trois principaux constructeurs, AMD, Intel et Nvidia, mais aussi des GPU intégrés des smartphones et tablettes (ARM, Imagination Technologies, etc.).
-Et en l'absence de GPU dans un appareil, il est parfaitement à même d'utiliser efficacement tous les coeurs et capacités vectorielles des CPU, ce qui en fait une technologie très générique.
+OpenCL fonctionne non seulement sur les GPU des trois principaux constructeurs, AMD, Intel et Nvidia, mais aussi des GPU intégrés des smartphones et tablettes (ARM, Imagination Technologies, etc.) et en l'absence de GPU dans un appareil, il est parfaitement à même d'utiliser efficacement tous les coeurs et capacités vectorielles des CPU, ce qui en fait une technologie très générique.
 
-Mais le développement d'applications performantes et industrielles, c'est à dire, autre chose que la résolution d'un laplacien sur une grille structurée et carrée, requiert un investissement et des compétences conséquentes de la part des programmeurs.
-Il est très important de noter qu'en matière de code sur GPU, c'est le stockage, transfert et accès efficace aux données qui sont le plus problématiques et non les algorithmes, qui ne nécessitent pas tant d'adaptation par rapport aux plateformes CPU parallèles conventionnelles.
+Mais le développement d'applications performantes et industrielles, c'est à dire, autre chose que la résolution d'un laplacien sur une grille structurée et carrée, requiert un investissement et des compétences conséquentes de la part du programmeur.
+Il est donc important de préciser qu'en matière de programmation sur GPU, c'est le stockage, le transfert et l'accès efficace aux données qui sont le plus problématiques et non les algorithmes, qui ne nécessitent pas tant d'adaptation par rapport aux plateformes CPU parallèles conventionnelles.
 
-C'est pourquoi l'idée sous-jacente de la {\tt GMlib} est d'abstraire autant que possible la gestion des données et de laisser le programmeur le plus libre possible sur la partie code proprement dite.
-Les GPU étant à l'origine conçus pour l'affichage graphique, il est naturel d'en utiliser le paradigme de programmation proposé par les principaux acteurs : les shaders.
+C'est pourquoi l'idée sous-jacente de la {\tt GMlib} est d'abstraire autant que possible la gestion des données et de laisser le programmeur se concentrer le plus librement possible sur la partie algorithmique proprement dite.
+Les GPU étant à l'origine conçus pour l'affichage graphique, il est naturel d'en utiliser le paradigme de programmation proposé par les principaux acteurs, connus sous le terme de \emph{shaders}.
 
-L'approche du graphisme sur GPU consiste à demander au programmeur de transmettre l'ensemble des données nécessaires à l'affichage à la librairie (OpenGL, Direct 3D), puis de fournir un code assez succins, appelé shader, à appliquer sur chaque entité graphique sélectionnée.
-Il est par exemple courant de fournir un ensemble de sommets, de triangles, de vecteurs normaux aux sommets, et par la suite, de demander à la librairie graphique de boucler sur les triangles tout en accédant aux coordonnées et normales de leurs sommets afin d'exécuter un code (shader) calculant la couleur et la position à l'écran de chaque pixel du triangle.
+L'approche du graphisme sur GPU consiste à demander au programmeur de transmettre l'ensemble des données nécessaires à l'affichage à la librairie graphique (OpenGL, Direct 3D ou Vulkan), puis de fournir un code assez succins, appelé shader, à appliquer sur chacune des ces données graphiques.
+Il est par exemple courant de fournir un ensemble de sommets, de vecteurs normaux associés et de triangles, et par la suite, de demander à la librairie graphique de boucler sur les triangles tout en accédant aux coordonnées et normales de leurs sommets afin d'exécuter un code (shader) calculant la couleur, l'ombrage et la position à l'écran de chaque pixel du triangle.
 
-Une telle approche a été reprise pour la {\tt GMlib}, mais ici les textures, projections, et effets graphiques sont remplacés par des tétraèdres, arrêtes, champs de solutions physiques, et tous les accès indirects possibles entre ces entités.
-Les types de données de maillage actuellement proposées sont : sommets, arrêtes, triangles, quadrilatères, tétraèdres, pyramides, prismes et hexaèdres ainsi que les liens implicitent qui les relient entre eux (boules, coquille, voisin) et qui sont automatiquement construits par la librairie.
-De plus, des types de données libres (entier, flottant, scalaires, tableaux, vecteur) peuvent être associés à chaque entité de maillage afin d'y stocker les données nécessaires aux calculs.
+Une telle approche a été reprise par la {\tt GMlib}, mais ici les textures, projections, et effets graphiques sont remplacés par des tétraèdres, arêtes, champs de solutions physiques, et tous les accès indirects possibles entre ces entités.
+Les types de données de maillage actuellement proposées sont : sommets, arêtes, triangles, quadrilatères, tétraèdres, pyramides, prismes et hexaèdres ainsi que les liens implicites qui les relient entre eux (boules, coquilles, voisins) et qui sont automatiquement construits par la librairie.
+De plus, des types de données librement définissables (entier, flottant, scalaires, tableaux, vecteur) peuvent être associés à chaque entité de maillage afin d'y stocker les données nécessaires aux calculs.
 
-Un code basé sur la {\tt GMlib} se décompose en quatre étapes : initialisations, renseignements des données, compilation des kernels et exécution de ces derniers sur GPU.
+Un code basé sur la {\tt GMlib} se déroule en quatre étapes : initialisations, renseignements des données, compilation des \emph{kernels} (nom donné aux \emph{shaders} dans le monde de la simulation numérique) et exécution de ces derniers sur GPU.
 
-Initialisation :
-On doit tout d'abord initialiser la librairie en lui fournissant le numéro du matériel qui va exécuter le kernel en OpenCL.
-Puis on dimensionne chaque type de donnée de maillage et de solution associée simplement en fournissant le nombre de chaque entité et la taille des données, c'est une phase de description des données.
+\paragraph{Initialisation :} on doit tout d'abord initialiser la librairie en lui fournissant le numéro du matériel qui va exécuter les kernels en OpenCL. Puis on dimensionne chaque type de donnée de maillage et de solution associée simplement en fournissant le nombre de chaque entité et la taille des données.
 
-Renseignement des données :
-L'utilisateur doit boucler sur chaque sommet, élément, ou autre donné précédemment déclarés pour en transmettre le contenue à la {\tt GMlib}, qui elle-même se chargera de les transmettre sur la carte graphique au moment et sous la forme adéquate.
+\paragraph{Renseignement des données :} 'utilisateur doit boucler sur chaque sommet, élément, ou autres données précédemment déclarés pour en transmettre le contenu à la {\tt GMlib}, qui elle-même se chargera de les transmettre sur la carte graphique au bon moment et sous une forme adéquate.
 
-Compilation des kernels :
-L'utilisateur décrit les boucles qu'il souhaite exécuter sur GPU en précisant pour chacune, la liste des entités de maillage et solutions qui lui seront nécessaires, ainsi que leur mode d'accès, lecture et/ou écriture, puis le code source du code à exécuter sur ces données et qui sera au préalable compilé par la librairie.
-Cette compilation à chaud, permet de générer un code binaire exécutable au moment même de l'exécution du logiciel, ce qui lui permet de fonctionner sur l'importe quel type de matériel (AMD, Intel, NVIDIA, etc.)
+\paragraph{Compilation des kernels :} l'utilisateur décrit les boucles qu'il souhaite exécuter sur GPU en précisant pour chacune, la liste des entités de maillage et solutions qui lui seront nécessaires, ainsi que leur mode d'accès, lecture et/ou écriture, et enfin le code source du kernel à exécuter sur ces données et qui sera au préalable compilé par la librairie.
+Cette compilation à chaud permet de générer un code binaire exécutable au moment même de l'exécution du logiciel et donc de fonctionner sur n'importe quel type de matériel (AMD, Intel, NVIDIA, etc.)
 
-Exécution des kernels :
-Une fois toutes les données définies et transmises et les codes compilés et optimisés sur l'architecture choisie, il ne reste plus qu'a lancer l'exécution de chaque kernel, autant de fois que nécessaire pour converger un calcul et en ne modifiant que quelques paramètres globaux afin de contrôler ledit calcul (coefficients, résidus, flags, etc.)
+\paragraph{Exécution des kernels :} une fois toutes les données définies et transmises et les codes compilés et optimisés sur l'architecture choisie, il ne reste plus qu'a déclencher l'exécution de chaque kernel, autant de fois que nécessaire pour converger le calcul et en ne modifiant que quelques paramètres globaux afin de contrôler le processus numérique (coefficients, résidus, flags, etc.)
+
 
 \subsection{Motivation}
 Les deux principales motivations à la programmation sur GPU sont leur rapport performance/prix, bien plus intéressant que celui des CPU standards, ainsi que leur capacité d'évolution future, elle aussi bien plus grande que celle des CPU multic\oe urs qui semble être limitée à moyen terme.
@@ -109,26 +105,26 @@ Il a donc paru important de proposer aux développeurs une librairie simplifiant
 
 Le mode opératoire est donc le suivant :
 
--choisir les types de données parmi ceux proposés qui vous permettront de stocker vos données,
--partir d'un des codes de base proposés accédant à ce type de données et y insérer vos propres calculs sur ces données.
+\begin{itemize}
+\item choisir les types de données parmi ceux proposés qui vous permettront de stocker vos données,
+\item partir d'un des codes de base proposés accédant à ce type de données et y insérer vos propres calculs sur ces données.
+\end{itemize}
 
 Ceci nous amène donc à parler de l'interfaçage entre vos données et la librairie, autrement dit, l'API.
 
-\subsection{API}
 
-L'interaction avec la librairie repose sur deux éléments fondamentaux : les types de données et les codes (i.e. kernels) qui vont opérer sur celles-ci.
-Logiquement, le déroulement d'un logiciel utilisant un accélérateur GPU va se dérouler en deux phases :
+\subsection{API}
+\label{sec:API}
+L'interaction avec la librairie repose sur deux éléments fondamentaux : les types de données et les codes (i.e. kernels) qui vont opérer sur celles-ci. Par conséquent, le déroulement d'un logiciel utilisant un accélérateur GPU va se dérouler en deux phases :
 
 \begin{itemize}
-\item l'allocation et la définition des données (maillages, champs de solutions, liens topologiques),
-\item la déclaration, la compilation et l'exécution des kernels en OpenCL
+\item l'allocation et la définition des données, maillages, champs de solutions et liens topologiques,
+\item la déclaration, la compilation et l'exécution des kernels en OpenCL.
 \end{itemize}
 
-Toutes ces phases sont exécutées par le CPU hôte et seule les kernels tournent sur GPU et s'en trouveront donc accélérées.
-Dire d'un code qu'il "tourne sur GPU" est abus de langage, car les entrées-sorties, initialisation, compilation et post-traitement sont exécutés sur CPU et l'on doit parler de logiciel hybride CPU/GPU.
-Il est donc important d'optimiser toutes les phases d'initialisation, car celle-ci représente le \emph{coefficient d'Amdahl} de tout code hybride CPU/GPU.
+Ces deux phases sont exécutées par le CPU hôte et seule les kernels tournent sur le GPU proprement dit et s'en trouveront donc accélérées. Dire d'un code qu'il "tourne sur GPU" est abus de langage, car les entrées-sorties, initialisations, compilations et post-traitements sont exécutés sur CPU et l'on devrait plutôt parler de logiciel hybride CPU/GPU ou bien accélérés par GPU. Il est donc important d'optimiser toutes les phases initiales sur CPU, car celle-ci représente le \emph{coefficient d'Amdahl} de tout code hybride CPU/GPU.
 
-L'interfaçage avec la {\tt Gmlib} commence donc par son initialisation en lui fournissant le numéro du périphérique de calcul sur lequel les kernels seront exécutés : {\tt LibIdx = GmlInit(2);}
+L'interfaçage avec la {\tt Gmlib} commence donc par son initialisation en lui fournissant le numéro du périphérique de calcul sur lequel tous les kernels seront exécutés : {\tt LibIdx = GmlInit(2);}
 
 Sur la machine de l'auteur de ces lignes, une telle commande initialise la librairie avec la carte graphique \emph{ATI Radeon Pro 460} et l'étiquette retournée servira à communiquer avec toutes les autres commandes de la librairie par la suite.
 Notez que plusieurs instances de la librairie peuvent être ouvertes simultanément, avec le même périphérique, ou bien un autre.
@@ -137,10 +133,9 @@ Remarque : une instance ne peut utiliser qu'un seul périphérique de calcul, co
 
 Si l'utilisateur souhaite combiner la puissance de plusieurs GPU, il devra implémenter la distribution des calculs entre les cartes lui-même.
 
-Ensuite il faut définir et renseigner les types de données qui seront utilisés par les calculs effectués sur le GPU.
-Cela introduit un aspect très important : l'utilisateur ne peut utiliser ses propres données en mémoire CPU (tableaux, structures, objets, etc.), mais doit obligatoirement les déclarer et le transférer à la librairie. C'est une contrainte très forte, car la nature des données offertes est assez limitée et le portage d'un code sur GPU va surtout consister à plier ses propres structures de données dans le canevas proposé par la {\tt GMlib}.
+Il faut ensuite définir et renseigner les types de données qui seront utilisés par les calculs effectués sur le GPU. Cela introduit un aspect très important : l'utilisateur ne peut pas utiliser ses propres données en mémoire CPU (tableaux, structures, objets, etc.), mais doit obligatoirement les déclarer et les transférer à la librairie. C'est une contrainte très forte, car la nature des données offertes est assez limitée et le portage d'un code sur GPU va surtout consister à plier ses propres structures de données dans le canevas proposé par la {\tt GMlib}.
 
-Pour illustrer les processus, on va déclarer et renseigner les sommets d'un maillage que l'on vient de lire et de ranger dans le tableau {\tt crd[n][3]} et assigner à chacun une vitesse et un vecteur de déplacement aléatoire.
+Pour illustrer le processus, on va déclarer et renseigner les sommets d'un maillage que l'on vient de lire, dans le tableau {\tt crd[n][3]} et assigner à chacun une vitesse et un vecteur de déplacement aléatoire.
 
 \begin{tt}
 \begin{verbatim}
@@ -168,10 +163,10 @@ for(i=0;i<NmbVer;i++)
 \end{tt}
 \normalfont
 
-On souhaite calculer sur GPU le déplacement itératif de ces sommets selon leur direction et vitesse et récupérer les coordonnées résultantes après 1000 itérations.
+On souhaite calculer sur GPU le déplacement itératif de ces sommets selon leur direction et vitesse puis récupérer les coordonnées résultantes après 1000 itérations.
 
-Pour cela, nous allons tout d'abord écrire le code de déplacement d'une itération en OpenCL : il s'agit d'un kernel et il doit être placé dans un fichier indépendant, que nous appellerons iteration.cl.
-Puis on va le compiler en lui passant les données préalablement définies : les sommets qu'on souhaite envoyer sur le GPU et récupérer à la fin (\emph{Read \& Write}) et la vitesse et le déplacement qu'on souhaite envoyer, mais pas récupérer (\emph{Read}).
+Pour cela, nous allons tout d'abord écrire le code de déplacement d'une itération en OpenCL : il s'agit d'un kernel et il doit être placé dans un fichier indépendant, que nous appellerons \emph{iteration.cl}.
+Puis on va le compiler en lui passant en paramètres les données préalablement définies : les sommets qu'on souhaite envoyer sur le GPU et récupérer à la fin (\emph{Read \& Write}) et la vitesse et le déplacement qu'on souhaite seulement envoyer, mais pas récupérer (\emph{Read}).
 
 \begin{tt}
 \begin{verbatim}
@@ -196,25 +191,29 @@ Ce code, on ne peux plus succin, amène de nombreuses remarques :
 
 \begin{itemize}
 \item il n'y a pas de boucle itérant de 1 à NmbVer,
-\item il ne comporte aucune définition préalable des variables utilisée,
-\item il n'y a pas d'accès aux tableaux des sommets et données associées, mais seulement des scalaires,
-\item comment sera stocké le résultat,
+\item il ne comporte aucune définition préalable des variables utilisées,
+\item il n'y a pas d'accès aux tableaux des sommets et données associées, mais seulement des scalaires préremplis,
+\item on ne sait pas comment sera stocké le résultat,
 \item les coordonnées et le champ de déplacement sont des vecteurs en 3-D.
 \end{itemize}
 
-\paragraph{Boucle implicite : } il y a bien un compteur de boucle qui est incrémenté de 1 à NmbVer, mais la boucle est effectué par le GPU et l'utilisateur n'a pas moyen de contrôler l'ordre de traitement des sommets. Il ne fournit que le noyau de la boucle (d'où le nom kernel), sans itérateur, et ce morceau de code sera instancié et exécuté autant de fois qu'il y a de sommets dans le maillage, mais dans un ordre non spécifié !
+\paragraph{Boucle implicite : } il y a bien un compteur de boucle qui est incrémenté de 1 à NmbVer, mais la boucle est effectué par le GPU et l'utilisateur n'a pas moyen de contrôler l'ordre de traitement des sommets.
+Il ne fournit que le noyau de la boucle (d'où le nom \emph{kernel}), sans itérateur, et ce morceau de code sera instancié et exécuté autant de fois qu'il y a de sommets dans le maillage, mais dans un ordre non spécifié.
 
 \paragraph{Variables implicites : } les déclarations de variables locales sont effectuées par la librairie en fonction des paramètres définis lors de la compilation du kernel.
-Nous avions demandé l'accès aux coordonnées des sommets (un vecteur 3-D), à la vitesse (scalaire) et au vecteur de déplacement (vecteur 3-D) et la librairie a donc défini d'elle-même les variables du type adéquat pour recevoir toutes les données demandées de l'unique sommet en cours de traitement. Les noms des données de type maillage sont imposés par la librairie et connus (VerCrd pour les coordonnées, TriVer pour les numéros des trois sommets d'un triangle), quant aux données librement définies par l'utilisateur, elles portent le nom qu'il leur a assigné au moment de l'initialisation.
-Dans notre exemple, {\tt vitesse} est un scalaire et {\tt direction} est un vecteur.
-Le code des définitions est en fait créé par la librairie et ajouté juste avant le kernel fourni par l'utilisateur.
+Comme nous avons demandé l'accès aux coordonnées des sommets (un vecteur 3-D), à la vitesse (un scalaire) et au vecteur de déplacement (un vecteur 3-D), la librairie a donc défini d'elle-même les variables du type adéquat pour recevoir toutes les données demandées associées à l'unique sommet en cours de traitement.
+Les noms des données de type maillage sont imposés par la librairie et connus (VerCrd pour les coordonnées, TriVer pour les numéros des trois sommets d'un triangle, etc.), quant aux données librement définies par l'utilisateur, elles portent le nom qu'il leur a assigné au moment de l'initialisation.
+Dans notre exemple, {\tt vitesse} est un scalaire et {\tt direction} est un vecteur. Le code OpenCL des définitions est en fait créé par la librairie et ajouté juste avant le kernel fourni par l'utilisateur.
 
-\paragraph{Accès aux tableaux globaux : } il n'y a pas qu'un seul sommet dans le maillage et pourtant la librairie n'a défini qu'un seul vecteur {\tt VerCrd} contentant les coordonnées d'un seul sommet. Là encore, la librairie a bien défini le tableau des coordonnées ({\tt VerCrdTab[ NmbVer ]}), mais celui-ci est caché à l'utilisateur et les coordonnées du sommet en cours de traitement sont automatiquement lues avant de passer la main au kernel.
-De fait, lorsque l'unique ligne du kernel d'exemple commence à être exécutée, la librairie a déjà fait remplir les variables locales avec les données du sommet courant \emph{i} : {\tt VerCrd = VerCrdTab[i]}, {\tt vitesse = vitesseTab[i]}, {\tt direction = directionTab[i]} et il n'a pas à se soucier du transfert des variables globales vers les locales sur lesquelles il va effectuer les calculs.
+\paragraph{Accès aux tableaux globaux : } il n'y a pas qu'un seul sommet dans le maillage et pourtant la librairie n'a défini qu'un seul vecteur {\tt VerCrd} contentant les coordonnées d'un seul sommet.
+Là encore, la librairie a bien défini le tableau des coordonnées ({\tt VerCrdTab[ NmbVer ]}), mais celui-ci est caché à l'utilisateur et les coordonnées du sommet en cours de traitement sont automatiquement lues avant de passer la main au kernel.
+De fait, lorsque l'unique ligne du kernel d'exemple commence à être exécutée, la librairie a déjà rempli les variables locales avec les données du sommet courant \emph{i} : {\tt VerCrd = VerCrdTab[i]}, {\tt vitesse = vitesseTab[i]}, {\tt direction = directionTab[i]} et il n'a pas à se soucier du transfert des variables globales vers les locales sur lesquelles les calculs seront effectués.
 
-\paragraph{Stockage du résultat en mémoire : } de la même manière qu'avec les lectures, toutes les variables étant définie comme \emph{Write} au moment de la compilation, seront stockées dans les tableaux globaux après l'exécution du kernel utilisateur. Cette écriture est cachée et transparente. Dans l'exemple, seules les coordonnées sont accédées en écriture et la librairie rajoutera d'elle-même la ligne suivante : {\tt VerCrdTab[i] = VerCrd} afin de stocker le résultat du calcul sur ce sommet dans la mémoire du GPU, d'éventuels calculs intermédiaires étant perdus !
+\paragraph{Stockage du résultat en mémoire : } de la même manière qu'avec les lectures, toutes les variables étant définies comme \emph{Write} au moment de la compilation seront stockées dans les tableaux globaux après l'exécution du kernel utilisateur.
+Cette écriture est cachée et transparente. Dans l'exemple, seules les coordonnées sont accédées en écriture et la librairie rajoutera d'elle-même la ligne suivante : {\tt VerCrdTab[i] = VerCrd} afin de stocker le résultat du calcul sur ce sommet dans la mémoire du GPU, d'éventuels calculs intermédiaires seront perdus !
 
-\paragraph{Calcul vectoriel : } le langage OpenCL offre des variantes scalaires et vectorielles de tailles 2,4,8 ou 16 pour chaque type de données entières (8,16,32 ou 64 bits) et réelles (16,32 ou 64 bits) et utilise la technique du surtypage d'opérateur pour adapter des opérations aux types des opérandes. Dans notre kernel, {\tt VerCrd} et {\tt direction} sont des vecteurs 3-D et effectuer l'opération {\tt VerCrd = VerCrd + direction} va déclencher une addition vectorielle traitant les trois coordonnées simultanément.
+\paragraph{Calcul vectoriel : } le langage OpenCL offre des variantes scalaires et vectorielles de tailles 2,4,8 ou 16 pour chaque type de données entières (codées sur 8,16,32 ou 64 bits) et réelles (16,32 ou 64 bits) et utilise la technique du surtypage d'opérateur pour adapter les opérations aux types des opérandes.
+Dans notre kernel, {\tt VerCrd} et {\tt direction} sont des vecteurs 3-D et effectuer l'opération {\tt VerCrd = VerCrd + direction} va déclencher une addition vectorielle traitant les trois coordonnées simultanément.
 Que se passe-t-il alors lorsqu'on multiplie le déplacement par le scalaire contenant la vitesse ?
 Le compilateur détecte la différence de type et choisit l'opération appropriée, dans le cas présent, il va utiliser la fonction multipliant tous les termes d'un vecteur par un scalaire.
 
@@ -222,12 +221,17 @@ Le compilateur détecte la différence de type et choisit l'opération appropri�
 \subsection{Les types de données}
 
 L'utilisateur étant contraint à utiliser uniquement les types de données proposés, il est donc très important de bien en comprendre le fonctionnement et tous les usages possibles.
-Les types se regroupent en trois catégories : les données des maillages (sommets, arêtes, triangles, etc.), les champs de solutions libres (des tableaux, scalaires ou vecteurs associés à chaque entité d'un type de maillage) et enfin les liens topologiques, de loin les plus complexes, qui permettent des accès indirects efficaces entres différents types (boules des points, voisinages par face, coquille d'arêtes).
+Ces types se regroupent en trois catégories : les données des maillages (sommets, arêtes, triangles, etc.), les champs de solutions libres (des tableaux, scalaires ou vecteurs associés à chaque entité d'un type de maillage) et enfin les liens topologiques, de loin les plus complexes, qui permettent des accès indirects efficaces entres tous les différents types (boules des points, voisinages par face, coquille d'arêtes, etc.).
 
-\paragraph{Types de données de maillage :} elles permettent de représenter tout maillage hybride à l'ordre un, les ordres deux et trois étant prévus pour une version ultérieure. Sont donc proposés les types classiques, Vertices, Edges, Triangles, Quadrilaterals, Tetrahedra, Pyramids, Prisms et Hexahedra. Les sommets (Vertices) sont composés de trois flottants et d'un entier pour stocker les coordonnées et la référence physique, et tous les éléments sont composés de 2 à 8 entiers pour stocker les numéros de sommets ainsi qu'un entier supplémentaire pur la référence.
-Remarque : tous les indices de tableaux vont de 0 à n-1.
-Leur allocation se fait avec la commande {\tt GmlNewMeshData}, en spécifiant simplement le nombre d'entités souhaitées dans le maillage. Notez qu'une instance de la librairie ne peut comporter qu'un seul tableau d'un même type de maillage, il n'est donc pas possible d'allouer deux tableaux de triangles par exemple.
-Leur renseignement se fait ensuite avec la commande {\tt GmlSetDataLine}, en précisant le type de la donnée, le numéro de l'entité (de 0 à n-1), puis un nombre variable d'arguments correspondant au sommet de l'élément en question.
+\paragraph{Types de données de maillage :} ils permettent de représenter tout maillage hybride à l'ordre un, les ordres deux et trois étant prévus pour une version ultérieure.
+Sont donc proposés les types classiques, Vertices, Edges, Triangles, Quadrilaterals, Tetrahedra, Pyramids, Prisms et Hexahedra.
+Les sommets (Vertices) sont composés de trois flottants et d'un entier pour stocker les coordonnées et la référence physique, et tous les autres éléments sont composés de 2 à 8 entiers pour stocker les numéros de sommets ainsi qu'un entier supplémentaire pour la référence.
+
+Remarque : tous les indices de tableaux vont de $0$ à $n-1$.
+
+Leur allocation se fait avec la commande {\tt GmlNewMeshData}, en spécifiant simplement le nombre d'entités souhaitées dans le maillage.
+Notez qu'une instance de la librairie ne peut comporter qu'un seul tableau d'un même type de maillage, il n'est donc pas possible d'allouer deux tableaux de triangles par exemple.
+Leur renseignement se fait ensuite avec la commande {\tt GmlSetDataLine}, en précisant le type de la donnée, le numéro de l'entité (de 0 à n-1), puis un nombre variable d'arguments correspondant aux données composant l'élément en question.
 L'exemple suivant alloue et renseigne trois sommets :
 
 \begin{tt}
@@ -240,11 +244,12 @@ GmlSetDataLine(LibIdx, VerIdx, 2, 6.3, 1.6, 2.3, 0);
 \end{tt}
 \normalfont
 
-\paragraph{Les champs associés : } ils permettent d'associer des données librement à toutes les entités d'un type de maillage donné. Il ne peut y avoir qu'un seul type de donnée OpenCL dans un champ, mais ce type peut être vectoriel (taille de 2 à 16) et peut même être composé d'un tableau de vecteur.
-Les types scalaires proposés sont : byte, int, float et double ainsi que leurs déclinaisons vectorielles.
-Chaque type de solution est associé à un type de maillage précis, mais il est possible de déclarer autant de champs associés pour chaque type de donnée de maillage ce qui permet de simuler l’équivalent d'une structure hybride, chaque champ stockant un type OpenCL différent.
+\paragraph{Les champs associés : } ils permettent d'associer des données librement à toutes les entités d'un type de maillage donné.
+Il ne peut y avoir qu'un seul type de donnée OpenCL dans un champ, mais ce type peut être vectoriel (taille de 2 à 16) et peut même être composé d'un tableau de vecteurs.
+Les types scalaires proposés sont : \emph{byte}, \emph{int}, \emph{float} et \emph{double} ainsi que leurs déclinaisons vectorielles.
+Chaque type de solution est associé à un type de maillage précis, mais il est possible de déclarer autant de champs associés pour chaque type de donnée de maillage que nécessaire ce qui permet de simuler l’équivalent d'une structure hybride, chaque champ stockant un type OpenCL différent.
 L'allocation se fait avec la commande {\tt GmlNewSolutionData}, en spécifiant le type de maillage auquel ce champ de solution est associé, la taille du tableau local associé à une entité de maillage (= 1 pour un scalaire), ainsi que le type de la donnée (GmlByte, GmlInt16, GmlFloat4, etc.) et le nom sous lequel apparaitra la variable déclarée automatiquement.
-Les données sont renseignées avec la commande {\tt GmlSetDataLine}, mais dans ce cas, on ne passe pas toutes les valeurs des champs explicitement, mais seulement un pointeur sur un tableau contenant la totalité du champ associé à cette entité et qui sera recopié dans la structure interne de la librairie.
+Les données sont renseignées avec la commande {\tt GmlSetDataLine}, mais contrairement aux éléments, on ne passe pas toutes les valeurs des champs explicitement, mais seulement un pointeur sur un tableau contenant la totalité du champ associé à cette entité et qui sera recopié dans la structure interne de la librairie.
 L'exemple suivant alloue et renseigne un tableau de deux flottants pour chacun des trois sommets alloués précédemment :
 
 \begin{tt}
@@ -261,12 +266,17 @@ GmlSetDataLine(LibIdx, VecIdx, 2, &vec);
 \end{tt}
 \normalfont
 
-\paragraph{Les liens topologiques : } c'est l'entité la plus complexe à appréhender et manipuler, mais aussi la plus puissante, grâce à elle, et un peu d'imagination, on peut contourner l'essentiel des limitations imposées par le calcul GPU.
-Un lien topologique permet de lier un type de maillage source et un type de destination, par exemple lier les triangles vers les tétraèdres, ce qui consiste à fournir les indices des deux tétraèdres pour chaque triangle. Un tel tableau serait associé aux triangles (la source) et serait composé de deux entiers par triangles (un maximum de deux tétraèdres peut partager un même triangle). Les liens ne sont pas commutatifs, car inverser les triangles et les tétraèdres revient à donner pour chaque tétraèdre (la source), la liste des quatre triangles qui constituent ses faces.
-Ces liens topologiques vont être utilisés dans les kernels à accès mémoire indirect, voir section xxx, et permettront d'accéder aux données associées aux tétraèdres dans une boucle sur les triangles, pour reprendre notre premier exemple.
-Un des points forts de la {\tt GMlib} est qu'elle va automatiquement construire les liens standards entre tous les types de données, et ce au moment de la compilation d'un kernel. Par exemple, si on demander une boucle sur les arrêtes, et que des données à lires sont associées à des triangles, la coquille des triangles pour chaque arête sera construite.
-L'utilisateur ne sera amené à créer ses propres liens topologiques que pour effectuer des accès mémoires indirects spécifiques à son algorithme, par exemple, donner les deux triangles "upwind" et "downwind" pour chaque arête dans un solveur fluide. Dans un tel cas en 2-D, si l'utilisateur demandait une boucle sur les arêtes et voulait lire des données de calculs associées aux triangles, la librairie construirait le lien topologique naturel partant des arêtes pour pointer sur les triangles : il s'agirait des deux triangles partageant une même arête, et ce n'est pas ce dont le solveur a besoin !
-Dans ce cas, il sera de la responsabilité de l'utilisateur d'allouer un type de donnée topologique avec la commande {\tt GmlNewLinkData} en précisant les étiquettes des types sources et destination ainsi que le nombre de liens pour chaque source, car vous pourriez avoir envie de créer une table donnant pour chaque sommet les indices des 180 pyramides les plus proches, pourquoi pas ?
+\paragraph{Les liens topologiques : } c'est l'entité la plus complexe à appréhender et manipuler, mais aussi la plus puissante, grâce à elle, et un peu d'imagination, on peut contourner l'essentiel des limitations imposées par le calcul sur GPU.
+Un lien topologique permet de lier un type de maillage source et un type de destination, par exemple lier les triangles vers les tétraèdres, ce qui consiste à fournir les indices des deux tétraèdres voisins pour chaque triangle.
+Un tel tableau serait associé aux triangles (la source) et serait composé de deux entiers par triangles, car un maximum de deux tétraèdres peut partager un même triangle.
+Les liens ne sont pas commutatifs, car inverser les triangles et les tétraèdres revient à donner pour chaque tétraèdre (la source), la liste des quatre triangles qui constituent ses faces.
+Ces liens topologiques vont être utilisés dans les kernels à accès mémoire indirect, voir section \ref{sec:kernels_indirects}, et permettront d'accéder aux données associées aux tétraèdres dans une boucle sur les triangles, pour reprendre notre premier exemple.
+Un des points forts de la {\tt GMlib} est qu'elle va automatiquement construire les liens standards entre tous les types de données, et ce au moment de la compilation d'un kernel.
+Par exemple, si on demande une boucle sur les arêtes, et que des données à lires sont associées à des triangles, la coquille des triangles pour chaque arête sera construite.
+L'utilisateur ne sera amené à créer ses propres liens topologiques que pour effectuer des accès mémoires indirects spécifiques à son algorithme, par exemple, donner les deux triangles \emph{upwind} et \emph{downwind} pour chaque arête dans un solveur fluide.
+Dans un tel cas en 2-D, si l'utilisateur demandait une boucle sur les arêtes et voulait lire des données de calculs associées aux triangles, la librairie construirait le lien topologique naturel partant des arêtes pour pointer sur les triangles : il s'agirait donc des deux triangles partageant une même arête, et ce n'est pas ce dont le solveur a besoin.
+Dans ce cas, il sera de la responsabilité de l'utilisateur d'allouer un type de donnée topologique avec la commande {\tt GmlNewLinkData} en précisant les étiquettes des types source et destination ainsi que le nombre de liens nécessaires pour chaque source.
+Vous pourriez, pourquoi pas, avoir envie de créer une table donnant pour chaque sommet les indices des 180 pyramides les plus proches !
 L'allocation et le remplissage sont similaires aux champs associés :
 
 \begin{tt}
@@ -279,11 +289,15 @@ for(i=0;i<NmbVer;i++)
 \end{tt}
 \normalfont
 
-Remarque : le lien inverse de sommet vers pyramides, soit une pyramide vers ses cinq sommets, n'est rien d'autre que le tableau des éléments pyramidaux lui-même. De fait, toutes les données de maillages ne sont que des liens entre des couples type/numéro.
+Remarque : le lien inverse de sommet vers pyramides, soit une pyramide vers ses cinq sommets, n'est rien d'autre que le tableau des éléments pyramidaux lui-même.
+De fait, tous les éléments du maillage ne sont que des liens entre de un numéro d'élément et plusieurs numéros de sommets.
 
-\subsection{Kernels a accès directs}
-C'est le type de Kernel le plus simple, comme tout kernel, il ne boucle que sur les éléments d'un seul type, et n'accède en lecture ou en écriture qu'à des données relatives au type d'élément de la boucle. Si on boucle sur les sommets et accès à un champ de solution qui leur est associée, tous les tableaux sont accédé via l'indice de boucle principal, il n'y a donc aucune indirection mémoire. C'est aussi le type de Kernel le plus efficace, car il utilise à 100\% la bande passante de la mémoire du GPU étant donné que les tableaux sont lus linéairement.
-Dans l'exemple introductif de la section xxx, les deux types de solutions alloués sont relatifs aux sommets et le kernel d'une ligne boucle sur les sommets et accède aux coordonnées en lecture et écriture et aux types de solutions en lecture.
+\subsection{Kernels à accès directs}
+\label{sec:kernels_directs}
+C'est le type de Kernel le plus simple et comme tout kernel il ne boucle que sur les éléments d'un seul type, et n'accède en lecture ou en écriture qu'à des données relatives au type d'élément de la boucle.
+Si on boucle sur les sommets et accède à un champ de solution qui leur est associé, tous les tableaux seront accédés via l'indice de boucle principal : il n'y a donc aucune indirection mémoire.
+C'est aussi le type de Kernel le plus efficace, car il utilise à 100\% la bande passante de la mémoire du GPU étant donné que les tableaux sont lus linéairement.
+Dans l'exemple introductif de la section \ref{sec:API}, les deux types de solutions alloués sont relatifs aux sommets et le kernel d'une ligne boucle sur ces sommets et accède aux coordonnées en lecture et écriture et aux solutions en lecture seulement.
 
 \begin{tt}
 \begin{verbatim}
@@ -292,17 +306,27 @@ VerCrd = VerCrd + VerVitesse * VerDirection;
 \end{tt}
 \normalfont
 
-Dans ce kernel, à chaque itération de la boucle, de 0 à NmbVer, les coordonnées, la vitesse et le vecteur de direction sont tous lus de manière cachée par libraire qui y accède via l'indice de boucle principal $i$. Dans les faits, un GPU transférant tout d'abord à mémoire par blocs (32 ou 64 entiers consécutifs) vers la cache et accédant ensuite à cette dernière, l'accès à la case {\tt vitesse[0]} va déclencher la lecture de {\tt vitesse[0..31]}, puis les accès suivants, de 1 à 31, ne couteront que le prix d'un accès au cache.
+Dans ce kernel, à chaque itération de la boucle de 0 à NmbVer, les coordonnées, la vitesse et le vecteur de direction sont tous lus de manière cachée par libraire qui y accède via l'indice de boucle principal $i$.
+Dans les faits, un GPU transférant tout d'abord la mémoire par blocs de 32 ou 64 entiers consécutifs vers la mémoire cache et accédant ensuite à cette dernière, l'accès à la case {\tt vitesse[0]} va déclencher la lecture de {\tt vitesse[0..31]}, puis les accès suivants, de 1 à 31, ne couteront que le prix d'un accès au cache.
 
-Dans cette configuration, le nommage des variables automatique est évidant, elles portent le nom court du type de maillage de la boucle principale auquel est concaténé le nom de la variable accédée. Dans notre exemple, la boucle portant sur les GmlVertices (nom court \emph{Ver}), et on accède aux coordonnées (\emph{Crd}), à la vitesse (\emph{Vitesse}) et au vecteur de direction (\emph{Direction}), ce qui donne les noms automatiques suivants : \emph{VerCrd}, \emph{VerVitesse} et \emph{VerDirection}, élémentaire !
+Dans cette configuration, le nommage des variables automatique est évident, elles portent le nom court du type de maillage de la boucle principale auquel est concaténé le nom de la variable accédée.
+Dans notre exemple, la boucle portant sur les {\tt GmlVertices} (nom court {\tt Ver}), et on accède aux coordonnées ({\tt Crd}), à la vitesse ({\tt Vitesse}) et au vecteur de direction ({\tt Direction}), ce qui donne les noms automatiques suivants : {\tt VerCrd}, {\tt VerVitesse} et {\tt VerDirection}, élémentaire !
 
-Remarque : les accès directs aux données peuvent être fait en mode lecture, ou écriture, ou bien les deux en même temps
+Remarque : les accès directs aux données peuvent être fait en mode lecture, ou écriture, ou bien les deux en même temps.
 
 \subsection{Kernels a accès indirects}
+\label{sec:kernels_indirects}
 C'est ici que les choses deviennent un peu plus sérieuses.
-Un kernel est dit à accès indirect lorsqu'il est amené à lire des données associées à un type de maillage différent de celui de la boucle. Dans un tel cas, les accès mémoires prennent la forme {\tt a = u[v[i]]} et non plus {\tt a = u[i]} comme c'est le cas dans les accès directs. De tels accès sont nettement plus lents pour deux raisons. Tout d'abord il faut effectuer deux accès mémoire pour obtenir une seule valeur au final, le GPU lit d'abord {\tt tmp = v[i]}, puis lit {\tt a = u[ tmp ]}. Enfin et surtout, les accès successifs à {\tt a = u[ tmp ]} ne sont pas consécutifs en mémoire lorsqu'on incrémente {\tt i} car les contenus de {\tt v[i]} sont totalement inconnus au moment de la compilation et dépendent uniquement de la numérotation des éléments et sommets du maillage. Afin de limiter le problème, on recourt à deux méthodes, la renumérotation du maillage par une courn=be de Hilbert afin d'améliorer l'efficacité de la mémoire cache, ainsi qu'a la vectorisation des liens montants (boules de points, coquilles d'arêtes), par nature irréguliers (cf xxx).
-Le développement de ces kernels est totalement transparent pour l'utilisateur, car la librairie va se charger de lire le tableau d'indirection, puis les données demandées. Dans le cas d'une boucle sur les triangles (Tri), si on souhaite accéder aux coordonnées des sommets (Crd), la librairie va d'elle-même définir et remplir un tableau (TriVer[3]) de trois vecteurs contenant les coordonnées des trois sommets du triangle.
-à titre d'illustration, voici un code bouclant sur les triangles et calculant leur barycentre :
+Un kernel est dit à accès indirect lorsqu'il est amené à lire des données associées à un type de maillage différent de celui de la boucle principale.
+Dans un tel cas, les accès mémoires prennent la forme {\tt a = u[v[i]]} et non plus {\tt a = u[i]} comme c'est le cas dans les accès directs.
+Ces accès indirects sont nettement plus lents pour deux raisons.
+Tout d'abord il faut effectuer deux accès mémoire pour obtenir une seule valeur utile au final.
+Le GPU commence par déclencher une première lecture {\tt tmp = v[i]}, puis lit {\tt a = u[ tmp ]}.
+Enfin et surtout, les accès successifs à {\tt a = u[ tmp ]} ne sont pas consécutifs en mémoire lorsqu'on incrémente le compteur, $i$ car les valeurs contenues dans {\tt v[i]} sont totalement inconnues au moment de la compilation et dépendent uniquement de la numérotation des éléments et sommets du maillage.
+Afin de limiter le problème, on recourt à deux méthodes, la renumérotation du maillage par une courbe de Hilbert (ou toute autre SFC) afin d'améliorer l'efficacité de la mémoire cache, ainsi qu'a la vectorisation des liens montants (boules de points, coquilles d'arêtes), par nature irréguliers, pour en améliorer la compacité d'accès mémoire (cf xxx).
+Le déroulement de ces kernels est totalement transparent pour l'utilisateur, car la librairie va se charger de lire le tableau d'indirection, puis les données ainsi accédées.
+Dans le cas d'une boucle sur les triangles ({\tt Tri}), si on souhaite accéder aux coordonnées des sommets ({\tt Crd}), la librairie va d'elle-même définir et remplir un tableau ({\tt TriVer[3]}) de trois vecteurs contenant les coordonnées des trois sommets du triangle.
+À titre d'illustration, voici un code bouclant sur les triangles et calculant leur barycentre :
 
 \begin{tt}
 \begin{verbatim}
@@ -314,7 +338,7 @@ KrnIdx = GmlCompileKernel( LibIdx,  barycentre, "barycentre", GmlTriangles, 3,
 \end{tt}
 \normalfont
 
-Et voici le fameux kernel : 
+Et voici le kernel indirect associé :
 
 \begin{tt}
 \begin{verbatim}
@@ -323,19 +347,23 @@ Bar = (TriCrd[0] + TriCrd[1] + TriCrd[3]) / 3.;
 \end{tt}
 \normalfont
 
-La variable {\tt Bar} est un unique vecteur de coordonné, car il est relatif au triangle, l'élément de la boucle alors que la variable {\tt TriCrd} est un tableau de taille 3, car elle relatives aux sommets dont un triangle est composé de trois.
-Comme vous pouvez le constater, il n'est nul besoin d'accéder explicitement aux numéros des trois sommets du triangle, ceci a été effectué par la librairie juste avant de passer la main au kernel de l'utilisateur. Un lien topologique est donc une structure complètement muette.
-Ce qui peut être perturbant, c'est que la même commande de compilation du kernel, mais avec {\tt GmlEdges} à la place de {\tt GmlTriangles} va produire un code différent !
-En effet, la variable contenant les coordonnées l'appellera alors {\tt EdgCrd[2]} et sa taille sera de deux au lieu de trois.
+La variable {\tt Bar} est un unique vecteur de coordonnées, car il est relatif au triangle qui est l'élément de la boucle principal, alors que la variable {\tt TriCrd} est un tableau de taille 3, car elle est relative aux sommets d'un triangle qui en compte trois.
+Comme vous pouvez le constater, il n'est nul besoin d'accéder explicitement aux numéros des trois sommets du triangle, ceci étant effectué par la librairie juste avant de passer la main au kernel de l'utilisateur.
+Un lien topologique est donc une structure complètement muette et transparente.
+Ce qui peut être perturbant, c'est que différentes commandes de compilation d'un même kernel mais avec {\tt GmlEdges} à la place de {\tt GmlTriangles} par exemple, va produire des codes différents !
+En effet, la variable contenant les coordonnées s'appellera alors {\tt EdgCrd[2]} et sa taille sera de deux au lieu de trois dans le cas d'une boucle principale sur les triangles.
 On parle alors de variable et de programmation contextuelle.
-Une fois maitrisée ce concept, il est possible d'accéder indirectement (en lecture seulement) à n'importe quel type de données (maillage ou solution) associées à des types de maillage complètement différents du type de la boucle, car tous les cas possibles sont gérés par la {\tt GMlib}.
+Une fois maitrisé ce concept, il est alors possible d'accéder indirectement (en lecture seulement) à n'importe quel type de données (maillage ou solution) associées à des types de maillage complètement différents du type de la boucle principale, car tous les cas possibles de liens indirects sont gérés par automatiquement par la {\tt GMlib}.
 
-\paragraph{Liens topologiques descendants, transverses et montants :} un lien est descendant si le type de la boucle est de dimension strictement supérieure au type accédé indirectement (triangle vers les arêtes), transverse si les deux types sont de même dimension (triangle vers les triangles ou quadrilatères voisins) et montant si la dimension du type indirect est strictement supérieure au type de boucle (boucle sur les sommets et accès aux triangles de leurs boules).
+\paragraph{Liens topologiques descendants, transverses et montants :} un lien est descendant si le type de la boucle est de dimension strictement supérieure au type accédé indirectement (exemple : triangle vers arêtes), transverse si les deux types sont de même dimension (triangle vers les triangles ou quadrilatères voisins) et montant si la dimension du type indirect est strictement supérieure au type de la boucle (boucle sur les sommets et accès aux triangles de leurs boules).
 
-\paragraph{Lien descendant :} ce premier type est trivial, il s'agit le plus souvent de boucler sur un élément et d'accéder aux données associées à ses sommets. Dans ce cas, la table d'indirection est la liste des noeuds composant chaque élément et la librairie n'a qu'à la transmettre telle quelle au GPU.
+\paragraph{Lien descendant :} ce premier type est trivial, il s'agit le plus souvent de boucler sur un élément et d'accéder aux données associées à ses sommets.
+Dans ce cas, la table d'indirection est la liste des noeuds composant chaque élément et la librairie n'a qu'à la transmettre telle quelle au GPU.
 
-\paragraph{Lien transverse :} le second type, présente une petite finesse, par défaut, si on boucle sur le triangle et accède à des données relatives aux triangles, il s'agit tout simplement d'un accès direct comme vu à la section xxx. Mais il est possible de fournir un tableau de lien topologique spécifique au moment de la compilation du kernel, comme au tableau des voisins par arêtes. Dans ce cas, on va boucler sur les triangles et accéder à des données relatives au triangle en cours de traitement ainsi qu'à ses trois voisins.
-Le code suivant va récupérer les barycentres des triangles calculés à l'exemple précédent afin de déterminer la distance maximum entre le centre d'un triangle et celui de ses trois voisins.
+\paragraph{Lien transverse :} le second type, présente une petite finesse, car par défaut, si on boucle sur les triangles et qu'on accède à des données relatives à chaque triangle, il s'agit tout simplement d'un accès direct comme vu à la section \ref{sec:kernels_directs}.
+Mais il est aussi possible de fournir un tableau de liens topologiques spécifiques au moment de la compilation du kernel, comme un tableau des voisins par arêtes.
+Dans ce cas, on pourra boucler sur les triangles et accéder à des données relatives au triangle en cours de traitement ainsi qu'à ses trois voisins.
+Le code suivant va récupérer les barycentres des triangles, calculés à l'exemple précédent, en même temps que ceux de leurs trois voisins, afin de déterminer la distance maximum entre le centre d'un triangle et celui de ses voisins.
 
 \begin{tt}
 \begin{verbatim}
@@ -348,25 +376,38 @@ KrnIdx = GmlCompileKernel( LibIdx,  distance, "distance", GmlTriangles, 2,
 \end{tt}
 \normalfont
 
+La première ligne demande la création d'un lien topologique liant les triangles entre eux par voisinage d'arêtes et ce lien, stocké dans la variable {\tt NgbIdx,} est passé à la compilation en paramètre de lien indirect lors de l'accès au tableau des barycentres.
+De ce fait, le kernel va lire le barycentre associé au triangle en cours ainsi que ceux de ses trois voisins s’ils existent.
+Si la valeur $0$, avait été passée à la place de {\tt NgbIdx}, le kernel se serait contenté de lire le seul barycentre du triangle en cours.
+
 Et voici kernel correspondant :
 
 \begin{tt}
 \begin{verbatim}
-float 1d, d2, d3;
-d1 = fast_distance(TriBar[0], TriBar[1]);
-d2 = fast_distance(TriBar[0], TriBar[2]);
-d3 = fast_distance(TriBar[0], TriBar[3]);
+float d1, d2, d3;
+d1 = distance(TriBar[0], TriBar[1]);
+d2 = distance(TriBar[0], TriBar[2]);
+d3 = distance(TriBar[0], TriBar[3]);
 distance = min(d1, d2);
 distance = min(distance, d3);
 \end{verbatim}
 \end{tt}
 \normalfont
 
-Ici, le tableau {\tt TriBar[4]} est nommé de la sorte, car on boucle sur les triangles (Tri) et on accède à leurs barycentres (Bar), mais il y a quatre barycentres lus pour chaque triangle : le premier est celui du triangle pointé par l'indice de boucle et les trois suivants sont ceux de ses voisins. Ici encore, il s'agit de variables vectorielles et une seule ligne de ces calculs traite les trois composantes des coordonnées.
+Ici, le tableau {\tt TriBar[4]} est nommé de la sorte, car on boucle sur les triangles ({\tt Tri}) et on accède à leurs barycentres ({\tt Bar}), mais il y a quatre barycentres lus pour chaque triangle : le premier est celui du triangle pointé par l'indice de boucle et les trois suivants sont ceux de ses voisins.
+Notez que si un des voisins est nul (arête frontière), le barycentre associé sera initialisé avec le vecteur ${0,0,0}$.
+Ici encore, il s'agit de variables vectorielles et une seule ligne de ces calculs traite les trois composantes des coordonnées.
 
-\paragraph{Lien montant :} enfin le dernier type est aussi le plus complexe, car les liens montants présentent l'inconvénient majeur d'être de taille variable, chose que détestent les GPU, qui ne sont efficaces qu'avec des tailles régulières et de puissance de 2. En effet, si le nombre de sommets d'un triangle est toujours égal à trois, le nombre de triangles partageant un même sommet est variable et dépend de la topologie du maillage. Afin de traiter ces cas efficacement, un système complexe est mis en place par la {\tt GMlib}. Tout d'abord la commande de renumérotation de Hilbert, nécessaire pour obtenir de bonnes performances d'accès mémoire, propose un mode spécifique au GPU et va ordonner les sommets du maillage selon leur degré croissant. Ainsi, tous les premiers sommets ayant un degré inférieur ou égal à 8 auront leur boule de triangle stockée dans un vecteur de cette taille (avec d'éventuelles valeurs nulles), puis les boules des sommets suivants seront stockées sur des vecteurs de taille 16 et ainsi de suite. Tout ceci est transparent pour l'utilisateur qui pourra connaitre le degré du sommet en cours avec la variable automatique {\tt VerTriDeg}, (Vertex' triangles degree).
-Remarque : une variable accédée indirectement via un lien montant pourra être nulle du fait que les vecteurs sont alignés sur des puissances de deux et que le degré réel peut être inférieur.
-Pour rester dans la même thématique, nous allons cette fois-ci boucler sur les sommets, accéder aux barycentres des triangles de la boule, et relaxer les coordonnées du sommet vers la moyenne des barycentres, pourquoi pas ?
+\paragraph{Lien montant :} enfin le dernier type est aussi le plus complexe, car les liens montants présentent l'inconvénient majeur d'être de taille variable, chose que détestent les GPU, qui ne sont efficaces qu'avec des tailles régulières et de puissance de 2.
+En effet, si le nombre de sommets d'un triangle est toujours égal à trois, en revanche, le nombre de triangles partageant un même sommet est variable et dépend de la topologie du maillage.
+Afin de traiter ces cas efficacement, un système complexe est mis en place par la {\tt GMlib}.
+Tout d'abord la commande de renumérotation de Hilbert, nécessaire pour obtenir de bonnes performances d'accès mémoire, propose un mode spécifique au calcul sur GPU et va ordonner les sommets du maillage selon leur degré croissant.
+Ainsi, tous les premiers sommets ayant un degré inférieur ou égal à 8 auront leur boule de triangle stockée dans un vecteur de cette taille (avec d'éventuelles valeurs nulles), puis les boules des sommets suivants seront stockées sur des vecteurs de taille 16 et ainsi de suite.
+Tout ceci est transparent pour l'utilisateur qui pourra connaitre le degré du sommet en cours avec la variable automatique {\tt VerTriDeg}, soit Vertex triangles degree.
+
+Remarque : une variable accédée indirectement via un lien montant pourra être nulle du fait que les tailles des vecteurs sont alignées sur des puissances de deux et que le degré réel peut donc être inférieur. Les données inutilisées sont toujours initialisées à 0, ce qui peut perturber certains calculs.
+
+Pour rester dans la même thématique, nous allons cette fois-ci boucler sur les sommets, accéder aux barycentres des triangles de la boule, et relaxer les coordonnées du sommet vers la moyenne des barycentres.
 
 
 
@@ -547,7 +588,7 @@ Retour     & type   & description \\
 \subsection{GmlExtractEdges}
 Cette procédure construit la table des arêtes uniques présentes dans tout le volume.
 Pour ce faire, elle analyse la totalité des éléments de dimension 1 (arêtes), 2 (faces) et 3 (volumes) afin d'en extraire les arêtes.
-Si une table d'arêtes avait déjà été renseignée, mais n'était pas complète, ne comportant que certaines arêtes caractéristiques du maillage par exemple, celle-ci est conservée et les nouvelles arêtes sont ajoutées à la suite de la table. Dans ce cas, l'étiquette du type de donnée arrête aura changé, car l'ancienne table est libérée et recopiée dans la nouvelle. Cette nouvelle étiquette est la valeur de retour de la procédure ({\tt NewEdgIdx = GmlExtractEdges(LibIdx)}).
+Si une table d'arêtes avait déjà été renseignée, mais n'était pas complète, ne comportant que certaines arêtes caractéristiques du maillage par exemple, celle-ci est conservée et les nouvelles arêtes sont ajoutées à la suite de la table. Dans ce cas, l'étiquette du type de donnée d'arêtes aura changé, car l'ancienne table est libérée et recopiée dans la nouvelle. Cette nouvelle étiquette est la valeur de retour de la procédure ({\tt NewEdgIdx = GmlExtractEdges(LibIdx)}).
 
 \subsubsection*{Syntaxe}
 
@@ -574,10 +615,10 @@ DatIdx     & int    & numéro de la nouvelle étiquette de donnée d'arête\\
 \end{tabular}
 
 \subsubsection*{Commentaires}
-La numérotation des arêtes ainsi générée peut ne pas être optimale, car celles-ci ayant été générées en bouclant consécutivement sur les éléments, la numérotation des arrêtes suit globalement celles des autres éléments volumiques, mais n'est pas aussi optimale qu'une vraie renumérotation via une SFC comme Hilbert.
+La numérotation des arêtes ainsi générée peut ne pas être optimale, car celles-ci ayant été générées en bouclant consécutivement sur les éléments, la numérotation des arêtes suit globalement celles des autres éléments volumiques, mais n'est pas aussi optimale qu'une vraie renumérotation via une SFC comme Hilbert.
 De plus, ces arêtes n'ont pas été triées selon leur degré de coquille ce qui a pour conséquence de consommer plus de mémoire et de temps de lecture dans le cas d'un kernel montant arête vers tétraèdres par exemple.
 Les arêtes seront toutes stockées dans la zone à haut degré, soit 32, dans le cas des coquilles de tétraèdres, alors que la moyenne est à 6.
-Dans une telle situation, il faut envisager de renuméroter les arêtes selon leur degré et une courbe de Hilbert afin d’optimiser l'exécution d'un kernel d'arrêtes vers tétraèdres.
+Dans une telle situation, il faut envisager de renuméroter les arêtes selon leur degré et une courbe de Hilbert afin d’optimiser l'exécution d'un kernel d'arêtes vers tétraèdres.
 
 
 \subsection{GmlExtractFaces}
@@ -1032,7 +1073,7 @@ Ceci est en revanche très utile pour déboguer un code en recopiant la totalit�
 
 Création d'un type de donné libre associé à une entité de maillage.
 Bien qu'il y ait "solution" dans le nom, ce type est fait pour y stocker ce que l'on veut.
-On choisi le type OpenCL (entier, flottant, scalaire, vecteur) et la taille du tableau local, attention, il s'agit du nombre de variables associé à chaque entité de maillage, pas du nombre total de lignes de ce champ qui est par définition égal au nombre de lignes de l'entité de maillage auquel il fait référence.
+On choisit le type OpenCL (entier, flottant, scalaire, vecteur) et la taille du tableau local, attention, il s'agit du nombre de variables associé à chaque entité de maillage, pas du nombre total de lignes de ce champ qui est par définition égal au nombre de lignes de l'entité de maillage auquel il fait référence.
 Il n'est pas possible de stocker des types différents, à la manière d'une structure en C, mais seulement un tableau homogène. Si vous avez besoin de mélanger des deux entiers et des quatre flottants associés à chaque triangle par exemple, il est tout à fait possible d'allouer deux {\tt SolutionData} associées aux triangles, l'une composé d'un {\tt GmlInt2} et l'autre d'un {\\ GmlFloat4}. Notez qu'il est possible de demander un tableau de {\tt 2 x GmlInt} et un autre de {\\ 4 x GmlFloat}, ce qui revient au même.
 
 \subsubsection*{Syntaxe}

@@ -76,14 +76,14 @@ int main(int argc, char *argv[])
    float MidTab[4], SolTab[8], TetChk = 0., VerChk = 0.;
    float Zero[4] = {0.f, 0.f, 0.f, 0.f};
    double NgbTim = 0, TetTim = 0, VerTim = 0, RedTim = 0, F64Tim = 0;
-   double res, FlxTim = 0., GtrTim = 0., ResTim = 0.;
+   double TotalTime = 0., res, FlxTim = 0., GtrTim = 0., ResTim = 0.;
    float *Sol, *XGrdTet, *YGrdTet, *ZGrdTet, *Laplacian;
    GmlParSct *GmlPar;
 
    int n;
    int IniTetKrn, SolTetIdx, SolTetTmpIdx, GrdTetIdx, SolExtIdx, GrdExtIdx, RhsIdx;
    int SolExtKrn, GrdTetKrn, GrdExtKrn, FlxBalKrn, TimKrn;
-   double Time, InitRes, Res;
+   double Time[6]={0.}, InitRes, Res;
    float *SolTet, Tmp[4];
 
    /* Library initialization. */
@@ -164,16 +164,27 @@ int main(int argc, char *argv[])
    /* Solution initialization. */
    // Time = GmlLaunchKernel(GmlIdx, IniTetKrn);
    /* Begin resolution. */
-   for (n = 1; n <= 10000; n++)
+   for (n = 1; n <= 1000; n++)
    {
-      Time = GmlLaunchKernel(GmlIdx, SolExtKrn);
-      Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
-      Time = GmlLaunchKernel(GmlIdx, GrdExtKrn);
-      Time = GmlLaunchKernel(GmlIdx, FlxBalKrn);
-      Time = GmlLaunchKernel(GmlIdx, TimKrn);
-      Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
-      printf("+++ Iteration %4d Residual = %.12f\n", n, Res);
+      Time[0] += GmlLaunchKernel(GmlIdx, SolExtKrn);
+      Time[1] += GmlLaunchKernel(GmlIdx, GrdTetKrn);
+      Time[2] += GmlLaunchKernel(GmlIdx, GrdExtKrn);
+      Time[3] += GmlLaunchKernel(GmlIdx, FlxBalKrn);
+      Time[4] += GmlLaunchKernel(GmlIdx, TimKrn);
+      Time[5] += GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
+      printf("\r+++ Iteration %4d Residual = %.12f", n, Res);
+      fflush(stdout);
    }
+
+   puts("");
+   for(i=0;i<6;i++)
+   {
+      TotalTime += Time[i];
+      printf("Total time for kernel %d = %g seconds\n", i, Time[i]);
+   }
+
+   printf("Total runing time       = %g seconds\n", TotalTime);
+
    // do
    // {
    //    // LOOP OVER THE TRIANGLES
