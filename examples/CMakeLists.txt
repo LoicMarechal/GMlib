@@ -26,7 +26,7 @@ compile_cl(MQ_mesh_quality)
 compile_cl(Parameters)
 add_executable(${example} ${example}.c
                ${CMAKE_CURRENT_BINARY_DIR}/MQ_mesh_quality.h
-            ${CMAKE_CURRENT_BINARY_DIR}/Parameters.h)
+               ${CMAKE_CURRENT_BINARY_DIR}/Parameters.h)
 target_link_libraries(${example} GM.3 ${libMeshb_LIBRARIES} ${OpenCL_LIBRARIES} ${LINK_LIBRARIES})
 install (TARGETS ${example} DESTINATION share/GMlib/examples COMPONENT examples)
 
@@ -40,8 +40,6 @@ add_executable(${example} ${example}.c
                ${CMAKE_CURRENT_BINARY_DIR}/NS_quality.h
                ${CMAKE_CURRENT_BINARY_DIR}/NS_scatter.h
                ${CMAKE_CURRENT_BINARY_DIR}/NS_gather.h
-            ${CMAKE_CURRENT_BINARY_DIR}/Parameters.h)
+               ${CMAKE_CURRENT_BINARY_DIR}/Parameters.h)
 target_link_libraries(${example} GM.3 ${libMeshb_LIBRARIES} ${OpenCL_LIBRARIES} ${LINK_LIBRARIES})
 install (TARGETS ${example} DESTINATION share/GMlib/examples COMPONENT examples)
-
-add_subdirectory(heat_cell_centered)
