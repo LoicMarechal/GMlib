@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.21                           */
+/*                         GPU Meshing Library 3.22                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: apr 29 2020                                           */
+/*   Last modification: may 05 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -26,6 +26,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifdef WIN32
+#include <windows.h>
+#include <sys/timeb.h>
+#else
+#include <sys/time.h>
+#include <unistd.h>
+#endif
 
 #include "gmlib3.h"
 #include "reduce.h"
@@ -79,7 +87,8 @@ typedef struct
 
 typedef struct
 {
-   int            idx, HghIdx, NmbLin[2], NmbDat, DatTab[ GmlMaxDat ];
+   int            idx, HghIdx, NmbLin[2], NmbDat, DatTab[ GmlMaxDat ], IniFlg;
+   size_t         NmbGrp, GrpSiz;
    cl_kernel      kernel;
    cl_program     program; 
 }KrnSct;
@@ -1580,6 +1589,36 @@ static int DownloadData(GmlSct *gml, int idx)
 
 
 /*----------------------------------------------------------------------------*/
+/* Send the parameter structure data to the GPU                               */
+/*----------------------------------------------------------------------------*/
+
+int GmlUploadParameters(size_t idx)
+{
+   GETGMLPTR(gml, idx);
+
+   if(!UploadData(gml, gml->ParIdx))
+      return(-2);
+   else
+      return(1);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Get the parameter structure data from the GPU                              */
+/*----------------------------------------------------------------------------*/
+
+int GmlDownloadParameters(size_t idx)
+{
+   GETGMLPTR(gml, idx);
+
+   if(!DownloadData(gml, gml->ParIdx))
+      return(-10);
+   else
+      return(1);
+}
+
+
+/*----------------------------------------------------------------------------*/
 /* Generate the kernel from user's source and data and compile it             */
 /*----------------------------------------------------------------------------*/
 
@@ -2365,10 +2404,6 @@ double GmlLaunchKernel(size_t GmlIdx, int idx)
    if( (idx < 1) || (idx > gml->NmbKrn) || !krn->kernel )
       return(-1);
 
-   // First send the parameters to the GPU memmory
-   if(!UploadData(gml, gml->ParIdx))
-      return(-2);
-
    if(!krn->HghIdx)
       RunTim = RunOclKrn(gml, krn);
    else
@@ -2377,10 +2412,6 @@ double GmlLaunchKernel(size_t GmlIdx, int idx)
       RunTim  = RunOclKrn(gml, krn);
       RunTim += RunOclKrn(gml, hgh);
    }
-
-   // Finaly, get back the parameters from the GPU memmory
-   if(!DownloadData(gml, gml->ParIdx))
-      return(-10);
 
    return(RunTim);
 }
@@ -2398,67 +2429,73 @@ static double RunOclKrn(GmlSct *gml, KrnSct *krn)
    cl_event event;
    cl_ulong start, end;
 
-   for(i=0;i<krn->NmbDat;i++)
+   if(!krn->IniFlg)
    {
-      dat = &gml->dat[ krn->DatTab[i] ];
-
-      if((krn->DatTab[i] < 1) || (krn->DatTab[i] > GmlMaxDat) || !dat->GpuMem)
+      for(i=0;i<krn->NmbDat;i++)
       {
-         printf(  "Invalid user argument %d, DatTab[i]=%d, GpuMem=%p\n",
-                  i, krn->DatTab[i], dat->GpuMem );
-         return(-1.);
+         dat = &gml->dat[ krn->DatTab[i] ];
+
+         if((krn->DatTab[i] < 1) || (krn->DatTab[i] > GmlMaxDat) || !dat->GpuMem)
+         {
+            printf(  "Invalid user argument %d, DatTab[i]=%d, GpuMem=%p\n",
+                     i, krn->DatTab[i], dat->GpuMem );
+            return(-1.);
+         }
+
+         res = clSetKernelArg(krn->kernel, i, sizeof(cl_mem), &dat->GpuMem);
+
+         if(res != CL_SUCCESS)
+         {
+            printf("Adding user argument %d failed with error: %d\n", i, res);
+            return(-2.);
+         }
       }
 
-      res = clSetKernelArg(krn->kernel, i, sizeof(cl_mem), &dat->GpuMem);
+      res = clSetKernelArg(krn->kernel, krn->NmbDat, sizeof(cl_mem),
+                           &gml->dat[ gml->ParIdx ].GpuMem);
 
       if(res != CL_SUCCESS)
       {
-         printf("Adding user argument %d failed with error: %d\n", i, res);
-         return(-2.);
+         printf("Adding the GMlib parameters argument failed with error %d\n", res);
+         return(-3.);
       }
+
+      res = clSetKernelArg(krn->kernel, krn->NmbDat+1, 2 * sizeof(int), krn->NmbLin);
+
+      if(res != CL_SUCCESS)
+      {
+         printf("Adding the kernel loop counter argument failed with error %d\n", res);
+         return(-4.);
+      }
+
+      // Fit data loop size to the GPU kernel size
+      res = clGetKernelWorkGroupInfo(  krn->kernel, gml->device_id[ gml->CurDev ],
+                                       CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t),
+                                       &GrpSiz, &RetSiz );
+
+      if(res != CL_SUCCESS )
+      {
+         printf("Geting the kernel workgroup size failed with error %d\n", res);
+         return(-5.);
+      }
+
+      // Compute the hyperthreading level
+      gml->CurGrpSiz = GrpSiz;
+      NmbGrp = krn->NmbLin[0] / GrpSiz;
+      NmbGrp *= GrpSiz;
+
+      if(NmbGrp < krn->NmbLin[0])
+         NmbGrp += GrpSiz;
+
+      // Launch GPU code
+      clFinish(gml->queue);
+      krn->IniFlg = 1;
+      krn->NmbGrp = NmbGrp;
+      krn->GrpSiz = GrpSiz;
    }
-
-   res = clSetKernelArg(krn->kernel, krn->NmbDat, sizeof(cl_mem),
-                        &gml->dat[ gml->ParIdx ].GpuMem);
-
-   if(res != CL_SUCCESS)
-   {
-      printf("Adding the GMlib parameters argument failed with error %d\n", res);
-      return(-3.);
-   }
-
-   res = clSetKernelArg(krn->kernel, krn->NmbDat+1, 2 * sizeof(int), krn->NmbLin);
-
-   if(res != CL_SUCCESS)
-   {
-      printf("Adding the kernel loop counter argument failed with error %d\n", res);
-      return(-4.);
-   }
-
-   // Fit data loop size to the GPU kernel size
-   res = clGetKernelWorkGroupInfo(  krn->kernel, gml->device_id[ gml->CurDev ],
-                                    CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t),
-                                    &GrpSiz, &RetSiz );
-
-   if(res != CL_SUCCESS )
-   {
-      printf("Geting the kernel workgroup size failed with error %d\n", res);
-      return(-5.);
-   }
-
-   // Compute the hyperthreading level
-   gml->CurGrpSiz = GrpSiz;
-   NmbGrp = krn->NmbLin[0] / GrpSiz;
-   NmbGrp *= GrpSiz;
-
-   if(NmbGrp < krn->NmbLin[0])
-      NmbGrp += GrpSiz;
-
-   // Launch GPU code
-   clFinish(gml->queue);
 
    if(clEnqueueNDRangeKernel( gml->queue, krn->kernel, 1, NULL,
-                              &NmbGrp, &GrpSiz, 0, NULL, &event) )
+                              &krn->NmbGrp, &krn->GrpSiz, 0, NULL, &event) )
    {
       return(-6.);
    }
@@ -3166,6 +3203,24 @@ int GetMeshInfo(size_t GmlIdx, int typ, int *NmbLin, int *DatIdx)
       *DatIdx = idx;
 
    return(1);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Return the wall clock in seconds                                           */
+/*----------------------------------------------------------------------------*/
+
+double GmlGetWallClock()
+{
+#ifdef WIN32
+   struct __timeb64 tb;
+   _ftime64(&tb);
+   return((double)tb.time + (double)tb.millitm/1000.);
+#else
+   struct timeval tp;
+   gettimeofday(&tp, NULL);
+   return(tp.tv_sec + tp.tv_usec / 1000000.);
+#endif
 }
 
 
