@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.19                           */
+/*                         GPU Meshing Library 3.23                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       tet mesh quality improvement with nodes smoothing     */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 27 2020                                           */
-/*   Last modification: mar 31 2020                                           */
+/*   Last modification: may 06 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -44,11 +44,11 @@ typedef struct {
 /* Some very basic kernel launch error checking                               */
 /*----------------------------------------------------------------------------*/
 
-double CheckLaunch(int KrnIdx, double res)
+int CheckLaunch(int KrnIdx, int res)
 {
    if(res < 0)
    {
-      printf("Launch kernel %d failled with error: %g\n", KrnIdx, res);
+      printf("Launch kernel %d failled with error: %d\n", KrnIdx, res);
       exit(0);
    }
 
@@ -63,11 +63,11 @@ double CheckLaunch(int KrnIdx, double res)
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int         i, j, NmbVer, NmbTet;
+   int         i, j, res, NmbVer, NmbTet;
    int         QalIdx, QalKrn, VerIdx, TetIdx, ParIdx, OptIdx, ResIdx;
    int         GpuIdx = 0, TetKrn, VerKrn;
    size_t      GmlIdx;
-   double      res, tim = 0., TetTim = 0., VerTim = 0., AvgQal, OptRes;
+   double      RedTim, TetTim, VerTim, AvgQal, OptRes;
    GmlParSct   *GmlPar;
 
 
@@ -143,39 +143,37 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Launch the tetrahedra quality kernel on the GPU
-   res  = GmlLaunchKernel(GmlIdx, QalKrn);
-   tim += CheckLaunch(QalKrn, res);
+   res = GmlLaunchKernel(GmlIdx, QalKrn);
+   CheckLaunch(QalKrn, res);
 
    // Launch the reduction kernel on the GPU
-   res  = GmlReduceVector(GmlIdx, QalIdx, GmlSum, &AvgQal);
-   tim += CheckLaunch(0, res);
+   res = GmlReduceVector(GmlIdx, QalIdx, GmlSum, &AvgQal);
+   CheckLaunch(0, res);
    printf("Before smoothing: mean quality=%g\n", AvgQal / NmbTet);
 
    for(int itr=1; itr<=10; itr++)
    {
       // Launch the tetrahedra optimizer kernel on the GPU
-      res  = GmlLaunchKernel(GmlIdx, TetKrn);
-      tim += CheckLaunch(TetKrn, res);
-      TetTim += res;
+      res = GmlLaunchKernel(GmlIdx, TetKrn);
+      CheckLaunch(TetKrn, res);
 
       // Launch the vertex gather kernel on the GPU
-      res  = GmlLaunchKernel(GmlIdx, VerKrn);
-      tim += CheckLaunch(VerKrn, res);
-      VerTim += res;
+      res = GmlLaunchKernel(GmlIdx, VerKrn);
+      CheckLaunch(VerKrn, res);
 
       // Compute the residual displacement value
-      res  = GmlReduceVector(GmlIdx, ResIdx, GmlSum, &OptRes);
-      tim += CheckLaunch(0, res);
+      res = GmlReduceVector(GmlIdx, ResIdx, GmlSum, &OptRes);
+      CheckLaunch(0, res);
       printf("Smoothing step %2d: residual=%g\n", itr, OptRes);
    }
 
    // Launch the tetrahedra quality kernel on the GPU
    res  = GmlLaunchKernel(GmlIdx, QalKrn);
-   tim += CheckLaunch(QalKrn, res);
+   CheckLaunch(QalKrn, res);
 
    // Launch the reduction kernel on the GPU
-   res  = GmlReduceVector(GmlIdx, QalIdx, GmlSum, &AvgQal);
-   tim += CheckLaunch(0, res);
+   res = GmlReduceVector(GmlIdx, QalIdx, GmlSum, &AvgQal);
+   CheckLaunch(0, res);
    printf("After  smoothing: mean quality=%g\n", AvgQal / NmbTet);
 
 
@@ -183,8 +181,12 @@ int main(int ArgCnt, char **ArgVec)
    /* GET THE RESULTS */
    /*-----------------*/
 
+   TetTim = GmlGetKernelRunTime(GmlIdx, TetKrn);
+   VerTim = GmlGetKernelRunTime(GmlIdx, VerKrn);
+   RedTim = GmlGetReduceRunTime(GmlIdx, GmlSum);
+
    printf(  "%d tets optimized in %g seconds (scatter=%g, gather=%g)\n",
-            NmbTet, tim, TetTim, VerTim );
+            NmbTet, RedTim, TetTim, VerTim );
 
    printf("%ld MB used, %ld MB transfered\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,

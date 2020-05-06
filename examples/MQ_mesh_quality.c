@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.19                           */
+/*                         GPU Meshing Library 3.23                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Compute a tet mesh mean and min qualities             */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 24 2020                                           */
-/*   Last modification: mar 30 2020                                           */
+/*   Last modification: may 06 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -45,11 +45,11 @@ typedef struct {
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int         i, j, NmbVer, NmbTet;
+   int         i, j, NmbVer, NmbTet, res;
    int         QalIdx, QalKrn, VerIdx, TetIdx;
    int         GpuIdx = 0, ParIdx;
    size_t      GmlIdx;
-   double      res, QalTim, AvgTim, MinTim, AvgQal, MinQal;
+   double      QalTim, AvgTim, MinTim, AvgQal, MinQal;
    GmlParSct   *GmlPar;
 
 
@@ -99,42 +99,40 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Launch the tetrahedra kernel on the GPU
-   res  = GmlLaunchKernel(GmlIdx, QalKrn);
+   res = GmlLaunchKernel(GmlIdx, QalKrn);
 
    if(res < 0)
    {
-      printf("Launch kernel %d failled with error: %g\n", QalKrn, res);
+      printf("Launch kernel %d failled with error: %d\n", QalKrn, res);
       exit(0);
    }
-
-   QalTim = res;
 
    // Launch the reduction kernel on the GPU
    res = GmlReduceVector(GmlIdx, QalIdx, GmlSum, &AvgQal);
 
    if(res < 0)
    {
-      printf("Launch reduction kernel failled with error: %g\n", res);
+      printf("Launch reduction kernel failled with error: %d\n", res);
       exit(0);
    }
-
-   AvgTim = res;
 
    // Launch the reduction kernel on the GPU
    res = GmlReduceVector(GmlIdx, QalIdx, GmlMin, &MinQal);
 
    if(res < 0)
    {
-      printf("Launch reduction kernel failled with error: %g\n", res);
+      printf("Launch reduction kernel failled with error: %d\n", res);
       exit(0);
    }
-
-   MinTim = res;
 
 
    /*-----------------*/
    /* GET THE RESULTS */
    /*-----------------*/
+
+   QalTim = GmlGetKernelRunTime(GmlIdx, QalKrn);
+   AvgTim = GmlGetReduceRunTime(GmlIdx, GmlSum);
+   MinTim = GmlGetReduceRunTime(GmlIdx, GmlMin);
 
    printf("%d tets processed in %g seconds, quality=%g s, min=%g s, mean=%g s\n",
           NmbTet, QalTim + AvgTim + MinTim, QalTim, AvgTim, MinTim);
