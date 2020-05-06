@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.19                           */
+/*                         GPU Meshing Library 3.23                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Basic loop on tetrahedra                              */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     nov 21 2019                                           */
-/*   Last modification: mar 30 2020                                           */
+/*   Last modification: may 06 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -49,14 +49,14 @@ typedef struct {
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int         i, j, NmbVer=0, NmbTri=0, NmbTet=0, CalMid, OptVer, FlxIdx;
+   int         i, j, res, NmbVer=0, NmbTri=0, NmbTet=0, CalMid, OptVer, FlxIdx;
    int         ParIdx, VerIdx=0, TriIdx=0, TetIdx=0, BalIdx, MidIdx, SolIdx;
    int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, F64Idx, F64Krn, FlxKrn;
    size_t      GmlIdx;
    float       MidTab[4], SolTab[8], TetChk = 0., VerChk = 0.;
    float       IniSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
-   double      NgbTim = 0, TetTim = 0, VerTim = 0, RedTim = 0, F64Tim = 0;
-   double      res, residual;
+   double      NgbTim, TetTim, VerTim, RedTim, F64Tim;
+   double      residual;
    GmlParSct   *GmlPar;
 
 
@@ -172,6 +172,7 @@ int main(int ArgCnt, char **ArgVec)
    for(i=1;i<=100;i++)
    {
       GmlPar->res = i;
+      GmlUploadParameters(GmlIdx);
 
       if(F64Krn)
       {
@@ -181,11 +182,9 @@ int main(int ArgCnt, char **ArgVec)
 
          if(res < 0)
          {
-            printf("Launch kernel %d failled with error: %g\n", F64Krn, res);
+            printf("Launch kernel %d failled with error: %d\n", F64Krn, res);
             exit(0);
          }
-
-         F64Tim += res;
       }
 
       // Launch the tetrahedra kernel on the GPU
@@ -193,44 +192,37 @@ int main(int ArgCnt, char **ArgVec)
 
       if(res < 0)
       {
-         printf("Launch kernel %d failled with error: %g\n", NgbKrn, res);
+         printf("Launch kernel %d failled with error: %d\n", NgbKrn, res);
          exit(0);
       }
-
-      NgbTim += res;
 
       // Launch the tetrahedra kernel on the GPU
       res  = GmlLaunchKernel(GmlIdx, CalMid);
 
       if(res < 0)
       {
-         printf("Launch kernel %d failled with error: %g\n", CalMid, res);
+         printf("Launch kernel %d failled with error: %d\n", CalMid, res);
          exit(0);
       }
-
-      TetTim += res;
 
       // Launch the vertex kernel on the GPU
       res = GmlLaunchKernel(GmlIdx, OptVer);
 
       if(res < 0)
       {
-         printf("Launch kernel %d failled with error: %g\n", OptVer, res);
+         printf("Launch kernel %d failled with error: %d\n", OptVer, res);
          exit(0);
       }
-
-      VerTim += res;
 
       // Launch the reduction kernel on the GPU
       res = GmlReduceVector(GmlIdx, ResIdx, GmlSum, &residual);
 
       if(res < 0)
       {
-         printf("Launch reduction kernel failled with error: %g\n", res);
+         printf("Launch reduction kernel failled with error: %d\n", res);
          exit(0);
       }
 
-      RedTim += res;
       printf("Iteration: %3d, residual: %g\n", i, residual);
    }
 
@@ -238,6 +230,16 @@ int main(int ArgCnt, char **ArgVec)
    /*-----------------*/
    /* GET THE RESULTS */
    /*-----------------*/
+
+   if(F64Krn)
+      F64Tim = GmlGetKernelRunTime(GmlIdx, F64Krn);
+   else
+      F64Tim = 0.;
+
+   NgbTim = GmlGetKernelRunTime(GmlIdx, NgbKrn);
+   TetTim = GmlGetKernelRunTime(GmlIdx, CalMid);
+   VerTim = GmlGetKernelRunTime(GmlIdx, OptVer);
+   RedTim = GmlGetReduceRunTime(GmlIdx, GmlSum);
 
    // Get back the MidTet data from the GPU memory and compute a checksum
    for(i=0;i<NmbTet;i++)

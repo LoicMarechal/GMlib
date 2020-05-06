@@ -674,7 +674,6 @@ Paramètre  & type    & description \\
 LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
 \hline
 \end{tabular}
-\subsubsection*{Commentaires}
 
 
 \subsection{GmlDebugOn}
@@ -705,7 +704,13 @@ Retour     & type   & description \\
 \hline
 \end{tabular}
 
-\subsubsection*{Commentaires}
+
+\subsection{GmlDownloadParameters}
+
+Cette fonction copie le contenu de la structure de paramètres, définie avec {\tt GmlNewParameters}, de la mémoire du GPU vers celle du CPU hôte afin d'en exploiter le contenu après le lancement d'un kernel qui y aurait écrit certaines informations.
+
+\subsubsection*{Syntaxe}
+{\tt GmlDownloadParameters(LibIdx);}
 
 
 \subsection{GmlExtractEdges}
@@ -854,6 +859,38 @@ C'est l'appel à GmlGetDataLine() de la première ligne de donnée qui déclench
 Il en découle que si vous commencez par lire les données sans commencer par la première ligne, les données retournées seront vides.
 
 
+\subsection{GmlGetKernelRunTime}
+
+\subsubsection*{Syntaxe}
+
+Permets de connaitre le temps d'exécution total de ce kernel au moment de l'appel de la fonction.
+Le temps retourné est basé sur les compteurs de profilage internes d'OpenCL et peut être sensiblement inférieur au temps physique écoulé qui est calculé avec la fonction {\tt GmlGetWallClock}.
+
+{\tt temps = GmlGetKernelRunTime(LibIdx, KrnIdx);}
+
+\subsubsection*{Paramètres}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Paramètre  & type    & description \\
+\hline
+LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
+\hline
+KrnIdx     & int     & numéro du kernel à évaluer \\
+\hline
+\end{tabular}
+
+\medskip
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type    & description \\
+\hline
+temps      & double  & temps en secondes \\
+\hline
+\end{tabular}
+
+
 \subsection{GmlGetMemoryTransfer}
 
 \subsubsection*{Syntaxe}
@@ -908,6 +945,30 @@ LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
 Retour     & type    & description \\
 \hline
 taille     & size\_t & \\
+\hline
+\end{tabular}
+
+
+\subsection{GmlGetReduceRunTime}
+
+Permets d'obtenir le temps total d'exécution d'un des kernels de réduction de la librairie.
+Le fonctionnement est identique à {\tt GmlGetKernelRunTime} sauf l'étiquette de kernel qui est remplacée par le code de l'opération de réduction dont on veut récupérer le chronomètre (GmlMin, GmlMax, GmlSum).
+
+
+\subsection{GmlGetWallClock}
+
+\subsubsection*{Syntaxe}
+
+Retourne simplement le temps physique en secondes.
+Cette fonction est très utile pour s'affranchir des informations de profilages, toujours incomplètes, et des perturbations des fonctions système d'horloges telles que {\tt clock()} liées aux environnements multithreads.
+
+{\tt temps = GmlGetWallClock();}
+
+\begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
+\hline
+Retour     & type    & description \\
+\hline
+temps      & double & temps absolu exprimé en secondes\\
 \hline
 \end{tabular}
 
@@ -992,11 +1053,10 @@ De fait, l'unité 0 étant presque toujours un CPU, il est pertinent d'exécuter
 Lancement de l'exécution d'un kernel déjà compilé.
 Cette procédure prend très peu de paramètres, car tout a été défini au moment de la compilation : nombre d'itération de la boucle, les données à lire ou écrire, code à compiler ainsi que le GPU ou CPU exécutant.
 Il ne reste alors qu'à donner un index d'instance de librairie et un numéro de kernel et ça démarre !
-La procédure est bloquante et ne rends la main qu'a la fin de l'exécution, mais cette une limitation imposée par la version actuelle de la {\tt GMlib} qui sera levée par la suite afin de permettre des exécutions en \emph{pipeline}.
 
 \subsubsection*{Syntaxe}
 
-{\tt temps = GmlLaunchKernel(LibIdx, KrnIdx);}
+{\tt flag = GmlLaunchKernel(LibIdx, KrnIdx);}
 
 \subsubsection*{Paramètres}
 
@@ -1014,9 +1074,9 @@ KrnIdx     & int     & numéro du kernel à exécuter \\
 
 \begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
 \hline
-Retour     & type   & description \\
+Retour     & type    & description \\
 \hline
-temps      & double & si < 0 : code d'erreur, si >=0 : temps d'exécution en secondes \\
+flag       & int     & si < 0 : code d'erreur, 1 = succès \\
 \hline
 \end{tabular}
 
@@ -1156,7 +1216,8 @@ DatIdx     & int    & étiquette du datatype alloué et à passer en argument au
 \subsection{GmlNewParameters}
 
 Permets d'allouer une structure librement définie par l'utilisateur et contenant toute sorte de paramètres nécessaires à la communication entre le CPU et le GPU.
-Une image miroir du côté CPU et du côté GPU sera automatiquement synchronisée, avant chaque exécution de kernel, la structure sera recopiée de la mémoire CPU vers le GPU afin qu'il puisse y lire des paramètres et à la fin, la copie en mémoire GPU sera rapatriée sur le CPU afin d'y lire d'éventuels résultats de calculs ou codes d'erreurs.
+Une image miroir du côté CPU et du côté GPU pourra être manuellement synchronisée, avant l'exécution d'un kernel en appelant la commande {\tt GmlUploadParameters}, la structure sera alors recopiée de la mémoire CPU vers le GPU afin qu'il puisse y lire des paramètres et à la fin.
+Enfin, la copie en mémoire GPU sera rapatriée sur le CPU afin d'y lire d'éventuels résultats de calculs ou codes d'erreurs après appel à la commande {\tt GmlDownloadParameters}.
 
 \subsubsection*{Syntaxe}
 
@@ -1188,7 +1249,7 @@ ParDat     & void * & pointeur sur la structure allouée en mémoire CPU \\
 
 \subsubsection*{Commentaires}
 Afin de garantir que la structure est identique du côté CPU et GPU, il est habile d'inclure sa définition dans un header coté CPU et de passer ce header comme code OpenCL à compiler via la commande {\tt GmlNewParameters}.
-Bien que la taille de la structure ne soit pas limitée, comme elle sera transférée deux fois à chaque lancement de kernel (upload / download), cela pénalisera le temps d'exécution si elle est utilisée pour transférer de gros tableaux.
+Bien que la taille de la structure ne soit pas limitée, si elle est transférée deux fois à chaque lancement de kernel (upload / download), cela pénalisera le temps d'exécution si elle est utilisée pour transférer de gros tableaux.
 Ceci est en revanche très utile pour déboguer un code en recopiant la totalité d'un tableau problématique dans la structure afin de l'analyser du côté CPU.
 
 
@@ -1246,7 +1307,7 @@ Les opérations proposées sont la somme des termes, la valeur minimum et la max
 
 \subsubsection*{Syntaxe}
 
-{\tt temps = GmlReduceVector(LibIdx, DatIdx, OppCod, norme);}
+{\tt flag = GmlReduceVector(LibIdx, DatIdx, OppCod, norme);}
 
 \subsubsection*{Paramètres}
 
@@ -1270,7 +1331,7 @@ norme      & double * & valeur résiduelle \\
 \hline
 Retour     & type   & description \\
 \hline
-temps      & double & temps d'exécution en secondes \\
+slat       & int    & si < 0 : code d'erreur, 1 : succès  \\
 \hline
 \end{tabular}
 
@@ -1423,6 +1484,14 @@ Paramètre  & type    & description \\
 LibIdx     & size\_t & l'index de l'instance tel que retourné par GmlInit() \\
 \hline
 \end{tabular}
+
+
+\subsection{GmlUploadParameters}
+
+Cette fonction copie le contenu de la structure de paramètres, définie avec {\tt GmlNewParameters}, de la mémoire du CPU hôte vers celle du GPU afin que celui-ci puisse utiliser les paramètres définis par l'utilisateur avant le lancement du kernel.
+
+\subsubsection*{Syntaxe}
+{\tt GmlUploadParameters(LibIdx);}
 
 
 %
