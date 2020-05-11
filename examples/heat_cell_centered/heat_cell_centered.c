@@ -76,14 +76,14 @@ int main(int argc, char *argv[])
    float MidTab[4], SolTab[8], TetChk = 0., VerChk = 0.;
    float Zero[4] = {0.f, 0.f, 0.f, 0.f};
    double NgbTim = 0, TetTim = 0, VerTim = 0, RedTim = 0, F64Tim = 0;
-   double res, FlxTim = 0., GtrTim = 0., ResTim = 0.;
+   double TotalTime = 0., res, FlxTim = 0., GtrTim = 0., ResTim = 0., WallTime;
    float *Sol, *XGrdTet, *YGrdTet, *ZGrdTet, *Laplacian;
    GmlParSct *GmlPar;
 
    int n;
    int IniTetKrn, SolTetIdx, SolTetTmpIdx, GrdTetIdx, SolExtIdx, GrdExtIdx, RhsIdx;
    int SolExtKrn, GrdTetKrn, GrdExtKrn, FlxBalKrn, TimKrn;
-   double Time, InitRes, Res;
+   double Time[6]={0.}, InitRes, Res;
    float *SolTet, Tmp[4];
 
    /* Library initialization. */
@@ -164,16 +164,41 @@ int main(int argc, char *argv[])
    /* Solution initialization. */
    // Time = GmlLaunchKernel(GmlIdx, IniTetKrn);
    /* Begin resolution. */
-   for (n = 1; n <= 10000; n++)
+
+   WallTime = GmlGetWallClock();
+   GmlUploadParameters(GmlIdx);
+
+   for (n = 1; n <= 1; n++)
    {
-      Time = GmlLaunchKernel(GmlIdx, SolExtKrn);
-      Time = GmlLaunchKernel(GmlIdx, GrdTetKrn);
-      Time = GmlLaunchKernel(GmlIdx, GrdExtKrn);
-      Time = GmlLaunchKernel(GmlIdx, FlxBalKrn);
-      Time = GmlLaunchKernel(GmlIdx, TimKrn);
-      Time = GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
-      printf("+++ Iteration %4d Residual = %.12f\n", n, Res);
+      GmlLaunchKernel(GmlIdx, SolExtKrn);
+      GmlLaunchKernel(GmlIdx, GrdTetKrn);
+      GmlLaunchKernel(GmlIdx, GrdExtKrn);
+      GmlLaunchKernel(GmlIdx, FlxBalKrn);
+      GmlLaunchKernel(GmlIdx, TimKrn);
+      GmlReduceVector(GmlIdx, RhsIdx, GmlSum, &Res);
+      printf("\r+++ Iteration %4d Residual = %.12f", n, Res);
+      fflush(stdout);
    }
+
+   GmlDownloadParameters(GmlIdx);
+
+   Time[0] = GmlGetKernelRunTime(GmlIdx, SolExtKrn);
+   Time[1] = GmlGetKernelRunTime(GmlIdx, GrdTetKrn);
+   Time[2] = GmlGetKernelRunTime(GmlIdx, GrdExtKrn);
+   Time[3] = GmlGetKernelRunTime(GmlIdx, FlxBalKrn);
+   Time[4] = GmlGetKernelRunTime(GmlIdx, TimKrn);
+   Time[5] = GmlGetReduceRunTime(GmlIdx, GmlSum);
+
+   puts("");
+   for(i=0;i<6;i++)
+   {
+      TotalTime += Time[i];
+      printf("Total time for kernel %d = %g seconds\n", i, Time[i]);
+   }
+
+   printf("GPU execution time = %g seconds\n", TotalTime);
+   printf("Wall clock         = %g seconds\n", GmlGetWallClock() - WallTime);
+
    // do
    // {
    //    // LOOP OVER THE TRIANGLES
@@ -242,6 +267,7 @@ int main(int argc, char *argv[])
    free(SolTet);
    free(XGrdTet);
    free(Laplacian);
+   GmlStop(GmlIdx);
 
    return 0;
 }
