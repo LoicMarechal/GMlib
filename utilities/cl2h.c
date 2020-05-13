@@ -55,7 +55,7 @@ int main(int ArgCnt, char **ArgVec)
       fprintf(OutHdl, "\\n\" \\\n");
    }while(c != EOF);
 
-   fprintf(OutHdl, "\n;");
+   fprintf(OutHdl, "\n;\n");
 
    fclose(InpHdl);
    fclose(OutHdl);
