@@ -24,7 +24,7 @@
 
 - Tetrahedral mesh nodes smoother :heavy_check_mark:
 - Tetrahedral mesh quality calculation and statistics :heavy_check_mark:
-- Basic iterative edge based solver with boundary conditions
+- Basic iterative edge based solver with boundary conditions :heavy_check_mark:
 
 ### Documentation
 
@@ -43,7 +43,7 @@
 - Write a renumbering analyzer preprocessor
 - Call the LPlib Hilbert renumbering and renumber the whole input data
 - Provide a plugin functions mechanism available on the GPU side :heavy_check_mark:
-- Develop basic geometric functions on tets, hexes, triangles , quads and edges
+- Develop basic geometric functions on tets, hexes, triangles, quads and edges
 - length, surface, volume and quality :heavy_check_mark:
 - Handle hybrid meshes with prisms and pyramids
 - Update the ball generation to handle hybrid meshes
