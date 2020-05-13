@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.21                           */
+/*                         GPU Meshing Library 3.23                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 27 2020                                           */
+/*   Last modification: may 06 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -72,8 +72,8 @@ int      GmlFreeData          (size_t, int);
 int      GmlSetDataLine       (size_t, int, int, ...);
 int      GmlGetDataLine       (size_t, int, int, ...);
 int      GmlCompileKernel     (size_t, char *, char *, int, int, ...);
-double   GmlLaunchKernel      (size_t, int);
-double   GmlReduceVector      (size_t, int, int, double *);
+int      GmlLaunchKernel      (size_t, int);
+int      GmlReduceVector      (size_t, int, int, double *);
 size_t   GmlGetMemoryUsage    (size_t);
 size_t   GmlGetMemoryTransfer (size_t);
 void     GmlDebugOn           (size_t);
@@ -84,6 +84,11 @@ int      GmlSetNeighbours     (size_t, int);
 int      GmlCheckFP64         (size_t);
 int      GetMeshInfo          (size_t, int, int *, int *);
 int      GmlSetDataBlock      (size_t, int, int, int, void *, void *, int *, int *);
+double   GmlGetKernelRunTime  (size_t, int);
+double   GmlGetReduceRunTime  (size_t, int);
+double   GmlGetWallClock      ();
+int      GmlUploadParameters  (size_t);
+int      GmlDownloadParameters(size_t);
 
 #ifdef WITH_LIBMESHB
 int      GmlImportMesh        (size_t, char *, ...);

@@ -1,1 +1,1 @@
-SolTet = SolTet + 0.00001f * Rhs;
+SolTet = SolTet + GmlPar->dt * Rhs;
