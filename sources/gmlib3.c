@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.23                           */
+/*                         GPU Meshing Library 3.24                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 06 2020                                           */
+/*   Last modification: may 13 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -316,6 +316,14 @@ static const int ItmFacNod[8][6][4] = {
 { {0,2,1,0}, {3,4,5,0}, {0,1,4,3}, {1,2,5,4}, {3,5,2,0}, {0,0,0,0} },
 { {0,4,7,3}, {1,2,6,5}, {0,1,5,4}, {3,7,6,2}, {0,3,2,1}, {4,5,6,7} } };
 
+static const int GmfKwdTab[8] = {
+GmfVertices, GmfEdges, GmfTriangles, GmfQuadrilaterals,
+GmfTetrahedra, GmfPyramids, GmfPrisms, GmfHexahedra };
+
+static const int GmfTypTab[10] = {
+GmfFloat,  GmfFloatVec,  GmfFloatVec,  GmfFloatVec,  GmfFloatVec,
+GmfDouble, GmfDoubleVec, GmfDoubleVec, GmfDoubleVec, GmfDoubleVec };
+
 char *sep="\n\n############################################################\n";
 
 
@@ -384,7 +392,8 @@ size_t GmlInit(int DevIdx)
       return(0);
    }
 
-   err = clGetDeviceInfo(gml->device_id[ gml->CurDev ], CL_DEVICE_EXTENSIONS, 1024, str, &retSiz);
+   err = clGetDeviceInfo(  gml->device_id[ gml->CurDev ],
+                           CL_DEVICE_EXTENSIONS, 1024, str, &retSiz );
 
    if(strstr(str, "cl_khr_fp64"))
       gml->DblExt = 1;
@@ -451,8 +460,8 @@ void GmlListGPU()
    }
 
    for(i=0;i<num_devices;i++)
-      if(clGetDeviceInfo(  device_id[i], CL_DEVICE_NAME,  GmlMaxStrSiz , GpuNam,
-                           &GpuNamSiz) == CL_SUCCESS )
+      if(clGetDeviceInfo(  device_id[i], CL_DEVICE_NAME, GmlMaxStrSiz,
+                           GpuNam, &GpuNamSiz) == CL_SUCCESS )
       {
          printf("      %d      : %s\n", i, GpuNam);
       }
@@ -2098,7 +2107,8 @@ static void WriteKernelVariables(char *src, int MshTyp,
       // If ball or shell voyeurs are required, define a vector char
       if(arg->FlgTab & GmlVoyeurs)
       {
-         sprintf(str,  "   char      %s[%d];\n", arg->VoyNam, arg->NmbItm * arg->ItmLen);
+         sprintf( str,  "   char      %s[%d];\n",
+                  arg->VoyNam, arg->NmbItm * arg->ItmLen );
          strcat(src, str);
       }
    }
@@ -2231,8 +2241,8 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
             {
                // Otherwise, read the ball data and perform the right shift on the fly
                sprintf( str, "   %s%s%s = %s %sTab[ %s%s%s ]%s %s %s;\n",
-                        arg->nam, ArgTd2, ArgTd1,
-                        DegTst, arg->nam, LnkNam, LnkTd1, LnkTd2, ArgTd1, BalSft, DegNul);
+                        arg->nam, ArgTd2, ArgTd1, DegTst, arg->nam,
+                        LnkNam, LnkTd1, LnkTd2, ArgTd1, BalSft, DegNul );
 
                strcat(src, str);
             }
@@ -3221,7 +3231,7 @@ double GmlGetKernelRunTime(size_t GmlIdx, int KrnIdx)
       &&  (clGetEventProfilingInfo( krn->EvtTab[i], CL_PROFILING_COMMAND_END,
                                     sizeof(end),   &end,   NULL) == CL_SUCCESS) )
       {
-         RunTim += (double)(end - start) / 1e9;
+         RunTim += (double)(end - start) * 1e-9;
       }
    }
 
@@ -3386,6 +3396,97 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
 
    // And close the mesh
    GmfCloseMesh(InpMsh);
+
+   return(NmbKwd);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Read a mesh file and allocate and set the requested keywords in the GMlib  */
+/*----------------------------------------------------------------------------*/
+
+int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
+{
+   GETGMLPTR   (gml, GmlIdx);
+   int         i, j, NmbLin, GmlTyp, GmfKwd, DatIdx, NmbDat = 0, NmbKwd = 0;
+   int         DatTab[10][4], KwdDatTab[10][15] = {0}, NewKwdFlg, SolKwd;
+   float       *AdrTab[10][2], *DatPtr;
+   DatSct      *dat;
+   int64_t     InpMsh;
+   va_list     VarArg;
+
+   va_start(VarArg, SolNam);
+
+   while( (DatIdx = va_arg(VarArg, int)) && (NmbDat < 10) )
+   {
+      if(!(dat = &gml->dat[ DatIdx ]))
+         continue;
+
+      GmfKwd = GmfKwdTab[ dat->MshTyp ];
+      DatPtr = (float *)dat->CpuMem;
+      DatTab[ NmbDat ][0] = DatIdx;
+      DatTab[ NmbDat ][1] = GmfTypTab[ dat->ItmTyp ];
+      DatTab[ NmbDat ][2] = dat->ItmLen;
+      AdrTab[ NmbDat ][0] = &DatPtr[ 0 ];
+      AdrTab[ NmbDat ][1] = &DatPtr[ (dat->NmbLin - 1) * dat->ItmLen ];
+
+      NewKwdFlg = 1;
+
+      for(i=0;i<NmbKwd;i++)
+         if(KwdDatTab[i][0] == GmfKwd)
+         {
+            KwdDatTab[i][ KwdDatTab[i][1] + 4 ] = NmbDat;
+            KwdDatTab[i][1]++;
+            KwdDatTab[i][3] += dat->ItmLen;
+            NewKwdFlg = 0;
+            break;
+         }
+
+      if(NewKwdFlg)
+      {
+         KwdDatTab[ NmbKwd ][0] = GmfKwd;
+         KwdDatTab[ NmbKwd ][1] = 1;
+         KwdDatTab[ NmbKwd ][2] = GmfTypTab[ dat->ItmTyp ];
+         KwdDatTab[ NmbKwd ][3] = dat->ItmLen;
+         KwdDatTab[ NmbKwd ][4] = NmbDat;
+         NmbKwd++;
+      }
+
+      NmbDat++;
+   }
+
+   va_end(VarArg);
+
+   /*if( !(OutSol = GmfOpenMesh(SolNam, GmfWrite, 3, 3)) )
+   {
+      printf("Could not create file %s\n", SolNam);
+      return(0);
+   }*/
+
+   printf("found %d data and %d sol kwd\n", NmbDat, NmbKwd);
+
+   for(i=0;i<NmbKwd;i++)
+   {
+      SolKwd = KwdDatTab[i][0];
+      GmlTyp = Gmf2Gml(SolKwd);
+
+      if(!(GetMeshInfo(GmlIdx, GmlTyp, &NmbLin, &DatIdx)))
+         continue;
+
+      printf("write sol kwd %d, nmb lines = %d, size = %d/%d\n",
+               SolKwd, NmbLin, KwdDatTab[i][1], KwdDatTab[i][3]);
+
+      for(j=0;j<KwdDatTab[i][1];j++)
+      {
+         DatIdx = KwdDatTab[i][ j+4 ];
+         printf("Add field %d, size=%d, adr = %p %p\n",
+                  DatIdx, DatTab[ DatIdx ][2], AdrTab[ DatIdx ][0],AdrTab[ DatIdx ][1]);
+      }
+      puts("");
+   }
+
+   // And close the mesh
+   //GmfCloseMesh(OutSol);
 
    return(NmbKwd);
 }
