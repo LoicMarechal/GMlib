@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 13 2020                                           */
+/*   Last modification: may 14 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -2690,33 +2690,35 @@ int GmlCheckFP64(size_t GmlIdx)
 
 int GmlExtractEdges(size_t GmlIdx)
 {
-   int         i, j, typ, idx, cod, cpt = 0, HshKey, ItmTab[3];
-   int         EdgIdx, EleSiz, NmbItm, EleLen, *EleNod, *nod;
+   int         i, j, typ, idx, cod, HshKey, ItmTab[3], (*EdgTab)[3] = NULL;
+   int         EdgIdx, EleSiz, NmbItm, EleLen, NmbEdg = 0, *EleNod, *nod;
+   int         OldNmbEdg, IdxLst[2], EdgNod[2];
    DatSct      *dat;
    BucSct      *buc;
-   HshTabSct   lnk;
+   HshTabSct   EdgHsh;
 
    GETGMLPTR(gml, GmlIdx);
 
+   // Count the number of inner and surface edges
    for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
       if(gml->TypIdx[ typ ])
-         cpt += gml->dat[ gml->TypIdx[ typ ] ].NmbLin;
+         NmbEdg += gml->dat[ gml->TypIdx[ typ ] ].NmbLin;
 
    // Setup a hash table
-   memset(&lnk, 0, sizeof(HshTabSct));
-   lnk.HshTyp = GmlEdges;
-   lnk.TabSiz = cpt;
-   lnk.DatLen = ItmNmbVer[ lnk.HshTyp ];
-   lnk.KeyLen = HshLenTab[ lnk.DatLen ];
-   lnk.NmbDat = lnk.TabSiz;
-   lnk.NxtDat = 1;
-   lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
-   lnk.DatTab = malloc(lnk.TabSiz * sizeof(BucSct));
-   cpt = 0;
+   memset(&EdgHsh, 0, sizeof(HshTabSct));
+   EdgHsh.HshTyp = GmlEdges;
+   EdgHsh.TabSiz = NmbEdg;
+   EdgHsh.DatLen = ItmNmbVer[ EdgHsh.HshTyp ];
+   EdgHsh.KeyLen = HshLenTab[ EdgHsh.DatLen ];
+   EdgHsh.NmbDat = EdgHsh.TabSiz;
+   EdgHsh.NxtDat = 1;
+   EdgHsh.HshTab = calloc(EdgHsh.TabSiz, sizeof(int));
+   EdgHsh.DatTab = malloc(EdgHsh.TabSiz * sizeof(BucSct));
+   NmbEdg = 0;
 
    if(gml->DbgFlg)
       printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
-               lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
+               EdgHsh.TabSiz, EdgHsh.DatLen, EdgHsh.KeyLen);
 
    for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
    {
@@ -2727,7 +2729,6 @@ int GmlExtractEdges(size_t GmlIdx)
       EleNod = (int *)dat->CpuMem;
       EleLen = dat->ItmLen;
       NmbItm = ItmNmbVer[ typ ];
-      printf("parse typ %d, NmbItm=%d, EleLen=%d", typ, NmbItm, EleLen);
 
       // Add edges to the hash table
       for(i=0;i<dat->NmbLin;i++)
@@ -2736,26 +2737,64 @@ int GmlExtractEdges(size_t GmlIdx)
 
          for(j=0;j<NmbItm;j++)
          {
-            GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
-            HshKey = CalHshKey(&lnk, ItmTab);
+            GetItmNod(nod, typ, EdgHsh.HshTyp, j, ItmTab);
+            HshKey = CalHshKey(&EdgHsh, ItmTab);
 
-            if(GetHsh(&lnk, HshKey, i, j, ItmTab, NULL, NULL))
+            if(GetHsh(&EdgHsh, HshKey, i, j, ItmTab, NULL, NULL))
                continue;
 
-            AddHsh(&lnk, HshKey, typ, i, j, ItmTab);
-            cpt++;
+            AddHsh(&EdgHsh, HshKey, typ, i, j, ItmTab);
+            NmbEdg++;
          }
       }
    }
 
    if(gml->DbgFlg)
       printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
-               lnk.NxtDat-1, (100LL * lnk.NmbHit) / lnk.TabSiz,
-               (double)lnk.NmbMis / (double)lnk.TabSiz );
+               EdgHsh.NxtDat-1, (100LL * EdgHsh.NmbHit) / EdgHsh.TabSiz,
+               (double)EdgHsh.NmbMis / (double)EdgHsh.TabSiz );
 
-   EdgIdx = GmlNewMeshData(GmlIdx, GmlEdges, cpt);
-   cpt = 0;
+   // If there are surface edges, save their references and hash them
+   GetMeshInfo(GmlIdx, GmlEdges, &OldNmbEdg, &EdgIdx);
 
+   if(OldNmbEdg)
+   {
+      EdgTab = malloc(OldNmbEdg * 3 * sizeof(int));
+      assert(EdgTab);
+
+      for(i=0;i<OldNmbEdg;i++)
+          GmlGetDataLine(GmlIdx, EdgIdx, i, &EdgTab[i][0], &EdgTab[i][1], &EdgTab[i][2]);
+
+      // Then free the existing edge data type
+      // and allocate a new one with the increased size
+      GmlFreeData(GmlIdx, EdgIdx);
+      EdgIdx = GmlNewMeshData(GmlIdx, GmlEdges, NmbEdg);
+      NmbEdg = 0;
+
+      for(i=0;i<OldNmbEdg;i++)
+      {
+         GetItmNod(EdgTab[i], GmlEdges, GmlEdges, 0, EdgNod);
+         HshKey = CalHshKey(&EdgHsh, EdgNod);
+
+         // If it is in the hash table, send its data to the GMlib
+         if(GetHsh(&EdgHsh, HshKey, i, 0, EdgNod, IdxLst, NULL) != 1)
+            continue;
+
+         if(IdxLst[0] >> 4 != i)
+            continue;
+
+         GmlSetDataLine(GmlIdx, EdgIdx, NmbEdg, EdgNod[0], EdgNod[1], EdgTab[i][2]);
+
+         NmbEdg++;
+      }
+   }
+   else
+   {
+      EdgIdx = GmlNewMeshData(GmlIdx, GmlEdges, NmbEdg);
+      NmbEdg = 0;
+   }
+
+   // Loop over all kinds of elements and setup the inner edges
    for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
    {
       if(!gml->TypIdx[ typ ])
@@ -2773,29 +2812,32 @@ int GmlExtractEdges(size_t GmlIdx)
 
          for(j=0;j<NmbItm;j++)
          {
-            GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
-            HshKey = CalHshKey(&lnk, ItmTab);
+            GetItmNod(nod, typ, EdgHsh.HshTyp, j, ItmTab);
+            HshKey = CalHshKey(&EdgHsh, ItmTab);
             cod = 0;
 
-            if(!GetHsh(&lnk, HshKey, i, j, ItmTab, &cod, NULL))
+            if(!GetHsh(&EdgHsh, HshKey, i, j, ItmTab, &cod, NULL))
                continue;
 
             if(cod >> 4 != i)
                continue;
 
-            GmlSetDataLine(GmlIdx, EdgIdx, cpt, ItmTab[0], ItmTab[1], 0);
-            cpt++;
+            GmlSetDataLine(GmlIdx, EdgIdx, NmbEdg, ItmTab[0], ItmTab[1], 0);
+            NmbEdg++;
          }
       }
    }
 
-   free(lnk.HshTab);
-   free(lnk.DatTab);
+   if(EdgTab)
+      free(EdgTab);
+
+   free(EdgHsh.HshTab);
+   free(EdgHsh.DatTab);
 
    if(gml->DbgFlg)
-      printf("Hashed, setup and transfered %d edges to the GMlib.\n", cpt);
+      printf("Hashed, setup and transfered %d edges to the GMlib.\n", NmbEdg);
 
-   return(EdgIdx);
+   return(NmbEdg);
 }
 
 
@@ -3335,7 +3377,7 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
    /*--------------*/
 
    // Open the mesh
-   if( !(InpMsh = GmfOpenMesh(MshNam, GmfRead, &ver, &dim)) || (dim != 3) )
+   if( !(InpMsh = GmfOpenMesh(MshNam, GmfRead, &ver, &dim)) )
    {
       printf("Could not open file %s\n", MshNam);
       return(0);
