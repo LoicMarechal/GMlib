@@ -67,7 +67,7 @@ int main(int ArgCnt, char **ArgVec)
    int         QalIdx, QalKrn, VerIdx, TetIdx, ParIdx, OptIdx, ResIdx;
    int         GpuIdx = 0, TetKrn, VerKrn;
    size_t      GmlIdx;
-   double      RedTim, TetTim, VerTim, AvgQal, OptRes;
+   double      RedTim, TetTim, VerTim, WalTim, AvgQal, OptRes;
    GmlParSct   *GmlPar;
 
 
@@ -142,6 +142,8 @@ int main(int ArgCnt, char **ArgVec)
    if(!VerKrn)
       return(1);
 
+   WalTim = GmlGetWallClock();
+
    // Launch the tetrahedra quality kernel on the GPU
    res = GmlLaunchKernel(GmlIdx, QalKrn);
    CheckLaunch(QalKrn, res);
@@ -176,6 +178,8 @@ int main(int ArgCnt, char **ArgVec)
    CheckLaunch(0, res);
    printf("After  smoothing: mean quality=%g\n", AvgQal / NmbTet);
 
+   WalTim = GmlGetWallClock() - WalTim;
+
 
    /*-----------------*/
    /* GET THE RESULTS */
@@ -185,8 +189,8 @@ int main(int ArgCnt, char **ArgVec)
    VerTim = GmlGetKernelRunTime(GmlIdx, VerKrn);
    RedTim = GmlGetReduceRunTime(GmlIdx, GmlSum);
 
-   printf(  "%d tets optimized in %g seconds (scatter=%g, gather=%g)\n",
-            NmbTet, RedTim, TetTim, VerTim );
+   printf(  "%d tets optimized in %g seconds (scatter=%g, gather=%g, reduce=%g), wall clock = %g\n",
+            NmbTet, RedTim + TetTim + VerTim, TetTim, VerTim, RedTim, WalTim );
 
    printf("%ld MB used, %ld MB transfered\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,
