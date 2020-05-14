@@ -3,7 +3,7 @@
 /*   Description:       Cell-centered heat equation solver                    */
 /*   Author:            Julien VANHAREN                                       */
 /*   Creation date:     apr 15 2020                                           */
-/*   Last modification: apr 27 2020                                           */
+/*   Last modification: may 13 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 

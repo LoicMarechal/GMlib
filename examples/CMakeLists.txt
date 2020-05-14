@@ -45,3 +45,4 @@ target_link_libraries(${example} GM.3 ${libMeshb_LIBRARIES} ${OpenCL_LIBRARIES} 
 install (TARGETS ${example} DESTINATION share/GMlib/examples COMPONENT examples)
 
 add_subdirectory(heat_cell_centered)
+add_subdirectory(adv_v4)
