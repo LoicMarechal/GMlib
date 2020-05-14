@@ -1,6 +1,6 @@
 ![alt text](https://github.com/LoicMarechal/GMlib/blob/develop/Documentation/GMlib_logo.png "OpenCL logo by Khronos")
 
-# GMlib version 3.19
+#
 Porting meshing tools and solvers that deal with unstructured meshes on GPUs
 
 # Overview
