@@ -2725,8 +2725,9 @@ int GmlExtractEdges(size_t GmlIdx)
 
       dat = &gml->dat[ gml->TypIdx[ typ ] ];
       EleNod = (int *)dat->CpuMem;
-      NmbItm = NmbTpoLnk[ typ ][ lnk.HshTyp ];
-      EleLen = ItmNmbVer[ typ ];
+      EleLen = dat->ItmLen;
+      NmbItm = ItmNmbVer[ typ ];
+      printf("parse typ %d, NmbItm=%d, EleLen=%d", typ, NmbItm, EleLen);
 
       // Add edges to the hash table
       for(i=0;i<dat->NmbLin;i++)
@@ -2762,8 +2763,8 @@ int GmlExtractEdges(size_t GmlIdx)
 
       dat = &gml->dat[ gml->TypIdx[ typ ] ];
       EleNod = (int *)dat->CpuMem;
-      NmbItm = NmbTpoLnk[ typ ][ lnk.HshTyp ];
-      EleLen = ItmNmbVer[ typ ];
+      EleLen = dat->ItmLen;
+      NmbItm = ItmNmbVer[ typ ];
 
       // Get edges from the hash table
       for(i=0;i<dat->NmbLin;i++)
