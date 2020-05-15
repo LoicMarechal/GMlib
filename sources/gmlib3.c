@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.24                           */
+/*                         GPU Meshing Library 3.25                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 14 2020                                           */
+/*   Last modification: may 15 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -316,9 +316,13 @@ static const int ItmFacNod[8][6][4] = {
 { {0,2,1,0}, {3,4,5,0}, {0,1,4,3}, {1,2,5,4}, {3,5,2,0}, {0,0,0,0} },
 { {0,4,7,3}, {1,2,6,5}, {0,1,5,4}, {3,7,6,2}, {0,3,2,1}, {4,5,6,7} } };
 
-static const int GmfKwdTab[8] = {
+static const int GmfMshKwdTab[8] = {
 GmfVertices, GmfEdges, GmfTriangles, GmfQuadrilaterals,
 GmfTetrahedra, GmfPyramids, GmfPrisms, GmfHexahedra };
+
+static const int GmfSolKwdTab[8] = {
+GmfSolAtVertices, GmfSolAtEdges, GmfSolAtTriangles, GmfSolAtQuadrilaterals,
+GmfSolAtTetrahedra, GmfSolAtPyramids, GmfSolAtPrisms, GmfSolAtHexahedra };
 
 static const int GmfTypTab[10] = {
 GmfFloat,  GmfFloatVec,  GmfFloatVec,  GmfFloatVec,  GmfFloatVec,
@@ -3451,33 +3455,39 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
 int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
 {
    GETGMLPTR   (gml, GmlIdx);
-   int         i, j, NmbLin, GmlTyp, GmfKwd, DatIdx, NmbDat = 0, NmbKwd = 0;
+   int         i, j, k, NmbLin, GmlTyp, GmfKwd, DatIdx, NmbDat = 0, NmbKwd = 0;
    int         DatTab[10][4], KwdDatTab[10][15] = {0}, NewKwdFlg, SolKwd;
-   float       *AdrTab[10][2], *DatPtr;
+   int         NmbTyp, TypTab[100], MshKwd, NmbArg, ArgTab[2][10];
+   float       *AdrTab[10][2], *DatPtr, *PtrTab[2][10];
    DatSct      *dat;
-   int64_t     InpMsh;
+   int64_t     OutSol;
    va_list     VarArg;
 
    va_start(VarArg, SolNam);
 
+   // Scan each user's GML datatypes
    while( (DatIdx = va_arg(VarArg, int)) && (NmbDat < 10) )
    {
       if(!(dat = &gml->dat[ DatIdx ]))
          continue;
 
-      GmfKwd = GmfKwdTab[ dat->MshTyp ];
+      // Add a new GML datatyp to the list and download its data from the GPU
+      GmfKwd = GmfMshKwdTab[ dat->MshTyp ];
       DatPtr = (float *)dat->CpuMem;
       DatTab[ NmbDat ][0] = DatIdx;
       DatTab[ NmbDat ][1] = GmfTypTab[ dat->ItmTyp ];
       DatTab[ NmbDat ][2] = dat->ItmLen;
       AdrTab[ NmbDat ][0] = &DatPtr[ 0 ];
-      AdrTab[ NmbDat ][1] = &DatPtr[ (dat->NmbLin - 1) * dat->ItmLen ];
+      AdrTab[ NmbDat ][1] = &DatPtr[ dat->NmbLin * dat->ItmLen ];
+      DownloadData(gml, DatIdx);
 
+      // Now, try to associate this GML type to a GMF keyword
       NewKwdFlg = 1;
 
       for(i=0;i<NmbKwd;i++)
          if(KwdDatTab[i][0] == GmfKwd)
          {
+            // If a sol keyword was found, add this GML data to the field
             KwdDatTab[i][ KwdDatTab[i][1] + 4 ] = NmbDat;
             KwdDatTab[i][1]++;
             KwdDatTab[i][3] += dat->ItmLen;
@@ -3485,6 +3495,7 @@ int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
             break;
          }
 
+      // If not GMF solution was found, create a new one
       if(NewKwdFlg)
       {
          KwdDatTab[ NmbKwd ][0] = GmfKwd;
@@ -3500,36 +3511,50 @@ int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
 
    va_end(VarArg);
 
-   /*if( !(OutSol = GmfOpenMesh(SolNam, GmfWrite, 3, 3)) )
+   // Create the sol file
+   if( !(OutSol = GmfOpenMesh(SolNam, GmfWrite, 1, 3)) )
    {
       printf("Could not create file %s\n", SolNam);
       return(0);
-   }*/
+   }
 
-   printf("found %d data and %d sol kwd\n", NmbDat, NmbKwd);
-
+   // For each GMF solution keyword, set the header and write the data block
    for(i=0;i<NmbKwd;i++)
    {
-      SolKwd = KwdDatTab[i][0];
-      GmlTyp = Gmf2Gml(SolKwd);
+      MshKwd = KwdDatTab[i][0];
+      GmlTyp = Gmf2Gml(MshKwd);
+      SolKwd = GmfSolKwdTab[ GmlTyp ];
+      NmbTyp = NmbArg = 0;
 
       if(!(GetMeshInfo(GmlIdx, GmlTyp, &NmbLin, &DatIdx)))
          continue;
 
-      printf("write sol kwd %d, nmb lines = %d, size = %d/%d\n",
-               SolKwd, NmbLin, KwdDatTab[i][1], KwdDatTab[i][3]);
-
+      // This GMF keyword may be built out of several GML datatypes
       for(j=0;j<KwdDatTab[i][1];j++)
       {
+         // Get the mesh type, vec size and start and end adresses
          DatIdx = KwdDatTab[i][ j+4 ];
-         printf("Add field %d, size=%d, adr = %p %p\n",
-                  DatIdx, DatTab[ DatIdx ][2], AdrTab[ DatIdx ][0],AdrTab[ DatIdx ][1]);
+         ArgTab[0][ NmbArg ] = GmfFloatVec;
+         ArgTab[1][ NmbArg ] = DatTab[ DatIdx ][2];
+         PtrTab[0][ NmbArg ] = AdrTab[ DatIdx ][0];
+         PtrTab[1][ NmbArg ] = AdrTab[ DatIdx ][1];
+         NmbArg++;
+
+         // Use the GmfSca scalar type duplicated as many times as needed
+         // because the arbitrary GML data sizes do not fit into the fixed
+         // GMF scalar, 2D-3D vectors and matrices
+         for(k=0;k<DatTab[ DatIdx ][2];k++)
+            TypTab[ NmbTyp++ ] = GmfSca;
       }
-      puts("");
+
+      // Write the header and the field
+      GmfSetKwd(OutSol, SolKwd, NmbLin, NmbTyp, TypTab);
+      GmfSetBlock(OutSol, SolKwd, 1, NmbLin, 0, NULL, NULL, GmfArgTab,
+                  ArgTab[0], ArgTab[1], PtrTab[0], PtrTab[1]);
    }
 
    // And close the mesh
-   //GmfCloseMesh(OutSol);
+   GmfCloseMesh(OutSol);
 
    return(NmbKwd);
 }
