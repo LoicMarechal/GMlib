@@ -38,7 +38,7 @@
 - Optional include of libMeshb :heavy_check_mark:
 - Write a .meshb to GMlib import module :heavy_check_mark:
 - Write a .solb to GMlib import module
-- Write a GMlib to .solb export module
+- Write a GMlib to .solb export module :heavy_check_mark:
 - Optional include of LPlib
 - Write a renumbering analyzer preprocessor
 - Call the LPlib Hilbert renumbering and renumber the whole input data
@@ -57,7 +57,7 @@
 - `GmlImportMesh("file.meshb", GmfTetrahedra, GmfTriangles, GmfVertices, 0);` :heavy_check_mark:
 - `GmlImportSolution("file.solb", GmfSolAtTetrahedra, GmfSolAtVertices, 0);`
 - `GmlExportMesh("file.meshb", NmbDat, IdxTab[]);`
-- `GmlExportSolution("file.solb", NmbDat, IdxTab[]);`
+- `GmlExportSolution("file.solb", NmbDat, IdxTab[]);` :heavy_check_mark:
 - `GmlEvaluateNumbering();`
 - `GmlHilbertRenumbering();`
 
