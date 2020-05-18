@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.25                           */
+/*                         GPU Meshing Library 3.26                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 15 2020                                           */
+/*   Last modification: may 18 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -2537,12 +2537,13 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
 
 int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
 {
-   int      i, NmbLin, res;
-   float    *vec;
-   char     *RedNam[3] = {"reduce_min", "reduce_max", "reduce_sum"};
    GETGMLPTR(gml, GmlIdx);
+   int      i, NmbLin, ret;
+   float    res, *vec;
    DatSct   *dat, *red;
    KrnSct   *krn;
+   char     *RedNam[] = { "reduce_min", "reduce_max", "reduce_sum",
+            "reduce_L0", "reduce_L1", "reduce_L2", "reduce_Linf" };
 
    // Check indices and data conformity
    if( (DatIdx < 1) || (DatIdx > GmlMaxDat) )
@@ -2595,10 +2596,10 @@ int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
    krn->NmbLin[0] = dat->NmbLin;
 
    // Launch the right reduction kernel according to the requested opperation
-   res = RunOclKrn(gml, krn);
+   ret = RunOclKrn(gml, krn);
 
-   if(res < 0)   
-      return(res);
+   if(ret < 0)   
+      return(ret);
 
    // Trim the size of the output vector down to the number of OpenCL groups
    // used by the kernel and download this amount of data
@@ -2614,25 +2615,27 @@ int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
    {
       case GmlMin :
       {
-         *nrm = 1e37;
+         res = 1e37;
          for(i=0;i<NmbLin;i++)
-            *nrm = MIN(*nrm, vec[i]);
+            res = MIN(res, vec[i]);
       }break;
 
-      case GmlSum :
+      case GmlSum : case GmlL0 : case GmlL1 : case GmlL2 :
       {
-         *nrm = 0.;
+         res = 0.;
          for(i=0;i<NmbLin;i++)
-            *nrm += vec[i];
+            res += vec[i];
       }break;
 
-      case GmlMax :
+      case GmlMax : case GmlLinf :
       {
-         *nrm = -1e37;
+         res = -1e37;
          for(i=0;i<NmbLin;i++)
-            *nrm = MAX(*nrm, vec[i]);
+            res = MAX(res, vec[i]);
       }break;
    }
+
+   *nrm = res;
 
    return(1);
 }
