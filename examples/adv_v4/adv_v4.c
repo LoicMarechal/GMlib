@@ -44,11 +44,11 @@ int main(int argc, char *argv[])
     Adv_Init(argc, argv, &GmlIdx);
 
     /* Import mesh and print statistics. */
-    GmlImportMesh(GmlIdx, "../sample_meshes/square.meshb", GmfVertices, GmfEdges, GmfTriangles);
+    GmlImportMesh(GmlIdx, "../sample_meshes/square.meshb", GmfVertices, GmfTriangles);
     GetMeshInfo(GmlIdx, GmlVertices, &NbrVer, &VerIdx);
-    GetMeshInfo(GmlIdx, GmlEdges, &NbrEdg, &EdgIdx);
+    // GetMeshInfo(GmlIdx, GmlEdges, &NbrEdg, &EdgIdx);
     GetMeshInfo(GmlIdx, GmlTriangles, &NbrTri, &TriIdx);
-    printf("+++ Imported %d vertices, %d edges and %d triangles\n", NbrVer, NbrEdg, NbrTri);
+    printf("+++ Imported %d vertices and %d triangles\n", NbrVer, NbrTri);
     GmlExtractEdges(GmlIdx);
     GetMeshInfo(GmlIdx, GmlEdges, &NbrEdg, &EdgIdx);
     printf("+++ %d edges extracted from the surface\n", NbrEdg);
