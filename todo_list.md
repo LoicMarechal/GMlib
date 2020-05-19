@@ -24,7 +24,7 @@
 
 - Tetrahedral mesh nodes smoother :heavy_check_mark:
 - Tetrahedral mesh quality calculation and statistics :heavy_check_mark:
-- Basic iterative edge based solver with boundary conditions
+- Basic iterative edge based solver with boundary conditions :heavy_check_mark:
 
 ### Documentation
 
@@ -38,12 +38,12 @@
 - Optional include of libMeshb :heavy_check_mark:
 - Write a .meshb to GMlib import module :heavy_check_mark:
 - Write a .solb to GMlib import module
-- Write a GMlib to .solb export module
+- Write a GMlib to .solb export module :heavy_check_mark:
 - Optional include of LPlib
 - Write a renumbering analyzer preprocessor
 - Call the LPlib Hilbert renumbering and renumber the whole input data
 - Provide a plugin functions mechanism available on the GPU side :heavy_check_mark:
-- Develop basic geometric functions on tets, hexes, triangles , quads and edges
+- Develop basic geometric functions on tets, hexes, triangles, quads and edges
 - length, surface, volume and quality :heavy_check_mark:
 - Handle hybrid meshes with prisms and pyramids
 - Update the ball generation to handle hybrid meshes
@@ -57,7 +57,7 @@
 - `GmlImportMesh("file.meshb", GmfTetrahedra, GmfTriangles, GmfVertices, 0);` :heavy_check_mark:
 - `GmlImportSolution("file.solb", GmfSolAtTetrahedra, GmfSolAtVertices, 0);`
 - `GmlExportMesh("file.meshb", NmbDat, IdxTab[]);`
-- `GmlExportSolution("file.solb", NmbDat, IdxTab[]);`
+- `GmlExportSolution("file.solb", NmbDat, IdxTab[]);` :heavy_check_mark:
 - `GmlEvaluateNumbering();`
 - `GmlHilbertRenumbering();`
 

@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.23                           */
+/*                         GPU Meshing Library 3.26                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 06 2020                                           */
+/*   Last modification: may 18 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -316,6 +316,18 @@ static const int ItmFacNod[8][6][4] = {
 { {0,2,1,0}, {3,4,5,0}, {0,1,4,3}, {1,2,5,4}, {3,5,2,0}, {0,0,0,0} },
 { {0,4,7,3}, {1,2,6,5}, {0,1,5,4}, {3,7,6,2}, {0,3,2,1}, {4,5,6,7} } };
 
+static const int GmfMshKwdTab[8] = {
+GmfVertices, GmfEdges, GmfTriangles, GmfQuadrilaterals,
+GmfTetrahedra, GmfPyramids, GmfPrisms, GmfHexahedra };
+
+static const int GmfSolKwdTab[8] = {
+GmfSolAtVertices, GmfSolAtEdges, GmfSolAtTriangles, GmfSolAtQuadrilaterals,
+GmfSolAtTetrahedra, GmfSolAtPyramids, GmfSolAtPrisms, GmfSolAtHexahedra };
+
+static const int GmfTypTab[10] = {
+GmfFloat,  GmfFloatVec,  GmfFloatVec,  GmfFloatVec,  GmfFloatVec,
+GmfDouble, GmfDoubleVec, GmfDoubleVec, GmfDoubleVec, GmfDoubleVec };
+
 char *sep="\n\n############################################################\n";
 
 
@@ -384,7 +396,8 @@ size_t GmlInit(int DevIdx)
       return(0);
    }
 
-   err = clGetDeviceInfo(gml->device_id[ gml->CurDev ], CL_DEVICE_EXTENSIONS, 1024, str, &retSiz);
+   err = clGetDeviceInfo(  gml->device_id[ gml->CurDev ],
+                           CL_DEVICE_EXTENSIONS, 1024, str, &retSiz );
 
    if(strstr(str, "cl_khr_fp64"))
       gml->DblExt = 1;
@@ -451,8 +464,8 @@ void GmlListGPU()
    }
 
    for(i=0;i<num_devices;i++)
-      if(clGetDeviceInfo(  device_id[i], CL_DEVICE_NAME,  GmlMaxStrSiz , GpuNam,
-                           &GpuNamSiz) == CL_SUCCESS )
+      if(clGetDeviceInfo(  device_id[i], CL_DEVICE_NAME, GmlMaxStrSiz,
+                           GpuNam, &GpuNamSiz) == CL_SUCCESS )
       {
          printf("      %d      : %s\n", i, GpuNam);
       }
@@ -2098,7 +2111,8 @@ static void WriteKernelVariables(char *src, int MshTyp,
       // If ball or shell voyeurs are required, define a vector char
       if(arg->FlgTab & GmlVoyeurs)
       {
-         sprintf(str,  "   char      %s[%d];\n", arg->VoyNam, arg->NmbItm * arg->ItmLen);
+         sprintf( str,  "   char      %s[%d];\n",
+                  arg->VoyNam, arg->NmbItm * arg->ItmLen );
          strcat(src, str);
       }
    }
@@ -2231,8 +2245,8 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
             {
                // Otherwise, read the ball data and perform the right shift on the fly
                sprintf( str, "   %s%s%s = %s %sTab[ %s%s%s ]%s %s %s;\n",
-                        arg->nam, ArgTd2, ArgTd1,
-                        DegTst, arg->nam, LnkNam, LnkTd1, LnkTd2, ArgTd1, BalSft, DegNul);
+                        arg->nam, ArgTd2, ArgTd1, DegTst, arg->nam,
+                        LnkNam, LnkTd1, LnkTd2, ArgTd1, BalSft, DegNul );
 
                strcat(src, str);
             }
@@ -2523,12 +2537,13 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
 
 int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
 {
-   int      i, NmbLin, res;
-   float    *vec;
-   char     *RedNam[3] = {"reduce_min", "reduce_max", "reduce_sum"};
    GETGMLPTR(gml, GmlIdx);
+   int      i, NmbLin, ret;
+   float    res, *vec;
    DatSct   *dat, *red;
    KrnSct   *krn;
+   char     *RedNam[] = { "reduce_min", "reduce_max", "reduce_sum",
+            "reduce_L0", "reduce_L1", "reduce_L2", "reduce_Linf" };
 
    // Check indices and data conformity
    if( (DatIdx < 1) || (DatIdx > GmlMaxDat) )
@@ -2581,10 +2596,10 @@ int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
    krn->NmbLin[0] = dat->NmbLin;
 
    // Launch the right reduction kernel according to the requested opperation
-   res = RunOclKrn(gml, krn);
+   ret = RunOclKrn(gml, krn);
 
-   if(res < 0)   
-      return(res);
+   if(ret < 0)   
+      return(ret);
 
    // Trim the size of the output vector down to the number of OpenCL groups
    // used by the kernel and download this amount of data
@@ -2600,25 +2615,27 @@ int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
    {
       case GmlMin :
       {
-         *nrm = 1e37;
+         res = 1e37;
          for(i=0;i<NmbLin;i++)
-            *nrm = MIN(*nrm, vec[i]);
+            res = MIN(res, vec[i]);
       }break;
 
-      case GmlSum :
+      case GmlSum : case GmlL0 : case GmlL1 : case GmlL2 :
       {
-         *nrm = 0.;
+         res = 0.;
          for(i=0;i<NmbLin;i++)
-            *nrm += vec[i];
+            res += vec[i];
       }break;
 
-      case GmlMax :
+      case GmlMax : case GmlLinf :
       {
-         *nrm = -1e37;
+         res = -1e37;
          for(i=0;i<NmbLin;i++)
-            *nrm = MAX(*nrm, vec[i]);
+            res = MAX(res, vec[i]);
       }break;
    }
+
+   *nrm = res;
 
    return(1);
 }
@@ -2680,33 +2697,35 @@ int GmlCheckFP64(size_t GmlIdx)
 
 int GmlExtractEdges(size_t GmlIdx)
 {
-   int         i, j, typ, idx, cod, cpt = 0, HshKey, ItmTab[3];
-   int         EdgIdx, EleSiz, NmbItm, EleLen, *EleNod, *nod;
+   int         i, j, typ, idx, cod, HshKey, ItmTab[3], (*EdgTab)[3] = NULL;
+   int         EdgIdx, EleSiz, NmbItm, EleLen, NmbEdg = 0, *EleNod, *nod;
+   int         OldNmbEdg, IdxLst[2], EdgNod[2];
    DatSct      *dat;
    BucSct      *buc;
-   HshTabSct   lnk;
+   HshTabSct   EdgHsh;
 
    GETGMLPTR(gml, GmlIdx);
 
+   // Count the number of inner and surface edges
    for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
       if(gml->TypIdx[ typ ])
-         cpt += gml->dat[ gml->TypIdx[ typ ] ].NmbLin;
+         NmbEdg += gml->dat[ gml->TypIdx[ typ ] ].NmbLin;
 
    // Setup a hash table
-   memset(&lnk, 0, sizeof(HshTabSct));
-   lnk.HshTyp = GmlEdges;
-   lnk.TabSiz = cpt;
-   lnk.DatLen = ItmNmbVer[ lnk.HshTyp ];
-   lnk.KeyLen = HshLenTab[ lnk.DatLen ];
-   lnk.NmbDat = lnk.TabSiz;
-   lnk.NxtDat = 1;
-   lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
-   lnk.DatTab = malloc(lnk.TabSiz * sizeof(BucSct));
-   cpt = 0;
+   memset(&EdgHsh, 0, sizeof(HshTabSct));
+   EdgHsh.HshTyp = GmlEdges;
+   EdgHsh.TabSiz = NmbEdg;
+   EdgHsh.DatLen = ItmNmbVer[ EdgHsh.HshTyp ];
+   EdgHsh.KeyLen = HshLenTab[ EdgHsh.DatLen ];
+   EdgHsh.NmbDat = EdgHsh.TabSiz;
+   EdgHsh.NxtDat = 1;
+   EdgHsh.HshTab = calloc(EdgHsh.TabSiz, sizeof(int));
+   EdgHsh.DatTab = malloc(EdgHsh.TabSiz * sizeof(BucSct));
+   NmbEdg = 0;
 
    if(gml->DbgFlg)
       printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
-               lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
+               EdgHsh.TabSiz, EdgHsh.DatLen, EdgHsh.KeyLen);
 
    for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
    {
@@ -2715,8 +2734,8 @@ int GmlExtractEdges(size_t GmlIdx)
 
       dat = &gml->dat[ gml->TypIdx[ typ ] ];
       EleNod = (int *)dat->CpuMem;
-      NmbItm = NmbTpoLnk[ typ ][ lnk.HshTyp ];
-      EleLen = ItmNmbVer[ typ ];
+      EleLen = dat->ItmLen;
+      NmbItm = ItmNmbVer[ typ ];
 
       // Add edges to the hash table
       for(i=0;i<dat->NmbLin;i++)
@@ -2725,26 +2744,64 @@ int GmlExtractEdges(size_t GmlIdx)
 
          for(j=0;j<NmbItm;j++)
          {
-            GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
-            HshKey = CalHshKey(&lnk, ItmTab);
+            GetItmNod(nod, typ, EdgHsh.HshTyp, j, ItmTab);
+            HshKey = CalHshKey(&EdgHsh, ItmTab);
 
-            if(GetHsh(&lnk, HshKey, i, j, ItmTab, NULL, NULL))
+            if(GetHsh(&EdgHsh, HshKey, i, j, ItmTab, NULL, NULL))
                continue;
 
-            AddHsh(&lnk, HshKey, typ, i, j, ItmTab);
-            cpt++;
+            AddHsh(&EdgHsh, HshKey, typ, i, j, ItmTab);
+            NmbEdg++;
          }
       }
    }
 
    if(gml->DbgFlg)
       printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
-               lnk.NxtDat-1, (100LL * lnk.NmbHit) / lnk.TabSiz,
-               (double)lnk.NmbMis / (double)lnk.TabSiz );
+               EdgHsh.NxtDat-1, (100LL * EdgHsh.NmbHit) / EdgHsh.TabSiz,
+               (double)EdgHsh.NmbMis / (double)EdgHsh.TabSiz );
 
-   EdgIdx = GmlNewMeshData(GmlIdx, GmlEdges, cpt);
-   cpt = 0;
+   // If there are surface edges, save their references and hash them
+   GetMeshInfo(GmlIdx, GmlEdges, &OldNmbEdg, &EdgIdx);
 
+   if(OldNmbEdg)
+   {
+      EdgTab = malloc(OldNmbEdg * 3 * sizeof(int));
+      assert(EdgTab);
+
+      for(i=0;i<OldNmbEdg;i++)
+          GmlGetDataLine(GmlIdx, EdgIdx, i, &EdgTab[i][0], &EdgTab[i][1], &EdgTab[i][2]);
+
+      // Then free the existing edge data type
+      // and allocate a new one with the increased size
+      GmlFreeData(GmlIdx, EdgIdx);
+      EdgIdx = GmlNewMeshData(GmlIdx, GmlEdges, NmbEdg);
+      NmbEdg = 0;
+
+      for(i=0;i<OldNmbEdg;i++)
+      {
+         GetItmNod(EdgTab[i], GmlEdges, GmlEdges, 0, EdgNod);
+         HshKey = CalHshKey(&EdgHsh, EdgNod);
+
+         // If it is in the hash table, send its data to the GMlib
+         if(GetHsh(&EdgHsh, HshKey, i, 0, EdgNod, IdxLst, NULL) != 1)
+            continue;
+
+         if(IdxLst[0] >> 4 != i)
+            continue;
+
+         GmlSetDataLine(GmlIdx, EdgIdx, NmbEdg, EdgNod[0], EdgNod[1], EdgTab[i][2]);
+
+         NmbEdg++;
+      }
+   }
+   else
+   {
+      EdgIdx = GmlNewMeshData(GmlIdx, GmlEdges, NmbEdg);
+      NmbEdg = 0;
+   }
+
+   // Loop over all kinds of elements and setup the inner edges
    for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
    {
       if(!gml->TypIdx[ typ ])
@@ -2752,8 +2809,8 @@ int GmlExtractEdges(size_t GmlIdx)
 
       dat = &gml->dat[ gml->TypIdx[ typ ] ];
       EleNod = (int *)dat->CpuMem;
-      NmbItm = NmbTpoLnk[ typ ][ lnk.HshTyp ];
-      EleLen = ItmNmbVer[ typ ];
+      EleLen = dat->ItmLen;
+      NmbItm = ItmNmbVer[ typ ];
 
       // Get edges from the hash table
       for(i=0;i<dat->NmbLin;i++)
@@ -2762,29 +2819,32 @@ int GmlExtractEdges(size_t GmlIdx)
 
          for(j=0;j<NmbItm;j++)
          {
-            GetItmNod(nod, typ, lnk.HshTyp, j, ItmTab);
-            HshKey = CalHshKey(&lnk, ItmTab);
+            GetItmNod(nod, typ, EdgHsh.HshTyp, j, ItmTab);
+            HshKey = CalHshKey(&EdgHsh, ItmTab);
             cod = 0;
 
-            if(!GetHsh(&lnk, HshKey, i, j, ItmTab, &cod, NULL))
+            if(!GetHsh(&EdgHsh, HshKey, i, j, ItmTab, &cod, NULL))
                continue;
 
             if(cod >> 4 != i)
                continue;
 
-            GmlSetDataLine(GmlIdx, EdgIdx, cpt, ItmTab[0], ItmTab[1], 0);
-            cpt++;
+            GmlSetDataLine(GmlIdx, EdgIdx, NmbEdg, ItmTab[0], ItmTab[1], 0);
+            NmbEdg++;
          }
       }
    }
 
-   free(lnk.HshTab);
-   free(lnk.DatTab);
+   if(EdgTab)
+      free(EdgTab);
+
+   free(EdgHsh.HshTab);
+   free(EdgHsh.DatTab);
 
    if(gml->DbgFlg)
-      printf("Hashed, setup and transfered %d edges to the GMlib.\n", cpt);
+      printf("Hashed, setup and transfered %d edges to the GMlib.\n", NmbEdg);
 
-   return(EdgIdx);
+   return(NmbEdg);
 }
 
 
@@ -3221,7 +3281,7 @@ double GmlGetKernelRunTime(size_t GmlIdx, int KrnIdx)
       &&  (clGetEventProfilingInfo( krn->EvtTab[i], CL_PROFILING_COMMAND_END,
                                     sizeof(end),   &end,   NULL) == CL_SUCCESS) )
       {
-         RunTim += (double)(end - start) / 1e9;
+         RunTim += (double)(end - start) * 1e-9;
       }
    }
 
@@ -3324,7 +3384,7 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
    /*--------------*/
 
    // Open the mesh
-   if( !(InpMsh = GmfOpenMesh(MshNam, GmfRead, &ver, &dim)) || (dim != 3) )
+   if( !(InpMsh = GmfOpenMesh(MshNam, GmfRead, &ver, &dim)) )
    {
       printf("Could not open file %s\n", MshNam);
       return(0);
@@ -3386,6 +3446,118 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
 
    // And close the mesh
    GmfCloseMesh(InpMsh);
+
+   return(NmbKwd);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Read a mesh file and allocate and set the requested keywords in the GMlib  */
+/*----------------------------------------------------------------------------*/
+
+int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
+{
+   GETGMLPTR   (gml, GmlIdx);
+   int         i, j, k, NmbLin, GmlTyp, GmfKwd, DatIdx, NmbDat = 0, NmbKwd = 0;
+   int         DatTab[10][4], KwdDatTab[10][15] = {0}, NewKwdFlg, SolKwd;
+   int         NmbTyp, TypTab[100], MshKwd, NmbArg, ArgTab[2][10];
+   float       *AdrTab[10][2], *DatPtr, *PtrTab[2][10];
+   DatSct      *dat;
+   int64_t     OutSol;
+   va_list     VarArg;
+
+   va_start(VarArg, SolNam);
+
+   // Scan each user's GML datatypes
+   while( (DatIdx = va_arg(VarArg, int)) && (NmbDat < 10) )
+   {
+      if(!(dat = &gml->dat[ DatIdx ]))
+         continue;
+
+      // Add a new GML datatyp to the list and download its data from the GPU
+      GmfKwd = GmfMshKwdTab[ dat->MshTyp ];
+      DatPtr = (float *)dat->CpuMem;
+      DatTab[ NmbDat ][0] = DatIdx;
+      DatTab[ NmbDat ][1] = GmfTypTab[ dat->ItmTyp ];
+      DatTab[ NmbDat ][2] = dat->ItmLen;
+      AdrTab[ NmbDat ][0] = &DatPtr[ 0 ];
+      AdrTab[ NmbDat ][1] = &DatPtr[ dat->NmbLin * dat->ItmLen ];
+      DownloadData(gml, DatIdx);
+
+      // Now, try to associate this GML type to a GMF keyword
+      NewKwdFlg = 1;
+
+      for(i=0;i<NmbKwd;i++)
+         if(KwdDatTab[i][0] == GmfKwd)
+         {
+            // If a sol keyword was found, add this GML data to the field
+            KwdDatTab[i][ KwdDatTab[i][1] + 4 ] = NmbDat;
+            KwdDatTab[i][1]++;
+            KwdDatTab[i][3] += dat->ItmLen;
+            NewKwdFlg = 0;
+            break;
+         }
+
+      // If not GMF solution was found, create a new one
+      if(NewKwdFlg)
+      {
+         KwdDatTab[ NmbKwd ][0] = GmfKwd;
+         KwdDatTab[ NmbKwd ][1] = 1;
+         KwdDatTab[ NmbKwd ][2] = GmfTypTab[ dat->ItmTyp ];
+         KwdDatTab[ NmbKwd ][3] = dat->ItmLen;
+         KwdDatTab[ NmbKwd ][4] = NmbDat;
+         NmbKwd++;
+      }
+
+      NmbDat++;
+   }
+
+   va_end(VarArg);
+
+   // Create the sol file
+   if( !(OutSol = GmfOpenMesh(SolNam, GmfWrite, 1, 3)) )
+   {
+      printf("Could not create file %s\n", SolNam);
+      return(0);
+   }
+
+   // For each GMF solution keyword, set the header and write the data block
+   for(i=0;i<NmbKwd;i++)
+   {
+      MshKwd = KwdDatTab[i][0];
+      GmlTyp = Gmf2Gml(MshKwd);
+      SolKwd = GmfSolKwdTab[ GmlTyp ];
+      NmbTyp = NmbArg = 0;
+
+      if(!(GetMeshInfo(GmlIdx, GmlTyp, &NmbLin, &DatIdx)))
+         continue;
+
+      // This GMF keyword may be built out of several GML datatypes
+      for(j=0;j<KwdDatTab[i][1];j++)
+      {
+         // Get the mesh type, vec size and start and end adresses
+         DatIdx = KwdDatTab[i][ j+4 ];
+         ArgTab[0][ NmbArg ] = GmfFloatVec;
+         ArgTab[1][ NmbArg ] = DatTab[ DatIdx ][2];
+         PtrTab[0][ NmbArg ] = AdrTab[ DatIdx ][0];
+         PtrTab[1][ NmbArg ] = AdrTab[ DatIdx ][1];
+         NmbArg++;
+
+         // Use the GmfSca scalar type duplicated as many times as needed
+         // because the arbitrary GML data sizes do not fit into the fixed
+         // GMF scalar, 2D-3D vectors and matrices
+         for(k=0;k<DatTab[ DatIdx ][2];k++)
+            TypTab[ NmbTyp++ ] = GmfSca;
+      }
+
+      // Write the header and the field
+      GmfSetKwd(OutSol, SolKwd, NmbLin, NmbTyp, TypTab);
+      GmfSetBlock(OutSol, SolKwd, 1, NmbLin, 0, NULL, NULL, GmfArgTab,
+                  ArgTab[0], ArgTab[1], PtrTab[0], PtrTab[1]);
+   }
+
+   // And close the mesh
+   GmfCloseMesh(OutSol);
 
    return(NmbKwd);
 }

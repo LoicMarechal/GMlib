@@ -1,5 +1,4 @@
-# GMlib version 3.19
-Porting meshing tools and solvers that deal with unstructured meshes on GPUs
+![alt text](https://github.com/LoicMarechal/GMlib/blob/develop/Documentation/GMlib_logo.png "Gmlib logo made with Logo Maker ")
 
 # Overview
 The purpose of the **GMlib** is to provide programmers of solvers or automated meshers in the field of scientific computing with an easy, fast and transparent way to port their codes on *GPUs* (Graphic Processing Units).  
@@ -20,12 +19,11 @@ Simply follow these steps:
 - `cmake ../`
 - `sudo make install`
 
-Optionally, you may download some sample meshes to run the examples:
+Optionally, you may download libMeshb to run the examples:
 - you need to install the [libMeshb](https://github.com/LoicMarechal/libMeshb) from GitHub
-- manually download files from the *Git LFS* repository: [sample files](sample_meshes/)
-- move them into /opt/GMlib/sample_meshes/
+- cd to /usr/local/GMlib/sample_meshes/
 - uncompress them with `lzip -d *.meshb.lz`
-- you may now enter /opt/GMlib/examples directory and run the various examples
+- you may now enter /usr/local/GMlib/examples directory and run the various examples
 
 # Usage
 The **GMlib** is written in *ANSI C* with some parts in *OpenCL*.  

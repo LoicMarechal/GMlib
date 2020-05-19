@@ -37,8 +37,8 @@
 \begin{flushright}
 \Large Lo\"ic MAR\'ECHAL / INRIA, Projet Gamma\\
 \Large Mai 2020 \\
-\normalsize Document v2.05
-\normalsize Librairie v3.21
+\normalsize Document v2.06
+\normalsize Librairie v3.26
 \end{flushright}
 
 \end{titlepage}
@@ -952,7 +952,7 @@ taille     & size\_t & \\
 \subsection{GmlGetReduceRunTime}
 
 Permets d'obtenir le temps total d'exécution d'un des kernels de réduction de la librairie.
-Le fonctionnement est identique à {\tt GmlGetKernelRunTime} sauf l'étiquette de kernel qui est remplacée par le code de l'opération de réduction dont on veut récupérer le chronomètre (GmlMin, GmlMax, GmlSum).
+Le fonctionnement est identique à {\tt GmlGetKernelRunTime} sauf l'étiquette de kernel qui est remplacée par le code de l'opération de réduction dont on veut récupérer le chronomètre (GmlMin, GmlMax, Fmlsum).
 
 
 \subsection{GmlGetWallClock}
@@ -1076,7 +1076,7 @@ KrnIdx     & int     & numéro du kernel à exécuter \\
 \hline
 Retour     & type    & description \\
 \hline
-flag       & int     & si < 0 : code d'erreur, 1 = succès \\
+flag       & int     & si $<$ 0 : code d'erreur, 1 = succès \\
 \hline
 \end{tabular}
 
@@ -1331,12 +1331,13 @@ norme      & double * & valeur résiduelle \\
 \hline
 Retour     & type   & description \\
 \hline
-slat       & int    & si < 0 : code d'erreur, 1 : succès  \\
+flag       & int    & si $<$ 0 : code d'erreur, 1 : succès  \\
 \hline
 \end{tabular}
 
 \subsubsection*{Commentaires}
 Les codes OpenCL des trois opérations proposées se trouvent dans le fichier reduce.cl et il est très simple de s'en inspirer afin d'y ajouter son propre calcul de norme.
+Les opérations proposées par défaut sont le calcul de la somme des termes du vecteur, de la valeur minimum ou maximum, ou bien des normes $L_0$, $L_1$, $L_2$ et $L_{inf}$.
 
 
 \subsection{GmlSetDataBlock}
