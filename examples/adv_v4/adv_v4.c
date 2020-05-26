@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
   /* Import mesh and print statistics. */
   GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), param);
   GmlImportMesh(GmlIdx, "../sample_meshes/square.meshb", GmfVertices,
-                GmfTriangles);
+                GmfTriangles, 0);
   GetMeshInfo(GmlIdx, GmlVertices, &NbrVer, &VerIdx);
   GetMeshInfo(GmlIdx, GmlEdges, &NbrEdg, &EdgIdx);
   GetMeshInfo(GmlIdx, GmlTriangles, &NbrTri, &TriIdx);
@@ -59,55 +59,56 @@ int main(int argc, char *argv[]) {
   printf("+++ %d edges extracted from the surface\n", NbrEdg);
 
   /* Begin: For each triangles, store the coordinates of its three vertices. */
-  int CrdIdx = GmlNewSolutionData(GmlIdx, GmlTriangles, 3, GmlFlt4, "Crd");
-  int CrdKrn = GmlCompileKernel(GmlIdx, crd, "crd", GmlTriangles, 2, VerIdx,
-                                GmlReadMode, NULL, CrdIdx, GmlWriteMode, NULL);
-  printf("+++ Kernel compilation return: %d\n", CrdKrn);
-  flag = GmlLaunchKernel(GmlIdx, CrdKrn);
-  printf("+++ Kernel launch return: %d\n", flag);
-  // int i, j;
-  // float tmp[12];
-  // for (i = 0; i < NbrTri; i++) {
-  //   GmlGetDataLine(GmlIdx, CrdIdx, i, tmp);
-  //   for (j = 0; j < 12; j++) printf("%.3f ", tmp[j]);
-  //   printf("\n");
-  // }
-  /* End: For each triangles, store the coordinates of its three vertices. */
+  // int CrdIdx = GmlNewSolutionData(GmlIdx, GmlTriangles, 3, GmlFlt4, "Crd");
+  // int CrdKrn = GmlCompileKernel(GmlIdx, crd, "crd", GmlTriangles, 2, VerIdx,
+  //                               GmlReadMode, NULL, CrdIdx, GmlWriteMode,
+  //                               NULL);
+  // printf("+++ Kernel compilation return: %d\n", CrdKrn);
+  // flag = GmlLaunchKernel(GmlIdx, CrdKrn);
+  // printf("+++ Kernel launch return: %d\n", flag);
+  // // int i, j;
+  // // float tmp[12];
+  // // for (i = 0; i < NbrTri; i++) {
+  // //   GmlGetDataLine(GmlIdx, CrdIdx, i, tmp);
+  // //   for (j = 0; j < 12; j++) printf("%.3f ", tmp[j]);
+  // //   printf("\n");
+  // // }
+  // /* End: For each triangles, store the coordinates of its three vertices. */
 
-  int BalCrdIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1, GmlFlt4, "BalCrd");
+  // int BalCrdIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1, GmlFlt4,
+  // "BalCrd");
 
   // int BalCrdKrn =
   //     GmlCompileKernel(GmlIdx, bal_crd, "bal_crd", GmlVertices, 2, CrdIdx,
   //                      GmlReadMode, NULL, BalCrdIdx, GmlWriteMode, NULL);
   // GmlLaunchKernel(GmlIdx, BalCrdKrn);
 
-  int i, j;
-  float tmp[4];
-  float ini[4] = {-99.f, -99.f, -99.f, -99.f};
+  // int i, j;
+  // float tmp[4];
+  // float ini[4] = {-99.f, -99.f, -99.f, -99.f};
 
-  for (i = 0; i < NbrVer; i++) GmlSetDataLine(GmlIdx, BalCrdIdx, i, &ini);
+  // for (i = 0; i < NbrVer; i++) GmlSetDataLine(GmlIdx, BalCrdIdx, i, &ini);
 
-  for (i = 0; i < NbrVer; i++) {
-    GmlGetDataLine(GmlIdx, BalCrdIdx, i, &tmp);
-    for (j = 0; j < 4; j++) printf("%.3f ", tmp[j]);
-    printf("\n");
-  }
+  // for (i = 0; i < NbrVer; i++) {
+  //   GmlGetDataLine(GmlIdx, BalCrdIdx, i, &tmp);
+  //   for (j = 0; j < 4; j++) printf("%.3f ", tmp[j]);
+  //   printf("\n");
+  // }
 
-  int BalCrdKrn =
-      GmlCompileKernel(GmlIdx, bal_crd, "bal_crd", GmlVertices, 2, TriIdx , GmlReadMode, NULL, CrdIdx, GmlReadMode, NULL);
+  int BalCrdKrn = GmlCompileKernel(GmlIdx, bal_crd, "bal_crd", GmlVertices, 1,
+                                   TriIdx, GmlReadMode, NULL);
   printf("+++ Kernel compilation return: %d\n", BalCrdKrn);
   flag = GmlLaunchKernel(GmlIdx, BalCrdKrn);
-
   printf("+++ Kernel launch return: %d\n", flag);
 
-  printf("\n");
-  printf("\n");
-  printf("\n");
-  for (i = 0; i < NbrVer; i++) {
-    GmlGetDataLine(GmlIdx, BalCrdIdx, i, &tmp);
-    for (j = 0; j < 4; j++) printf("%.3f ", tmp[j]);
-    printf("\n");
-  }
+  // printf("\n");
+  // printf("\n");
+  // printf("\n");
+  // for (i = 0; i < NbrVer; i++) {
+  //   GmlGetDataLine(GmlIdx, BalCrdIdx, i, &tmp);
+  //   for (j = 0; j < 4; j++) printf("%.3f ", tmp[j]);
+  //   printf("\n");
+  // }
 
   GmlStop(GmlIdx);
   return 0;
