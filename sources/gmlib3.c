@@ -2,7 +2,7 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.26                           */
+/*                         GPU Meshing Library 3.27                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
@@ -3340,6 +3340,46 @@ double GmlGetWallClock()
    gettimeofday(&tp, NULL);
    return(tp.tv_sec + tp.tv_usec / 1000000.);
 #endif
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Return the percentage of cache hit while doing an elements to nodes access */
+/*----------------------------------------------------------------------------*/
+
+float GmlEvaluateNumbering(size_t GmlIdx)
+{
+   GETGMLPTR(gml, GmlIdx);
+   DatSct   *dat;
+   int      i, j, typ, VerIdx, HshPos, HshAdr;
+   int      HshTab[64]={0}, *EleTab, NmbHit = 0, NmbMis = 0;
+
+   for(typ=GmlEdges; typ<GmlMaxEleTyp; typ++)
+   {
+      if(!gml->TypIdx[ typ ])
+         continue;
+
+      dat = &gml->dat[ gml->TypIdx[ typ ] ];
+      EleTab = (int *)dat->CpuMem;
+
+      for(i=0;i<dat->NmbLin;i++)
+         for(j=0;j<dat->NmbItm;j++)
+         {
+            VerIdx = EleTab[ i * dat->ItmLen + j ];
+            HshPos = (VerIdx >> 4) & 0xf;
+            HshAdr = VerIdx >> 10;
+
+            if(HshTab[ HshPos ] == HshAdr)
+               NmbHit++;
+            else
+            {
+               NmbMis++;
+               HshTab[ HshPos ] = HshAdr;
+            }
+         }
+   }
+
+   return(100. * (float)NmbHit / (NmbHit + NmbMis));
 }
 
 
