@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 18 2020                                           */
+/*   Last modification: may 26 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -882,12 +882,30 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
          }
 
          MaxDeg = pow(2., ceil(log2(MaxDeg)));
-         HghSiz = MIN(MaxDeg, LenMatMax[ src->MshTyp ][ dst->MshTyp ]);
-         gml->SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
 
-         if(gml->DbgFlg)
-            printf(  "Width for lines 1..%d: %d, for lines %d..%d:%d\n",
-                     MaxPos, BalSiz, MaxPos+1, src->NmbLin, MaxDeg);
+         // If the max degree is greater than de base size,
+         // create an extension ball table for high degree entities
+         if(MaxDeg > BalSiz)
+         {
+            HghSiz = MIN(MaxDeg, LenMatMax[ src->MshTyp ][ dst->MshTyp ]);
+            gml->SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
+
+            if(gml->DbgFlg)
+               printf(  "Width for lines 1..%d: %d, for lines %d..%d:%d\n",
+                        MaxPos, BalSiz, MaxPos+1, src->NmbLin, MaxDeg);
+         }
+         else
+         {
+            // If the max degree fits in the base size vector,
+            // fall back to a regular contant width table
+            MaxDeg = BalSiz;
+            HghSiz = 0;
+            MaxPos = src->NmbLin;
+            gml->SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = 0;
+
+            if(gml->DbgFlg)
+               printf("Constant width uplink: %d\n", BalSiz);
+         }
       }
    }
 

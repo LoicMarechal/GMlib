@@ -108,7 +108,7 @@ float CalTriQal(float4 a, float4 b, float4 c)
    hmax = max(ha,   hb);
    hmax = max(hmax, hc);
 
-   return( 6.92820 * CalSrf(a,b,c) / (hmax * (ha + hb + hc)) );
+   return( 3.46410 * CalSrf(a,b,c) / (hmax * (ha + hb + hc)) );
 }
 
 float CalQadQal(float4 a, float4 b, float4 c, float4 d)
