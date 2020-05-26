@@ -63,11 +63,12 @@ int main(int argc, char *argv[]) {
   /* Define boundary conditions. */
   GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), param);
   *GmlPar = (GmlParSct){
-      NEUMANN, NEUMANN, NEUMANN, DIRICHLET, DIRICHLET, NEUMANN, 1,    2,  3, 4,
-      5,       6,       0.,      0.,        0.,        300.,    250., 0., 0.};
+      NEUMANN, NEUMANN, NEUMANN, DIRICHLET, DIRICHLET, NEUMANN, 1,  2,  3, 4,
+      5,       6,       0.,      0.,        0.,        1.,      0., 0., 0.};
 
   /* Import mesh and print statistics. */
-  GmlImportMesh(GmlIdx, "cube.meshb", GmfVertices, GmfTriangles, GmfTetrahedra);
+  GmlImportMesh(GmlIdx, "../sample_meshes/cube.meshb", GmfVertices,
+                GmfTriangles, GmfTetrahedra);
   GetMeshInfo(GmlIdx, GmlVertices, &NbrVer, &VerIdx);
   GetMeshInfo(GmlIdx, GmlTetrahedra, &NbrTet, &TetIdx);
   GetMeshInfo(GmlIdx, GmlTriangles, &NbrTri, &TriIdx);
@@ -158,7 +159,7 @@ int main(int argc, char *argv[]) {
     if (!(n % 1000))
       printf("+++ Iteration %6d Residual = %.3E\n", n, Res / InitRes);
     n++;
-  } while ((Res / InitRes > 1e-6) && (n < 100000));
+  } while ((Res / InitRes > 1e-7) && (n < 100000));
 
   GmlDownloadParameters(GmlIdx);
 
