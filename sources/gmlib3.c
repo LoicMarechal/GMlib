@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 26 2020                                           */
+/*   Last modification: may 28 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -2151,9 +2151,11 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
    char     BalSft[ GmlMaxStrSiz ], BalMsk[ GmlMaxStrSiz ];
    ArgSct   *arg, *LnkArg, *CptArg;
 
-   strcat(src, "   int       cnt = get_global_id(0);\n\n");
-   strcat(src, "   if(cnt >= count.s0)\n      return;\n\n");
-   strcat(src, "// KERNEL MEMORY READINGS\n");
+   strcat (src, "   int       cnt = get_global_id(0);\n");
+   sprintf(str, "   int       %sIdx = cnt + count.s1;\n\n", BalTypStr[ MshTyp ]);
+   strcat (src, str);
+   strcat (src, "   if(cnt >= count.s0)\n      return;\n\n");
+   strcat (src, "// KERNEL MEMORY READINGS\n");
 
    for(i=0;i<NmbArg;i++)
    {
@@ -3613,6 +3615,10 @@ int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
       GmfSetBlock(OutSol, SolKwd, 1, NmbLin, 0, NULL, NULL, GmfArgTab,
                   ArgTab[0], ArgTab[1], PtrTab[0], PtrTab[1]);
    }
+
+   GmfSetKwd(OutSol, GmfReferenceStrings, NmbKwd);
+   for(i=0;i<NmbKwd;i++)
+      GmfSetLin(OutSol, GmfReferenceStrings, GmfSolKwdTab[ Gmf2Gml(KwdDatTab[i][0]) ], 1, "field");
 
    // And close the mesh
    GmfCloseMesh(OutSol);

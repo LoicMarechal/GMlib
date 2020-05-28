@@ -40,7 +40,7 @@
 - Write a .solb to GMlib import module
 - Write a GMlib to .solb export module :heavy_check_mark:
 - Optional include of LPlib
-- Write a renumbering analyzer preprocessor
+- Write a renumbering analyzer preprocessor :heavy_check_mark:
 - Call the LPlib Hilbert renumbering and renumber the whole input data
 - Provide a plugin functions mechanism available on the GPU side :heavy_check_mark:
 - Develop basic geometric functions on tets, hexes, triangles, quads and edges
@@ -58,7 +58,7 @@
 - `GmlImportSolution("file.solb", GmfSolAtTetrahedra, GmfSolAtVertices, 0);`
 - `GmlExportMesh("file.meshb", NmbDat, IdxTab[]);`
 - `GmlExportSolution("file.solb", NmbDat, IdxTab[]);` :heavy_check_mark:
-- `GmlEvaluateNumbering();`
+- `GmlEvaluateNumbering();` :heavy_check_mark:
 - `GmlHilbertRenumbering();`
 
 ### Exposed GPU API
