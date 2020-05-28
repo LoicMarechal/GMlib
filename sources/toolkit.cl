@@ -1,19 +1,21 @@
-float CalLen   (float4, float4);
-float CalSrf   (float4, float4, float4);
-float CalVol   (float4, float4, float4, float4);
-float CalEdgLen(float4, float4);
-float CalTriSrf(float4, float4, float4);
-float CalQadSrf(float4, float4, float4, float4);
-float CalTetVol(float4, float4, float4, float4);
-float CalPyrVol(float4, float4, float4, float4, float4);
-float CalPriVol(float4, float4, float4, float4, float4, float4);
-float CalHexVol(float4, float4, float4, float4, float4, float4, float4, float4);
-float CalTriQal(float4, float4, float4);
-float CalQadQal(float4, float4, float4, float4);
-float CalTetQal(float4, float4, float4, float4);
-float CalPyrQal(float4, float4, float4, float4, float4);
-float CalPriQal(float4, float4, float4, float4, float4, float4);
-float CalHexQal(float4, float4, float4, float4, float4, float4, float4, float4);
+float  CalLen   (float4, float4);
+float  CalSrf   (float4, float4, float4);
+float  CalVol   (float4, float4, float4, float4);
+float4 GetEdgTng(float4, float4);
+float4 GetTriNrm(float4, float4, float4);
+float  CalEdgLen(float4, float4);
+float  CalTriSrf(float4, float4, float4);
+float  CalQadSrf(float4, float4, float4, float4);
+float  CalTetVol(float4, float4, float4, float4);
+float  CalPyrVol(float4, float4, float4, float4, float4);
+float  CalPriVol(float4, float4, float4, float4, float4, float4);
+float  CalHexVol(float4, float4, float4, float4, float4, float4, float4, float4);
+float  CalTriQal(float4, float4, float4);
+float  CalQadQal(float4, float4, float4, float4);
+float  CalTetQal(float4, float4, float4, float4);
+float  CalPyrQal(float4, float4, float4, float4, float4);
+float  CalPriQal(float4, float4, float4, float4, float4, float4);
+float  CalHexQal(float4, float4, float4, float4, float4, float4, float4, float4);
 
 
 float CalLen(float4 a, float4 b)
@@ -29,6 +31,16 @@ float CalSrf(float4 a, float4 b, float4 c)
 float CalVol(float4 a, float4 b, float4 c, float4 d)
 {
    return(dot(cross(b-a, c-a), d-a));
+}
+
+float4 GetEdgTng(float4 a, float4 b)
+{
+   return(fast_normalize(b-a));
+}
+
+float4 GetTriNrm(float4 a, float4 b, float4 c)
+{
+   return(fast_normalize(cross(c-a, b-a)));
 }
 
 float CalEdgLen(float4 a, float4 b)
@@ -96,7 +108,7 @@ float CalTriQal(float4 a, float4 b, float4 c)
    hmax = max(ha,   hb);
    hmax = max(hmax, hc);
 
-   return(.144337 * hmax * (ha + hb + hc) * CalSrf(a,b,c));
+   return( 3.46410 * CalSrf(a,b,c) / (hmax * (ha + hb + hc)) );
 }
 
 float CalQadQal(float4 a, float4 b, float4 c, float4 d)
@@ -125,7 +137,7 @@ float CalQadQal(float4 a, float4 b, float4 c, float4 d)
    smin = min(smin, s3);
    smin = min(smin, s4);
 
-   return(hmax + (h1 + h2 + h3 + h4) / smin);
+   return(4. * smin / (hmax * (h1 + h2 + h3 + h4)) );
 }
 
 float CalTetQal(float4 a, float4 b, float4 c, float4 d)
@@ -146,7 +158,7 @@ float CalTetQal(float4 a, float4 b, float4 c, float4 d)
 
    v = CalVol(a,b,c,d);
 
-   return(.25 * h * s * v);
+   return(176.363 * v / (h * s) );
 }
 
 float CalPyrQal(float4 a, float4 b, float4 c, float4 d, float4 e)
@@ -173,7 +185,7 @@ float CalPyrQal(float4 a, float4 b, float4 c, float4 d, float4 e)
    v = min(v, CalVol(a,b,d,e));
    v = min(v, CalVol(b,c,d,e));
 
-   return(.007625 * h * s * v);
+   return(141.516 * v / (h * s) );
 }
 
 float CalPriQal(float4 a, float4 b, float4 c, float4 d, float4 e, float4 f)
@@ -209,7 +221,7 @@ float CalPriQal(float4 a, float4 b, float4 c, float4 d, float4 e, float4 f)
    v = min(v, CalVol(e,c,a,f));
    v = min(v, CalVol(b,c,d,f));
 
-   return(.002865 * h * s * v);
+   return(98.3538 * v / (h * s) );
 }
 
 float CalHexQal(  float4 a, float4 b, float4 c, float4 d,
@@ -248,5 +260,5 @@ float CalHexQal(  float4 a, float4 b, float4 c, float4 d,
    v = min(v, CalVol(a,b,c,f));
    v = min(v, CalVol(a,f,c,h));
 
-   return(.002315 * l * s * v);
+   return(72. * v / (l * s) );
 }

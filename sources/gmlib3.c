@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.26                           */
+/*                         GPU Meshing Library 3.27                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 18 2020                                           */
+/*   Last modification: may 26 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -882,12 +882,30 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
          }
 
          MaxDeg = pow(2., ceil(log2(MaxDeg)));
-         HghSiz = MIN(MaxDeg, LenMatMax[ src->MshTyp ][ dst->MshTyp ]);
-         gml->SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
 
-         if(gml->DbgFlg)
-            printf(  "Width for lines 1..%d: %d, for lines %d..%d:%d\n",
-                     MaxPos, BalSiz, MaxPos+1, src->NmbLin, MaxDeg);
+         // If the max degree is greater than de base size,
+         // create an extension ball table for high degree entities
+         if(MaxDeg > BalSiz)
+         {
+            HghSiz = MIN(MaxDeg, LenMatMax[ src->MshTyp ][ dst->MshTyp ]);
+            gml->SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = HghSiz;
+
+            if(gml->DbgFlg)
+               printf(  "Width for lines 1..%d: %d, for lines %d..%d:%d\n",
+                        MaxPos, BalSiz, MaxPos+1, src->NmbLin, MaxDeg);
+         }
+         else
+         {
+            // If the max degree fits in the base size vector,
+            // fall back to a regular contant width table
+            MaxDeg = BalSiz;
+            HghSiz = 0;
+            MaxPos = src->NmbLin;
+            gml->SizMatHgh[ src->MshTyp ][ dst->MshTyp ] = 0;
+
+            if(gml->DbgFlg)
+               printf("Constant width uplink: %d\n", BalSiz);
+         }
       }
    }
 
@@ -3322,6 +3340,46 @@ double GmlGetWallClock()
    gettimeofday(&tp, NULL);
    return(tp.tv_sec + tp.tv_usec / 1000000.);
 #endif
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Return the percentage of cache hit while doing an elements to nodes access */
+/*----------------------------------------------------------------------------*/
+
+float GmlEvaluateNumbering(size_t GmlIdx)
+{
+   GETGMLPTR(gml, GmlIdx);
+   DatSct   *dat;
+   int      i, j, typ, VerIdx, HshPos, HshAdr;
+   int      HshTab[64]={0}, *EleTab, NmbHit = 0, NmbMis = 0;
+
+   for(typ=GmlEdges; typ<GmlMaxEleTyp; typ++)
+   {
+      if(!gml->TypIdx[ typ ])
+         continue;
+
+      dat = &gml->dat[ gml->TypIdx[ typ ] ];
+      EleTab = (int *)dat->CpuMem;
+
+      for(i=0;i<dat->NmbLin;i++)
+         for(j=0;j<dat->NmbItm;j++)
+         {
+            VerIdx = EleTab[ i * dat->ItmLen + j ];
+            HshPos = (VerIdx >> 4) & 0xf;
+            HshAdr = VerIdx >> 10;
+
+            if(HshTab[ HshPos ] == HshAdr)
+               NmbHit++;
+            else
+            {
+               NmbMis++;
+               HshTab[ HshPos ] = HshAdr;
+            }
+         }
+   }
+
+   return(100. * (float)NmbHit / (NmbHit + NmbMis));
 }
 
 

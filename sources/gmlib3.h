@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.26                           */
+/*                         GPU Meshing Library 3.27                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 18 2020                                           */
+/*   Last modification: may 26 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -89,6 +89,7 @@ double   GmlGetReduceRunTime  (size_t, int);
 double   GmlGetWallClock      ();
 int      GmlUploadParameters  (size_t);
 int      GmlDownloadParameters(size_t);
+float    GmlEvaluateNumbering (size_t);
 
 #ifdef WITH_LIBMESHB
 int      GmlImportMesh        (size_t, char *, ...);
