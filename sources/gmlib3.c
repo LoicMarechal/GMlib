@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.27                           */
+/*                         GPU Meshing Library 3.28                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 28 2020                                           */
+/*   Last modification: may 29 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -108,6 +108,7 @@ typedef struct
    int            CntMat[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
    int            SizMatHgh[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
    int            RedKrn[ GmlMaxRed ];
+   char           *UsrTlk;
    cl_uint        NmbDev;
    size_t         MemSiz, CurGrpSiz, MovSiz;
    DatSct         dat[ GmlMaxDat + 1 ];
@@ -141,6 +142,7 @@ static int     NewOclKrn               (GmlSct *, char *, char *);
 static int     GetNewDatIdx            (GmlSct *);
 static int     RunOclKrn               (GmlSct *, KrnSct *);
 static void    WriteToolkitSource      (char *, char *);
+static void    WriteUserToolkitSource  (char *, char *);
 static void    WriteUserTypedef        (char *, char *);
 static void    WriteProcedureHeader    (char *, char *, int, int, ArgSct *);
 static void    WriteKernelVariables    (char *, int, int, ArgSct *);
@@ -992,7 +994,7 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
       BalDat->ItmTyp = ItmTyp;
       BalDat->NmbItm = VecCnt;
       BalDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
-      BalDat->ItmLen = 1;
+      BalDat->ItmLen = NmbDat;
       BalDat->NmbLin = MaxPos+1;
       BalDat->LinSiz = BalDat->NmbItm * BalDat->ItmSiz;
       BalDat->MemSiz = (size_t)BalDat->NmbLin * (size_t)BalDat->LinSiz;
@@ -1028,7 +1030,7 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
          HghDat->ItmTyp = ItmTyp;
          HghDat->NmbItm = VecCnt;
          HghDat->ItmSiz = VecCnt * OclTypSiz[ ItmTyp ];
-         HghDat->ItmLen = 1;
+         HghDat->ItmLen = NmbDat;
          HghDat->NmbLin = gml->NmbEle[ SrcTyp ] - MaxPos;
          HghDat->LinSiz = HghDat->NmbItm * HghDat->ItmSiz;
          HghDat->MemSiz = (size_t)HghDat->NmbLin * (size_t)HghDat->LinSiz;
@@ -1935,6 +1937,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 
    // Generate the kernel source code
    WriteToolkitSource      (src, toolkit);
+   WriteUserToolkitSource  (src, gml->UsrTlk);
    WriteUserTypedef        (src, ParSrc);
    WriteProcedureHeader    (src, PrcNam, MshTyp, NmbArg, ArgTab);
    WriteKernelVariables    (src, MshTyp, NmbArg, ArgTab);
@@ -1983,6 +1986,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 
    // Generate the kernel source code
    WriteToolkitSource      (src, toolkit);
+   WriteUserToolkitSource  (src, gml->UsrTlk);
    WriteUserTypedef        (src, ParSrc);
    WriteProcedureHeader    (src, PrcNam, MshTyp, NmbArg, ArgTab);
    WriteKernelVariables    (src, MshTyp, NmbArg, ArgTab);
@@ -2021,6 +2025,21 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 static void WriteToolkitSource(char *src, char *TlkSrc)
 {
    strcat(src, "// GMlib MESHING AND GEOMETRICAL TOOLKIT\n");
+   strcat(src, TlkSrc);
+   strcat(src, "\n");
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Add the geometrical toolkit prototypes and source code                     */
+/*----------------------------------------------------------------------------*/
+
+static void WriteUserToolkitSource(char *src, char *TlkSrc)
+{
+   if(!TlkSrc)
+      return;
+
+   strcat(src, "// USER'S TOOLKIT\n");
    strcat(src, TlkSrc);
    strcat(src, "\n");
 }
@@ -3280,6 +3299,42 @@ int GetMeshInfo(size_t GmlIdx, int typ, int *NmbLin, int *DatIdx)
 
 
 /*----------------------------------------------------------------------------*/
+/* Return an internal link lengths and widths                                 */
+/*----------------------------------------------------------------------------*/
+
+int GmlGetLinkInfo(  size_t GmlIdx, int SrcTyp, int DstTyp,
+                     int *n, int *w, int *N, int *W )
+{
+   GETGMLPTR   (gml, GmlIdx);
+   CHKELETYP   (SrcTyp);
+   CHKELETYP   (DstTyp);
+   int         BalIdx, HghIdx;
+   DatSct      *BalDat, *HghDat;
+
+   BalIdx = gml->LnkMat[ SrcTyp ][ DstTyp ];
+   HghIdx = gml->LnkHgh[ SrcTyp ][ DstTyp ];
+
+   if(!BalIdx)
+      return(0);
+
+   BalDat = &gml->dat[ BalIdx ];
+   *n = BalDat->NmbLin;
+   *w = BalDat->ItmLen;
+
+   if(HghIdx)
+   {
+      HghDat = &gml->dat[ HghIdx ];
+      *N = HghDat->NmbLin;
+      *W = HghDat->ItmLen;
+   }
+   else
+      *N = *W = 0;
+
+   return(1);
+}
+
+
+/*----------------------------------------------------------------------------*/
 /* Compute the total kernel profiling time from the events table              */
 /*----------------------------------------------------------------------------*/
 
@@ -3382,6 +3437,17 @@ float GmlEvaluateNumbering(size_t GmlIdx)
    }
 
    return(100. * (float)NmbHit / (NmbHit + NmbMis));
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Add a custom user's toolkit after the GMlib's toolkit                      */
+/*----------------------------------------------------------------------------*/
+
+void GmlIncludeUserToolkit(size_t GmlIdx, char *PtrSrc)
+{
+   GETGMLPTR(gml, GmlIdx);
+   gml->UsrTlk = PtrSrc;
 }
 
 

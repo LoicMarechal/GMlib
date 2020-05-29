@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.23                           */
+/*                         GPU Meshing Library 3.28                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Basic loop on tetrahedra                              */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     nov 21 2019                                           */
-/*   Last modification: may 06 2020                                           */
+/*   Last modification: may 29 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -29,7 +29,6 @@
 #include "TF_downlink.h"
 #include "TF_uplink.h"
 #include "TF_double_precision.h"
-// #include "TF_flux.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -52,6 +51,7 @@ int main(int ArgCnt, char **ArgVec)
    int         i, j, res, NmbVer=0, NmbTri=0, NmbTet=0, CalMid, OptVer, FlxIdx;
    int         ParIdx, VerIdx=0, TriIdx=0, TetIdx=0, BalIdx, MidIdx, SolIdx;
    int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, F64Idx, F64Krn, FlxKrn;
+   int         n, w, N, W;
    size_t      GmlIdx;
    float       MidTab[4], SolTab[8], TetChk = 0., VerChk = 0.;
    float       IniSol[8] = {.125, .125, .125, .125, .125, .125, .125, .125};
@@ -168,6 +168,11 @@ int main(int ArgCnt, char **ArgVec)
 
    if(!OptVer)
       return(1);
+
+   // Print some information about the uplink:
+   // length and width of the base link and the high link
+   if(GmlGetLinkInfo(GmlIdx, GmlVertices, GmlTetrahedra, &n, &w, &N, &W))
+      printf("GMlib uplink ver -> tet: base: %d vertices x %d tets, extended: %d vertices x %d tets\n", n, w, N, W);
 
    for(i=1;i<=100;i++)
    {

@@ -51,6 +51,8 @@
 - Update the neighbors generation to handle hybrid meshes
 - Add a SetBlock() function for faster upload :heavy_check_mark:
 - Add a GetBlock() function for faster download
+- Add a GetLinkInfo() function to get sizes of vairable width topolinks :heavy_check_mark:
+- Include an optional user's toolkit before a user kernel :heavy_check_mark:
 
 ### Exposed CPU API
 
@@ -60,6 +62,8 @@
 - `GmlExportSolution("file.solb", NmbDat, IdxTab[]);` :heavy_check_mark:
 - `GmlEvaluateNumbering();` :heavy_check_mark:
 - `GmlHilbertRenumbering();`
+- `GmlGetLinkInfo(*n, *w, *N, *W);` :heavy_check_mark:
+- `GmlIncludeUserToolkit(char *PtrSrc);` :heavy_check_mark:
 
 ### Exposed GPU API
 
