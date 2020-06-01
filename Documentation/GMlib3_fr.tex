@@ -1,7 +1,8 @@
 \documentclass[a4paper,12pt]{article}
 
 \usepackage[utf8]{inputenc}
-\usepackage[francais]{babel}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
 \usepackage{multirow,array}
 \usepackage{graphicx}
 \usepackage{a4wide}
@@ -24,21 +25,15 @@
 \HRule
 \end{center}
 
-\vspace*{\stretch{3}}
-
 \begin{figure}[htbp]
 \begin{center}
-\includegraphics[height=10cm]{gpu.pdf}
+\includegraphics[width=15cm]{gpu.jpg}
 \end{center}
 \end{figure}
 
-\vspace*{\stretch{1}}
-
 \begin{flushright}
-\Large Lo\"ic MAR\'ECHAL / INRIA, Projet Gamma\\
-\Large Juin 2020 \\
-\normalsize Document v2.07
-\normalsize Librairie v3.28
+\Large Lo\"ic MAR\'ECHAL / INRIA, Projet Gamma \\
+\normalsize Juin 2020, document v2.07, librairie v3.28
 \end{flushright}
 
 \end{titlepage}
@@ -49,7 +44,7 @@
 \tableofcontents
 \vfill
 
-\footnotesize{Couverture : différentes cartes graphiques ou accélératrices capables d'exécuter du code OpenCL.}
+\footnotesize{Couverture : création de Jean-Luc Maréchal.}
 \normalsize
 
 \clearpage
@@ -358,7 +353,7 @@ Le GPU commence par déclencher une première lecture {\tt tmp = v[i]}, puis lit
 
 Enfin et surtout, les accès successifs à {\tt a = u[ tmp ]} ne sont pas consécutifs en mémoire lorsqu'on incrémente le compteur, $i$ car les valeurs contenues dans {\tt v[i]} sont totalement inconnues au moment de la compilation et dépendent uniquement de la numérotation des éléments et sommets du maillage.
 
-Afin de limiter le problème, on recourt à deux méthodes, la renumérotation du maillage par une courbe de Hilbert (ou toute autre SFC) afin d'améliorer l'efficacité de la mémoire cache, ainsi qu'a la vectorisation des liens montants (boules de points, coquilles d'arêtes), par nature irréguliers, pour en améliorer la compacité d'accès mémoire (cf xxx).
+Afin de limiter le problème, on recourt à deux méthodes, la renumérotation du maillage par une courbe de Hilbert (ou toute autre SFC) afin d'améliorer l'efficacité de la mémoire cache, ainsi qu'a la vectorisation des liens montants (boules de points, coquilles d'arêtes), par nature irréguliers, pour en améliorer la compacité d'accès mémoire (cf. \cite{peano_hilbert}).
 Le déroulement de ces kernels est totalement transparent pour l'utilisateur, car la librairie va se charger de lire le tableau d'indirection, puis les données ainsi accédées.
 Dans le cas d'une boucle sur les triangles ({\tt Tri}), si on souhaite accéder aux coordonnées des sommets ({\tt Crd}), la librairie va d'elle-même définir et remplir un tableau ({\tt TriVer[3]}) de trois vecteurs contenant les coordonnées des trois sommets du triangle.
 
@@ -487,7 +482,7 @@ Ces calculs inutiles sont en fait plus performants sur GPU, car les itérations 
 Une des problématiques les plus fréquentes des codes accédant à des maillages non structurés de manière concurrente, qu'ils soient multithread, parallèles ou vectoriels, est l'accès en écriture via des indirections mémoires.
 C'est le cas d'une boucle sur les triangles durant laquelle on écrit des données associées à leurs sommets.
 On comprend bien que deux triangles traités simultanément peuvent alors écrire sur un même sommet qu'ils auraient en commun.
-Pour contourner le problème, il existe de nombreuses techniques, comme la découpe en sous-blocs de triangles n'ayant aucun sommet en commun (cf ref xxx), les micro synchronisations afin d'éviter les conflits d'écritures simultanées (cf. ref xxx) et enfin la duplication des données : c'est la méthode scatter-gather, idéale pour les GPU.
+Pour contourner le problème, il existe de nombreuses techniques, comme la découpe en sous-blocs de triangles n'ayant aucun sommet en commun (\cite{lplib}), les micro synchronisations afin d'éviter les conflits d'écritures simultanées (cf. \cite{atomic}) et enfin la duplication des données : c'est la méthode scatter-gather, idéale pour les GPU.
 
 Il est en effet toujours possible de casser une boucle à écriture indirecte en deux boucles à lecture indirectes, mais écriture directe, qui ne présentent donc plus de conflit d'écriture.
 Pour illustrer le propos, prenons l'exemple d'une boucle calculant une valeur pour chaque triangle et additionnant celle-ci à un champ associé à leurs sommets.
@@ -715,7 +710,7 @@ Cette fonction copie le contenu de la structure de paramètres, définie avec {\
 
 \subsection{GmlEvaluateNumbering}
 
-Cette fonction calcule un indice synthétique d'efficacité de la numérotation des entités d'un maillage en termes de succès des requêtes à la mémoire cache. Plus l'indice est proche de 100\%, plus les accès mémoires se feront dans le cache et éviteront les couteux accès à la mémoire principale. Inversement, un indice proche de 0\% indique le maillage n'a pas été renuméroté par une \emph{SFC} (cf. xxx) et son exécution sera inefficace, car recourant toujours à des accès en mémoire principale, de 2 ordres de grandeur plus lents que la mémoire cache.
+Cette fonction calcule un indice synthétique d'efficacité de la numérotation des entités d'un maillage en termes de succès des requêtes à la mémoire cache. Plus l'indice est proche de 100\%, plus les accès mémoires se feront dans le cache et éviteront les couteux accès à la mémoire principale. Inversement, un indice proche de 0\% indique le maillage n'a pas été renuméroté par une \emph{SFC} (\cite{peano_hilbert}) et son exécution sera inefficace, car recourant toujours à des accès en mémoire principale, de 2 ordres de grandeur plus lents que la mémoire cache.
 
 \subsubsection*{Syntaxe}
 
@@ -927,9 +922,9 @@ temps      & double  & temps en secondes \\
 \subsection{GmlGetLinkInfo}
 
 Permets de connaitre les tailles en nombre de ligne et largeur de champ d'un lien entre deux types de maillage tels que générés automatiquement par la librairie. Cela peut-être utile pour dimensionner des tableaux de travail dans un kernel.
-La fonction retourne le nombre de lignes du type source ($$n$$ ou $$N$$) et le nombre d'entités du type destination pointé par chacune ($$w$$ ou $$W$$).
+La fonction retourne le nombre de lignes du type source ($n$ ou $N$) et le nombre d'entités du type destination pointé par chacune ($w$ ou $W$).
 
-Si les liens montants sont de taille constante : $$n$$ vaut le nombre de ligne du type source et $$w$$ est constant pour chaque entité du type source, ce n'est pas le cas des liens montant qui sont composé de deux tables, l'une pour les degrés faibles ($$n$$ ligne de $$w$$ liens) et l'autre pour les éléments de degré élevé ($$N$$ ligne de $$W$$ liens).
+Si les liens montants sont de taille constante : $n$ vaut le nombre de ligne du type source et $w$ est constant pour chaque entité du type source, ce n'est pas le cas des liens montant qui sont composé de deux tables, l'une pour les degrés faibles ($n$ ligne de $w$ liens) et l'autre pour les éléments de degré élevé ($N$ ligne de $W$ liens).
 
 \subsubsection*{Syntaxe}
 
@@ -969,7 +964,7 @@ W          & int *  & renseigné avec le nombre d'entités de type destination p
 
 \subsubsection*{Commentaires}
 
-Dans le cas de lien descendant ou égal (voisinage), $$N$$ et $$W$$ sont nuls car les tables simples sont de taille contente.
+Dans le cas de lien descendant ou égal (voisinage), $N$ et $W$ sont nuls car les tables simples sont de taille contente.
 
 
 \subsection{GmlGetMemoryTransfer}
@@ -1666,7 +1661,15 @@ C'est une portion de boucle qui est exécutée simultanément sur les différent
 	OpenCL Programming Guide for Mac,
 	\emph{http://developer.apple.com, 2012}.
 
+\bibitem{lplib}
+	Loïc Maréchal,
+	A parallelization framework for numerical simulation,
+	\emph{http://https://github.com/LoicMarechal/LPlib/tree/master/Documentation/LPlib3.pdf, 2018}.
 
+\bibitem{atomic}
+   B. Brandenburg and J. Anderson,
+   “Spin-Based Reader-Writer Synchronization for Multiprocessor Real-Time Systems”,
+   \emph{21st Euromicro Conference on Real-Time Systems (ECRTS 2009), Volume 46, Issue 1, pp. 25-87, 2010}.
 
 \end{thebibliography}
 
