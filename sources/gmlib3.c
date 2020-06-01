@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 29 2020                                           */
+/*   Last modification: jun 01 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -2801,7 +2801,7 @@ int GmlExtractEdges(size_t GmlIdx)
                (double)EdgHsh.NmbMis / (double)EdgHsh.TabSiz );
 
    // If there are surface edges, save their references and hash them
-   GetMeshInfo(GmlIdx, GmlEdges, &OldNmbEdg, &EdgIdx);
+   GmlGetMeshInfo(GmlIdx, GmlEdges, &OldNmbEdg, &EdgIdx);
 
    if(OldNmbEdg)
    {
@@ -3015,7 +3015,7 @@ int GmlExtractFaces(size_t GmlIdx)
    if(NmbTri)
    {
       // If there are surface triangles, save their references
-      GetMeshInfo(GmlIdx, GmlTriangles, &OldNmbTri, &TriIdx);
+      GmlGetMeshInfo(GmlIdx, GmlTriangles, &OldNmbTri, &TriIdx);
 
       TriTab = malloc(OldNmbTri * 4 * sizeof(int));
       assert(TriTab);
@@ -3053,7 +3053,7 @@ int GmlExtractFaces(size_t GmlIdx)
    if(NmbQad)
    {
       // If there are surface quads, save their references
-      GetMeshInfo(GmlIdx, GmlQuadrilaterals, &OldNmbQad, &QadIdx);
+      GmlGetMeshInfo(GmlIdx, GmlQuadrilaterals, &OldNmbQad, &QadIdx);
       QadTab = malloc(OldNmbQad * 5 * sizeof(int));
       assert(QadTab);
 
@@ -3272,7 +3272,7 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
 /* Return a mesh type number of lines and data index                          */
 /*----------------------------------------------------------------------------*/
 
-int GetMeshInfo(size_t GmlIdx, int typ, int *NmbLin, int *DatIdx)
+int GmlGetMeshInfo(size_t GmlIdx, int typ, int *NmbLin, int *DatIdx)
 {
    GETGMLPTR   (gml, GmlIdx);
    CHKELETYP   (typ);
@@ -3655,7 +3655,7 @@ int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
       SolKwd = GmfSolKwdTab[ GmlTyp ];
       NmbTyp = NmbArg = 0;
 
-      if(!(GetMeshInfo(GmlIdx, GmlTyp, &NmbLin, &DatIdx)))
+      if(!(GmlGetMeshInfo(GmlIdx, GmlTyp, &NmbLin, &DatIdx)))
          continue;
 
       // This GMF keyword may be built out of several GML datatypes

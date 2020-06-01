@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 29 2020                                           */
+/*   Last modification: jun 01 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -82,7 +82,7 @@ int      GmlExtractEdges      (size_t);
 int      GmlExtractFaces      (size_t);
 int      GmlSetNeighbours     (size_t, int);
 int      GmlCheckFP64         (size_t);
-int      GetMeshInfo          (size_t, int, int *, int *);
+int      GmlGetMeshInfo       (size_t, int, int *, int *);
 int      GmlGetLinkInfo       (size_t, int, int, int *, int *, int *, int *);
 int      GmlSetDataBlock      (size_t, int, int, int, void *, void *, int *, int *);
 double   GmlGetKernelRunTime  (size_t, int);
