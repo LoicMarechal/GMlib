@@ -33,7 +33,7 @@
 
 \begin{flushright}
 \Large Lo\"ic MAR\'ECHAL / INRIA, Projet Gamma \\
-\normalsize Juin 2020, document v2.07, librairie v3.28
+\normalsize Juin 2020, document v2.08, librairie v3.29
 \end{flushright}
 
 \end{titlepage}
@@ -111,7 +111,34 @@ Ceci nous amène donc à parler de l'interfaçage entre vos données et la libra
 
 \subsection{Installation et compilation}
 
-\subsection{Initialisation}
+La librairie est librement téléchargeable sur la page GitHub de l'auteur (cf. \cite{gmlib}) et le pacquage ZIP contient l'intégralité des sources, exemples et documentation.
+Elle est mise à disposition sous la licence MIT (cf. \cite{MIT}) et peut donc être librement intégrée dans tout logiciel libre ou commercial, open ou closed source, inchangée ou modifiée, du moment que l'auteur est cité.
+
+Le déploiement a été testé avec succès sous les systèmes \emph{Linux}, \emph{macOS} et \emph{Windows10}.
+Sous macOS, l'environnement OpenCL fait partie intégrante du système et il n'est donc pas nécessaire d'installer quoique ce soit.
+Ce n'est pas le cas des deux autres systèmes qui nécessitent d'installer un pilote adéquat, le plus souvent fourni par le fabricant de la carte graphique sur laquelle vous souhaitez exécuter les codes OpenCL.
+Les trois principaux constructeurs, \emph{AMD}, \emph{Intel} et \emph{Nvidia}, proposent tous gratuitement des kits de développement GPU pour Linux et Windows10 dont les références sont ici : \cite{driver_amd}, \cite{driver_intel}, \cite{driver_nvidia}.
+
+La {\tt GMlib} est composée du fichier C \emph{gmlib.c} et d'un header associé \emph{gmlib.h} et peut être simplement copié dans le répertoire source de votre projet pour y être recompilé et lié à la volée.
+Dans ce cas, il est de la responsabilité de l'utilisateur de lier son exécutable avec la librairie OpenCL dont le nom et la localisation peuvent varier d'un système à l'autre.
+
+C'est pourquoi un fichier \emph{cmakefile.txt} est fourni et permet une automatisation complète de la compilation et de l'installation de la librairie.
+Il suffit d'exécuter {\tt cmake .} et {\tt make install} pour que la librairie, les utilitaires et exemples soient compilés et installés dans le répertoire /usr/local/bin par défaut.
+
+La seule dépendance obligatoire est la librairie \emph{opencl} et il optionnellement, on peut aussi ajouter la {\tt libMeshb} afin d'ajouter des procédures d'import/export de fichiers \emph{.mshb} ou \emph{.solb} et de compiler les codes de démonstration.
+Pour ce faire, il suffit de passer le paramètre de compilation {\tt -DWITH\_LIBMESHB} si vous compilez la librairie vous-même.
+Le cmakefile quant à lui, détexte et ajouter automatiquement la {\tt libMeshb} si elle a elle aussi été installée via cmake.
+
+Les fichiers installés sont les suivants :
+
+\begin{itemize}
+   \item la librairie statique gmlib.a
+   \item le header gmlib.h
+   \item la commande de transformation des sources OpenCl en header cl2h
+   \item la documentation française GMlib\_fr.pdf
+   \item plusieurs codes démonstration sous forme d'exécutables
+   \item quelques fichiers de maillages utilisés par les démonstrations
+\end{itemize}
 
 
 %
@@ -540,6 +567,9 @@ VerSol = NewSol / VerTriDeg;
 
 
 \subsection{Programmation en OpenCL}
+Une description exhaustive ou même une simple présentation du langage OpenCL dépasserait le cadre de ce simple document technique. Le document de référence en la matière est la documentation officielle du Khronos Group \cite{khronos}, un regroupement de fabricants de matériels et d'éditeurs de logiciels supportant cette plate-forme ouverte.
+
+Il est aussi intéressant de lire quelques documents parlant d'optimisation des codes en OpenCL (\cite{nvidia} et \cite{apple}) ou d'expérience de portage de codes préexistants sur GPU (\cite{lohner}).
 
 
 \section{Exemples}
@@ -1670,6 +1700,34 @@ C'est une portion de boucle qui est exécutée simultanément sur les différent
    B. Brandenburg and J. Anderson,
    “Spin-Based Reader-Writer Synchronization for Multiprocessor Real-Time Systems”,
    \emph{21st Euromicro Conference on Real-Time Systems (ECRTS 2009), Volume 46, Issue 1, pp. 25-87, 2010}.
+
+\bibitem{gmlib}
+	Loïc Maréchal,
+	Porting meshing tools and solvers that deal with unstructured meshes on GPUs,
+	\emph{https://github.com/LoicMarechal/GMlib}.
+
+\bibitem{libmeshb}
+	Loïc Maréchal,
+	A library to handle the *.meshb file format,
+	\emph{https://github.com/LoicMarechal/libMeshb}.
+
+\bibitem{MIT}
+	Open Source Initiative,
+	The MIT license,
+	\emph{https://opensource.org/licenses/MIT}.
+
+\bibitem{driver_amd}
+	AMD Drivers and Support,
+	\emph{https://www.amd.com/en/support}.
+
+\bibitem{driver_intel}
+	OpenCL Runtimes for Intel Processors,
+	\emph{https://software.intel.com/content/www/us/en/develop/articles/opencl-drivers.html}.
+
+\bibitem{driver_nvidia}
+	NVIDIA Driver Downloads,
+	\emph{https://www.nvidia.com/download/index.aspx}.
+
 
 \end{thebibliography}
 
