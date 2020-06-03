@@ -81,13 +81,13 @@ int main(int ArgCnt, char **ArgVec)
    GmlImportMesh( GmlIdx, "../sample_meshes/tetrahedra.meshb",
                   GmfVertices, GmfTriangles, GmfTetrahedra, 0 );
 
-   if(!GetMeshInfo(GmlIdx, GmlVertices,   &NmbVer, &VerIdx))
+   if(!GmlGetMeshInfo(GmlIdx, GmlVertices,   &NmbVer, &VerIdx))
       return(1);
 
-   if(!GetMeshInfo(GmlIdx, GmlTriangles,   &NmbTri, &TriIdx))
+   if(!GmlGetMeshInfo(GmlIdx, GmlTriangles,   &NmbTri, &TriIdx))
       return(1);
 
-   if(!GetMeshInfo(GmlIdx, GmlTetrahedra, &NmbTet, &TetIdx))
+   if(!GmlGetMeshInfo(GmlIdx, GmlTetrahedra, &NmbTet, &TetIdx))
       return(1);
 
    printf("Imported %d vertices and %d tets from the mesh file\n", NmbVer, NmbTet);

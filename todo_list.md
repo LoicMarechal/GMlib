@@ -43,7 +43,7 @@
 - Write a renumbering analyzer preprocessor :heavy_check_mark:
 - Call the LPlib Hilbert renumbering and renumber the whole input data
 - Provide a plugin functions mechanism available on the GPU side :heavy_check_mark:
-- Develop basic geometric functions on tets, hexes, triangles, quads and edges
+- Develop basic geometric functions on tets, hexes, triangles, quads and edges :heavy_check_mark:
 - length, surface, volume and quality :heavy_check_mark:
 - Handle hybrid meshes with prisms and pyramids
 - Update the ball generation to handle hybrid meshes

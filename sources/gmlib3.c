@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.28                           */
+/*                         GPU Meshing Library 3.29                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 01 2020                                           */
+/*   Last modification: jun 03 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -125,6 +125,7 @@ typedef struct
 
 #define MIN(a,b)        ((a) < (b) ? (a) : (b))
 #define MAX(a,b)        ((a) > (b) ? (a) : (b))
+#define CHKDATIDX(p, i) if( ((i) < 1) || ((i) > GmlMaxDat) || !p->dat[(i)].use) return(0);
 #define CHKELETYP(t)    if( ((t) < 0) || ((t) >= GmlMaxEleTyp)) return(0)
 #define CHKOCLTYP(t)    if( ((t) < GmlInt) || ((t) >= GmlMaxOclTyp)) return(0)
 #define GETGMLPTR(p,i)  GmlSct *p = (GmlSct *)(i)
@@ -485,7 +486,7 @@ void *GmlNewParameters(size_t GmlIdx, int siz, char *src)
    GETGMLPTR(gml, GmlIdx);
 
    if(!(idx = GetNewDatIdx(gml)))
-      return(0);
+      return(NULL);
 
    dat = &gml->dat[ idx ];
 
@@ -505,7 +506,7 @@ void *GmlNewParameters(size_t GmlIdx, int siz, char *src)
    dat->src    = src;
 
    if(!NewData(gml, dat))
-      return(0);
+      return((NULL));
 
    gml->ParIdx = idx;
 
@@ -767,6 +768,9 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
    lnk.NxtDat = 1;
    lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
    lnk.DatTab = malloc(lnk.NmbDat * sizeof(BucSct));
+
+   if(!lnk.HshTab || !lnk.DatTab)
+      return(0);
 
    if(gml->DbgFlg)
       printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
@@ -1362,6 +1366,7 @@ int GmlFreeData(size_t GmlIdx, int idx)
 int GmlSetDataLine(size_t GmlIdx, int idx, int lin, ...)
 {
    GETGMLPTR(gml, GmlIdx);
+   CHKDATIDX(gml, idx);
    DatSct   *dat = &gml->dat[ idx ], *RefDat;
    char     *adr = (void *)dat->CpuMem;
    int      i, *EleTab, siz, *RefTab, *tab, RefIdx = 0;
@@ -1430,6 +1435,7 @@ int GmlSetDataLine(size_t GmlIdx, int idx, int lin, ...)
 int GmlGetDataLine(size_t GmlIdx, int idx, int lin, ...)
 {
    GETGMLPTR(gml, GmlIdx);
+   CHKDATIDX(gml, idx);
    DatSct   *dat = &gml->dat[ idx ], *RefDat;
    char     *adr = (void *)dat->CpuMem;
    int      i, *EleTab, siz, *RefTab, *tab, RefIdx = 0, *UsrDat;
@@ -1484,12 +1490,13 @@ int GmlGetDataLine(size_t GmlIdx, int idx, int lin, ...)
 /* Set a line of mesh, link or solution data                                  */
 /*----------------------------------------------------------------------------*/
 
-int GmlSetDataBlock( size_t GmlIdx, int TypIdx,
-                     int   BegIdx, int   EndIdx,
-                     void *DatBeg, void *DatEnd,
-                     int  *RefBeg, int  *RefEnd )
+int GmlSetDataBlock( size_t GmlIdx, int   TypIdx,
+                     int    BegIdx, int   EndIdx,
+                     void  *DatBeg, void *DatEnd,
+                     int   *RefBeg, int  *RefEnd )
 {
    GETGMLPTR(gml, GmlIdx);
+   CHKELETYP(TypIdx);
    int      DatIdx = gml->TypIdx[ TypIdx ], RefIdx = gml->RefIdx[ TypIdx ];
    DatSct   *dat = &gml->dat[ DatIdx ], *RefDat;
    char     *adr = (void *)dat->CpuMem;
@@ -1634,7 +1641,7 @@ int GmlUploadParameters(size_t idx)
    GETGMLPTR(gml, idx);
 
    if(!UploadData(gml, gml->ParIdx))
-      return(-2);
+      return(0);
    else
       return(1);
 }
@@ -1649,7 +1656,7 @@ int GmlDownloadParameters(size_t idx)
    GETGMLPTR(gml, idx);
 
    if(!DownloadData(gml, gml->ParIdx))
-      return(-10);
+      return(0);
    else
       return(1);
 }
@@ -1811,6 +1818,13 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
          arg->ItmTyp = ItmTyp;
          arg->FlgTab = GmlReadMode;
          arg->nam    = gml->dat[ arg->DatIdx ].nam;
+
+         if( (HghIdx != -1) && (HghIdx != gml->LnkHgh[ MshTyp ][ DstTyp ]) )
+         {
+            puts("Current limitation prevents mixing two different kinds of uplink in the same kernel.");
+            return(0);
+         }
+
          HghArg      = arg->ArgIdx;
          HghIdx      = gml->LnkHgh[ MshTyp ][ DstTyp ];
          NmbHgh      = gml->SizMatHgh[ MshTyp ][ DstTyp ];
@@ -1948,6 +1962,9 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    // And Compile it
    KrnIdx = NewOclKrn      (gml, src, PrcNam);
 
+   if(!KrnIdx)
+      return(0);
+
    if(gml->DbgFlg)
    {
       puts(sep);
@@ -1996,6 +2013,10 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
 
    // And Compile it
    KrnHghIdx = NewOclKrn   (gml, src, PrcNam);
+
+   if(!KrnHghIdx)
+      return(0);
+
    gml->krn[ KrnIdx ].HghIdx = KrnHghIdx;
 
    // Store information usefull to the kernel: loop indices and arguments list
@@ -2762,6 +2783,9 @@ int GmlExtractEdges(size_t GmlIdx)
    EdgHsh.DatTab = malloc(EdgHsh.TabSiz * sizeof(BucSct));
    NmbEdg = 0;
 
+   if(!EdgHsh.HshTab || !EdgHsh.DatTab)
+      return(0);
+
    if(gml->DbgFlg)
       printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
                EdgHsh.TabSiz, EdgHsh.DatLen, EdgHsh.KeyLen);
@@ -2806,7 +2830,9 @@ int GmlExtractEdges(size_t GmlIdx)
    if(OldNmbEdg)
    {
       EdgTab = malloc(OldNmbEdg * 3 * sizeof(int));
-      assert(EdgTab);
+
+      if(!EdgTab)
+         return(0);
 
       for(i=0;i<OldNmbEdg;i++)
           GmlGetDataLine(GmlIdx, EdgIdx, i, &EdgTab[i][0], &EdgTab[i][1], &EdgTab[i][2]);
@@ -2923,6 +2949,10 @@ int GmlExtractFaces(size_t GmlIdx)
       TriHsh.NxtDat = 1;
       TriHsh.HshTab = calloc(TriHsh.TabSiz, sizeof(int));
       TriHsh.DatTab = malloc(TriHsh.TabSiz * sizeof(BucSct));
+
+      if(!TriHsh.HshTab || !TriHsh.DatTab)
+         return(0);
+
       NmbTri = 0;
 
       if(gml->DbgFlg)
@@ -2942,6 +2972,10 @@ int GmlExtractFaces(size_t GmlIdx)
       QadHsh.NxtDat = 1;
       QadHsh.HshTab = calloc(QadHsh.TabSiz, sizeof(int));
       QadHsh.DatTab = malloc(QadHsh.TabSiz * sizeof(BucSct));
+
+      if(!QadHsh.HshTab || !QadHsh.DatTab)
+         return(0);
+
       NmbQad = 0;
 
       if(gml->DbgFlg)
@@ -3018,7 +3052,9 @@ int GmlExtractFaces(size_t GmlIdx)
       GmlGetMeshInfo(GmlIdx, GmlTriangles, &OldNmbTri, &TriIdx);
 
       TriTab = malloc(OldNmbTri * 4 * sizeof(int));
-      assert(TriTab);
+
+      if(!TriTab)
+         return(0);
 
       for(i=0;i<OldNmbTri;i++)
           GmlGetDataLine(GmlIdx, TriIdx, i, &TriTab[i][0], &TriTab[i][1],
@@ -3055,7 +3091,9 @@ int GmlExtractFaces(size_t GmlIdx)
       // If there are surface quads, save their references
       GmlGetMeshInfo(GmlIdx, GmlQuadrilaterals, &OldNmbQad, &QadIdx);
       QadTab = malloc(OldNmbQad * 5 * sizeof(int));
-      assert(QadTab);
+
+      if(!QadTab)
+         return(0);
 
       for(i=0;i<OldNmbQad;i++)
          GmlGetDataLine(GmlIdx, QadIdx, i, &QadTab[i][0], &QadTab[i][1],
@@ -3210,6 +3248,9 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
    lnk.NxtDat = 1;
    lnk.HshTab = calloc(lnk.TabSiz, sizeof(int));
    lnk.DatTab = malloc(lnk.TabSiz * sizeof(BucSct));
+
+   if(!lnk.HshTab || !lnk.DatTab)
+      return(0);
 
    if(gml->DbgFlg)
       printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
@@ -3536,6 +3577,9 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
          CrdTab = malloc( (NmbLin+1) * 3 * sizeof(float));
          RefTab = malloc( (NmbLin+1)     * sizeof(int));
 
+         if(!CrdTab || !RefTab)
+            return(0);
+
          GmfGetBlock(InpMsh, GmfVertices, 1, NmbLin, 0, NULL, NULL,
                      GmfFloatVec, 3, CrdTab[1],  CrdTab[ NmbLin ],
                      GmfInt,        &RefTab[1], &RefTab[ NmbLin ]);
@@ -3552,6 +3596,9 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
          EleSiz = EleNmbNod[ typ ];
          EleTab = malloc( (NmbLin+1) * EleSiz * sizeof(int));
          RefTab = malloc( (NmbLin+1) * sizeof(int));
+
+         if(!EleTab || !RefTab)
+            return(0);
 
          GmfGetBlock(InpMsh, KwdTab[k][0], 1, NmbLin, 0, NULL, NULL,
                      GmfIntVec, EleSiz, &EleTab[ 1 * EleSiz ], &EleTab[ NmbLin * EleSiz ],
