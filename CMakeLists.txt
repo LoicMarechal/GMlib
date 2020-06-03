@@ -4,18 +4,30 @@
 ################################
 
 cmake_minimum_required (VERSION 3.0.1)
-set (GMlib_VERSION_MAJOR 2)
+set (GMlib_VERSION_MAJOR 3)
 set (GMlib_VERSION_MINOR 0)
 project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C)
-set (CMAKE_C_FLAGS "-O3")
+set (CMAKE_C_FLAGS "-O3 -DWITH_LIBMESHB")
+
+
+#####################################################
+# CUSTOM COMMAND TO CREATE INTERMEDIARY HEADER FILES 
+# FROM OPENCL SOURCES BEFORE COMPILING THE EXECUTABLE
+#####################################################
+
+macro(compile_cl basename)
+
+add_custom_command (
+   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h
+   COMMAND cl2h ${CMAKE_CURRENT_SOURCE_DIR}/${basename}.cl ${CMAKE_CURRENT_BINARY_DIR}/${basename}.h ${basename}
+   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${basename}.cl )
+
+endmacro(compile_cl)
 
 
 #######################################
 # SET FILES AND DIRECTORIES TO BE BUILT
 #######################################
-
-include_directories (${PROJECT_SOURCE_DIR}/sources)
-add_subdirectory (sources)
 
 find_package(OpenCL)
 
@@ -27,6 +39,8 @@ else()
    message (FATAL_ERROR "OpenCL libary could not be found.")
 endif()
 
+include_directories (${PROJECT_SOURCE_DIR}/sources)
+
 find_package(libMeshb 7)
 
 if(libMeshb_FOUND)
@@ -34,12 +48,15 @@ if(libMeshb_FOUND)
    include_directories (${PROJECT_SOURCE_DIR}/examples)
    add_subdirectory (utilities)
    add_subdirectory (examples)
+   message (STATUS "LibMeshb include directory: " ${libMeshb_INCLUDE_DIRS})
 else()
    message (WARNING "
    libMeshb.7 could not be found.
    Consequently, examples and utilities will not be built.
    You can download it from GitHUB at https://github.com/LoicMarechal/libMeshb")
 endif()
+
+add_subdirectory (sources)
 
 install (FILES LICENSE.txt copyright.txt DESTINATION share/GMlib)
 install (DIRECTORY sample_meshes DESTINATION share/GMlib)
@@ -67,7 +84,7 @@ file(WRITE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
 "include(\${CMAKE_CURRENT_LIST_DIR}/GMlib-target.cmake)
 find_package(OpenCL)
 set(GMlib_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/include)
-set(GMlib_LIBRARIES GM.2 ${OpenCL_LIBRARIES})
+set(GMlib_LIBRARIES GM.3 ${OpenCL_LIBRARIES})
 set(GMlib_FOUND TRUE)
 ")
 write_basic_package_version_file(

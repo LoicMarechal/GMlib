@@ -1,111 +1,137 @@
 
-
-/*----------------------------------------------------------------------------*/
-/*                                                                            */
-/*                         GPU Meshing Library 2.00                           */
-/*                                                                            */
-/*----------------------------------------------------------------------------*/
-/*                                                                            */
-/*   Description:       vector reduction procedures                           */
-/*   Author:            Loic MARECHAL                                         */
-/*   Creation date:     nov 19 2012                                           */
-/*   Last modification: feb 06 2017                                           */
-/*                                                                            */
-/*----------------------------------------------------------------------------*/
-
-
-/*----------------------------------------------------------------------------*/
-/* Local defines                                                              */
-/*----------------------------------------------------------------------------*/
-
 #ifndef MAX_WORKGROUP_SIZE
 #define MAX_WORKGROUP_SIZE 1024
 #endif
 
-
-/*----------------------------------------------------------------------------*/
-/* GMLIB parameters structure                                                 */
-/*----------------------------------------------------------------------------*/
-
-typedef struct
+__kernel void reduce_min(__global float *inp, __global float *out, __global void *par, int cnt)
 {
-   int empty;
-}GmlParSct;
+   int i, g=get_global_id(0), l=get_local_id(0);
+   __local float tmp[ MAX_WORKGROUP_SIZE ];
 
-
-/*----------------------------------------------------------------------------*/
-/* Reduce the vector through an operator: min,max,L1,L2                       */
-/*----------------------------------------------------------------------------*/
-
-__kernel void reduce_min(  __global float *inp, __global float *out, \
-                           __global GmlParSct *par, int count )
-{
-   int i, GloIdx=get_global_id(0), LocIdx=get_local_id(0);
-   __local float LocVec[ MAX_WORKGROUP_SIZE ];
-
-   LocVec[ LocIdx ] = (GloIdx < count) ? inp[ GloIdx ] : 1e37;
-
+   tmp[l] = (g < cnt) ? inp[g] : 1e37;
    barrier(CLK_LOCAL_MEM_FENCE);
 
-   // Then do a partial reduction in local vector
    for(i=get_local_size(0)/2; i>0; i=i>>1)
    {
-      if(i > LocIdx)
-         LocVec[ LocIdx ] = fmin(LocVec[ LocIdx ], LocVec[ LocIdx + i ]);
+      if(i > l)
+         tmp[l] = fmin(tmp[l], tmp[ l+i ]);
       barrier(CLK_LOCAL_MEM_FENCE);
    }
 
-   // When the global index reaches the lower part of the vector,
-   // copy it to global memory
-   if(!LocIdx)
-      out[ get_group_id(0) ] = LocVec[0] ? LocVec[0] : 1e37;
+   if(!l)
+      out[ get_group_id(0) ] = tmp[0] ? tmp[0] : 1e37;
 }
 
-
-__kernel void reduce_max(  __global float *inp, __global float *out, \
-                           __global GmlParSct *par, int count )
+__kernel void reduce_max(__global float *inp, __global float *out, __global void *par, int cnt)
 {
-   int i, GloIdx=get_global_id(0), LocIdx=get_local_id(0);
-   __local float LocVec[ MAX_WORKGROUP_SIZE ];
+   int i, g=get_global_id(0), l=get_local_id(0);
+   __local float tmp[ MAX_WORKGROUP_SIZE ];
 
-   LocVec[ LocIdx ] = (GloIdx < count) ? inp[ GloIdx ] : -1e37;
-
+   tmp[l] = (g < cnt) ? inp[g] : -1e37;
    barrier(CLK_LOCAL_MEM_FENCE);
 
-   // Then do a partial reduction in local vector
    for(i=get_local_size(0)/2; i>0; i=i>>1)
    {
-      if(i > LocIdx)
-         LocVec[ LocIdx ] = fmax(LocVec[ LocIdx ], LocVec[ LocIdx + i ]);
+      if(i > l)
+         tmp[l] = fmax(tmp[l], tmp[ l+i ]);
       barrier(CLK_LOCAL_MEM_FENCE);
    }
 
-   // When the global index reaches the lower part of the vector, \
-   // copy it to global memory
-   if(!LocIdx)
-      out[ get_group_id(0) ] = LocVec[0] ? LocVec[0] : -1e37;
+   if(!l)
+      out[ get_group_id(0) ] = tmp[0] ? tmp[0] : -1e37;
 }
 
-__kernel void reduce_sum(  __global float *inp, __global float *out, \
-                           __global GmlParSct *par, int count )
+__kernel void reduce_Linf(__global float *inp, __global float *out, __global void *par, int cnt)
 {
-   int i, GloIdx=get_global_id(0), LocIdx=get_local_id(0);
-   __local float LocVec[ MAX_WORKGROUP_SIZE ];
+   int i, g=get_global_id(0), l=get_local_id(0);
+   __local float tmp[ MAX_WORKGROUP_SIZE ];
 
-   LocVec[ LocIdx ] = (GloIdx < count) ? inp[ GloIdx ] : 0;
-
+   tmp[l] = (g < cnt) ? fabs(inp[g]) : 0;
    barrier(CLK_LOCAL_MEM_FENCE);
 
-   // Then do a partial reduction in local vector
    for(i=get_local_size(0)/2; i>0; i=i>>1)
    {
-      LocVec[ LocIdx ] += (i > LocIdx) ? LocVec[ LocIdx + i ] : 0;
+      if(i > l)
+         tmp[l] = fmax(tmp[l], tmp[ l+i ]);
       barrier(CLK_LOCAL_MEM_FENCE);
    }
 
-   // When the global index reaches the lower part of the vector, \
-   // copy it to global memory
+   if(!l)
+      out[ get_group_id(0) ] = tmp[0];
+}
 
-   if(!LocIdx)
-      out[ get_group_id(0) ] = LocVec[0];
+__kernel void reduce_sum(__global float *inp, __global float *out, __global void *par, int cnt)
+{
+   int i, g=get_global_id(0), l=get_local_id(0);
+   __local float tmp[ MAX_WORKGROUP_SIZE ];
+
+   tmp[l] = (g < cnt) ? inp[g] : 0;
+   barrier(CLK_LOCAL_MEM_FENCE);
+
+   for(i=get_local_size(0)/2; i>0; i=i>>1)
+   {
+      tmp[l] += (i > l) ? tmp[ l+i ] : 0;
+      barrier(CLK_LOCAL_MEM_FENCE);
+   }
+
+   if(!l)
+      out[ get_group_id(0) ] = tmp[0];
+}
+
+__kernel void reduce_L0(__global float *inp, __global float *out, __global void *par, int cnt)
+{
+   int i, g=get_global_id(0), l=get_local_id(0);
+   __local float tmp[ MAX_WORKGROUP_SIZE ];
+
+   if(g < cnt)
+      tmp[l] = inp[g] ? 1. : 0.;
+   else
+      tmp[l] = 0.;
+
+   barrier(CLK_LOCAL_MEM_FENCE);
+
+   for(i=get_local_size(0)/2; i>0; i=i>>1)
+   {
+      tmp[l] += (i > l) ? tmp[ l+i ] : 0;
+      barrier(CLK_LOCAL_MEM_FENCE);
+   }
+
+   if(!l)
+      out[ get_group_id(0) ] = tmp[0];
+}
+
+__kernel void reduce_L1(__global float *inp, __global float *out, __global void *par, int cnt)
+{
+   int i, g=get_global_id(0), l=get_local_id(0);
+   __local float tmp[ MAX_WORKGROUP_SIZE ];
+
+   tmp[l] = (g < cnt) ? fabs(inp[g]) : 0.;
+   barrier(CLK_LOCAL_MEM_FENCE);
+
+   for(i=get_local_size(0)/2; i>0; i=i>>1)
+   {
+      tmp[l] += (i > l) ? tmp[ l+i ] : 0;
+      barrier(CLK_LOCAL_MEM_FENCE);
+   }
+
+   if(!l)
+      out[ get_group_id(0) ] = tmp[0];
+}
+
+__kernel void reduce_L2(__global float *inp, __global float *out, __global void *par, int cnt)
+{
+   int i, g=get_global_id(0), l=get_local_id(0);
+   __local float tmp[ MAX_WORKGROUP_SIZE ];
+
+   tmp[l] = (g < cnt) ? (inp[g] * inp[g]) : 0.;
+   barrier(CLK_LOCAL_MEM_FENCE);
+
+   for(i=get_local_size(0)/2; i>0; i=i>>1)
+   {
+      tmp[l] += (i > l) ? tmp[ l+i ] : 0;
+      barrier(CLK_LOCAL_MEM_FENCE);
+   }
+
+   if(!l)
+      out[ get_group_id(0) ] = tmp[0];
 }

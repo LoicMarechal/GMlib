@@ -1,5 +1,4 @@
-# GMlib version 2.0
-Porting meshing tools and solvers that deal with unstructured meshes on GPUs
+![alt text](https://github.com/LoicMarechal/GMlib/blob/develop/Documentation/GMlib_logo.png "Gmlib logo made with Logo Maker ")
 
 # Overview
 The purpose of the **GMlib** is to provide programmers of solvers or automated meshers in the field of scientific computing with an easy, fast and transparent way to port their codes on *GPUs* (Graphic Processing Units).  
@@ -17,16 +16,14 @@ Simply follow these steps:
 - `cd GMlib-master`
 - `mkdir build`
 - `cd build`
-- `cmake -DCMAKE_INSTALL_PREFIX=$HOME/local ../`
-- `make`
-- `make install`
+- `cmake ../`
+- `sudo make install`
 
-Optionally, you may download some sample meshes to run the examples:
+Optionally, you may download libMeshb to run the examples:
 - you need to install the [libMeshb](https://github.com/LoicMarechal/libMeshb) from GitHub
-- manually download files from the *Git LFS* repository: [sample files](sample_meshes/)
-- move them into /opt/GMlib/sample_meshes/
+- cd to /usr/local/GMlib/sample_meshes/
 - uncompress them with `lzip -d *.meshb.lz`
-- you may now enter /opt/GMlib/examples directory and run the various examples
+- you may now enter /usr/local/GMlib/examples directory and run the various examples
 
 # Usage
 The **GMlib** is written in *ANSI C* with some parts in *OpenCL*.  
@@ -39,55 +36,41 @@ Here is a basic example that computes some triangles' barycenters on a GPU:
 First the "C" part executed by the host CPU:
 ```C++
 // Init the GMLIB with the first available GPU on the system
-GmlInit(1);
+LibIdx = GmlInit(1);
 
-// Compile the OpenCL source code
-CalMid = GmlNewKernel(TrianglesBasicLoop, "ComputeCenters");
+// Create a vertex and a triangle datatype
+VerIdx = GmlNewMeshData(LibIdx, GmlVertices,  NmbVer);
+TriIdx = GmlNewMeshData(LibIdx, GmlTriangles, NmbTri);
 
-// Create a vertices data type
-VerIdx = GmlNewData(GmlVertices, NmbVer, 0, GmlInput);
-
-// Fill the datatype with your mesh coordinates
+// Fill the vertices with your mesh coordinates
 for(i=0;i<NmbVer;i++)
-   GmlSetVertex(VerIdx, i, VerTab[i][0], VerTab[i][1], VerTab[i][2]);
-
-// Transfer the data to the GPU
-GmlUploadData(VerIdx);
+   GmlSetDataLine(LibIdx, VerIdx, i, coords[i][0], coords[i][1], coords[i][2], VerRef[i]);
 
 // Do the same with the elements
-TriIdx = GmlNewData(GmlTriangles, NmbTri, 0, GmlInput);
 for(i=0;i<NmbTri;i++)
-   GmlSetTriangle(TriIdx, i, TriTab[i][0], TriTab[i][1], TriTab[i][2]);
-GmlUploadData(TriIdx);
+   GmlSetDataLine(LibIdx, TriIdx, i, TriVer[i][0], TriVer[i][1], TriVer[i][2], TriRef[i]);
 
-// Create a raw datatype that will receive the elements' centers
-MidIdx = GmlNewData(GmlRawData, NmbTri, sizeof(cl_float4), GmlOutput);
+// Create a raw datatype to store the calculated elements' centers
+MidIdx = GmlNewSolutionData(LibIdx, GmlTriangles, 1, GmlFlt4, "TriMid");
 
-// Launch the kernel on the GPU passing three arguments to the OpenCL procedure:
-// the elements connectivity, the barycenter table and the vertices coordinates
-GmlLaunchKernel(CalMid, NmbTri, 3, TriIdx, MidIdx, VerIdx);
+// Compile the OpenCL source code with the two needed datatypes:
+// the vertex coordinates (read) and the triangles centers (write)
+CalMid = GmlCompileKernel( LibIdx,  TriangleCenter, "CalMid", GmlTriangles, 2,
+                           VerIdx, GmlReadMode,  NULL,
+                           MidIdx, GmlWriteMode, NULL );
+
+// Launch the kernel on the GPU
+GmlLaunchKernel(LibIdx, CalMid);
 
 // Get the results back from the GPU and print it
-GmlDownloadData(MidIdx);
-
 for(i=0;i<NmbTri;i++)
 {
-   GmlGetRawData(MidIdx, i, MidTab);
-   printf("triangle %d center = %g %g %g\n", i, MidTab[0], MidTab[1], MidTab[2]);
+   GmlGetDataLine(LibIdx, MidIdx, i, MidTab[i]);
+   printf("triangle %d center = %g %g %g\n", i, MidTab[i][0], MidTab[i][1], MidTab[i][2]);
 }
 ```
 
 Then the "OpenCL" part executed by the GPU device:
 ```C++
-__kernel void ComputeCenters(__global int4 *tri, __global float4 *mid, __global float4 *crd)
-{
-   int i = get_global_id(0);
-   int4 idx;
-
-   // Get the three triangle vertex indices stored in one integer vector
-   idx = tri[i];
-
-   // Get three vertices coordinates, compute and store the triangle's middle
-   mid[i] = (crd[ idx.s0 ] + crd[ idx.s1 ] + crd[ idx.s2 ]) * (float4){1/3,1/3,1/3,0};
-}
+TriMid = (TriCrd[0] + TriCrd[1] + TriCrd[2]) / 3.;
 ```
