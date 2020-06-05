@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.28                           */
+/*                         GPU Meshing Library 3.29                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Basic loop on tetrahedra                              */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     nov 21 2019                                           */
-/*   Last modification: may 29 2020                                           */
+/*   Last modification: jun 05 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -24,11 +24,11 @@
 #include <libmeshb7.h>
 #include <gmlib3.h>
 
-#include "Parameters.h"
-#include "TF_neighbours.h"
-#include "TF_downlink.h"
-#include "TF_uplink.h"
-#include "TF_double_precision.h"
+#include "parameters.h"
+#include "neighbours.h"
+#include "downlink.h"
+#include "uplink.h"
+#include "double_precision.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -93,7 +93,7 @@ int main(int ArgCnt, char **ArgVec)
    printf("Imported %d vertices and %d tets from the mesh file\n", NmbVer, NmbTet);
 
    // Allocate a common parameters structure to pass along to every kernels
-   if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), Parameters)))
+   if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), parameters)))
       return(1);
 
    // Build neighbours between tets as a user defined topological link
@@ -119,7 +119,7 @@ int main(int ArgCnt, char **ArgVec)
    if(!(ResIdx = GmlNewSolutionData(GmlIdx, GmlTetrahedra, 1, GmlFlt, "ResVec")))
       return(1);
 
-   // FlxKrn = GmlCompileKernel( GmlIdx, TF_flux, "TF_flux",GmlTriangles, 2,
+   // FlxKrn = GmlCompileKernel( GmlIdx, flux, "flux",GmlTriangles, 2,
    //                            FlxIdx, GmlWriteMode, NULL,
    //                            MidIdx, GmlReadMode,  NULL );
 
@@ -131,7 +131,7 @@ int main(int ArgCnt, char **ArgVec)
          return(1);
 
       // Assemble and compile a neighbours kernel
-      F64Krn = GmlCompileKernel( GmlIdx, TF_double_precision, "TF_double_precision",
+      F64Krn = GmlCompileKernel( GmlIdx, double_precision, "double_precision",
                                  GmlTetrahedra, 1,
                                  F64Idx, GmlReadMode, NULL );
 
@@ -142,7 +142,7 @@ int main(int ArgCnt, char **ArgVec)
       F64Idx = F64Krn = 0;
 
    // Assemble and compile a neighbours kernel
-   NgbKrn = GmlCompileKernel( GmlIdx, TF_neighbours, "TF_neighbours",
+   NgbKrn = GmlCompileKernel( GmlIdx, neighbours, "neighbours",
                               GmlTetrahedra, 1,
                               MidIdx, GmlReadMode, NgbIdx );
 
@@ -150,7 +150,7 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Assemble and compile the scatter kernel
-   CalMid = GmlCompileKernel( GmlIdx, TF_downlink, "TF_downlink",
+   CalMid = GmlCompileKernel( GmlIdx, downlink, "downlink",
                               GmlTetrahedra, 4,
                               VerIdx, GmlReadMode | GmlRefFlag,  NULL,
                               SolIdx, GmlReadMode,  NULL,
@@ -161,7 +161,7 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Assemble and compile the gather kernel
-   OptVer = GmlCompileKernel( GmlIdx, TF_uplink, "TF_uplink",
+   OptVer = GmlCompileKernel( GmlIdx, uplink, "uplink",
                               GmlVertices, 2,
                               SolIdx, GmlWriteMode, NULL,
                               MidIdx, GmlReadMode | GmlVoyeurs,  NULL );

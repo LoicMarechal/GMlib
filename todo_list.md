@@ -89,8 +89,8 @@
 
 ### Documentation
 
-- Full PDF documentation with quick setup, install, compile, write OpenCL code and procedure lists
-- Full GitHub page with examples, sample files, source code and links to OpenCL and GPU programing
+- Full PDF documentation with quick setup, install, compile, write OpenCL code and procedure lists :heavy_check_mark:
+- Full GitHub page with examples, sample files, source code and links to OpenCL and GPU programing :heavy_check_mark:
 
 ## PHASE 3
 

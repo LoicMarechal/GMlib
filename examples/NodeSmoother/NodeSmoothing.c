@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.23                           */
+/*                         GPU Meshing Library 3.29                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       tet mesh quality improvement with nodes smoothing     */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 27 2020                                           */
-/*   Last modification: may 06 2020                                           */
+/*   Last modification: jun 05 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -24,10 +24,10 @@
 #include <libmeshb7.h>
 #include <gmlib3.h>
 
-#include "Parameters.h"
-#include "NS_quality.h"
-#include "NS_scatter.h"
-#include "NS_gather.h"
+#include "parameters.h"
+#include "quality.h"
+#include "scatter.h"
+#include "gather.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -88,7 +88,8 @@ int main(int ArgCnt, char **ArgVec)
 
    //GmlDebugOn(GmlIdx);
 
-   GmlImportMesh(GmlIdx, "../sample_meshes/tetrahedra.meshb", GmfVertices, GmfTetrahedra, 0);
+   GmlImportMesh( GmlIdx, "../sample_meshes/tetrahedra.meshb",
+                  GmfVertices, GmfTetrahedra, 0 );
 
    if(!GmlGetMeshInfo(GmlIdx, GmlVertices,   &NmbVer, &VerIdx))
       return(1);
@@ -99,7 +100,7 @@ int main(int ArgCnt, char **ArgVec)
    printf("Imported %d vertices and %d tets from the mesh file\n", NmbVer, NmbTet);
 
    // Allocate a common parameters structure to pass along to every kernels
-   if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), Parameters)))
+   if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), parameters)))
       return(1);
 
    // A vector to store the tets' quality
@@ -115,7 +116,7 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Assemble and compile the tet quality kernel
-   QalKrn = GmlCompileKernel( GmlIdx, NS_quality, "NS_quality",
+   QalKrn = GmlCompileKernel( GmlIdx, quality, "quality",
                               GmlTetrahedra, 2,
                               VerIdx, GmlReadMode,  NULL,
                               QalIdx, GmlWriteMode, NULL );
@@ -124,7 +125,7 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Assemble and compile the tet optimizing kernel
-   TetKrn = GmlCompileKernel( GmlIdx, NS_scatter, "NS_scatter",
+   TetKrn = GmlCompileKernel( GmlIdx, scatter, "scatter",
                               GmlTetrahedra, 2,
                               VerIdx, GmlReadMode,  NULL,
                               OptIdx, GmlWriteMode, NULL );
@@ -133,7 +134,7 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Assemble and compile gather coordinates kernel
-   VerKrn = GmlCompileKernel( GmlIdx, NS_gather, "NS_gather",
+   VerKrn = GmlCompileKernel( GmlIdx, gather, "gather",
                               GmlVertices, 3,
                               ResIdx, GmlWriteMode,               NULL,
                               OptIdx, GmlReadMode | GmlVoyeurs,   NULL,
