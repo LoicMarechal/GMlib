@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.29                           */
+/*                         GPU Meshing Library 3.30                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 01 2020                                           */
+/*   Last modification: jun 08 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -21,7 +21,11 @@
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
+#ifdef WIN32
+#include <CL/cl.h>
+#else
 #include <CL/opencl.h>
+#endif
 #endif
 
 #ifdef WITH_LIBMESHB
