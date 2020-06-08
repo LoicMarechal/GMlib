@@ -37,7 +37,7 @@ endmacro(compile_cl)
 find_package(OpenCL)
 
 if (OpenCL_FOUND)
-   include_directories (${OPENCL_INCLUDE_DIRS})
+   include_directories (${OpenCL_INCLUDE_DIRS})
 else()
    message ("Please set OpenCL library path like this:")
    message ("cmake -DOPENCL_LIB=/cm/shared/apps/cuda70/toolkit/current/lib64/libOpenCL.so")
