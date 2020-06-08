@@ -49,7 +49,7 @@ typedef struct {
 int main(int ArgCnt, char **ArgVec)
 {
    int         i, j, res, NmbVer=0, NmbTri=0, NmbTet=0, CalMid, OptVer, FlxIdx;
-   int         ParIdx, VerIdx=0, TriIdx=0, TetIdx=0, BalIdx, MidIdx, SolIdx;
+   int         VerIdx=0, TriIdx=0, TetIdx=0, BalIdx, MidIdx, SolIdx;
    int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, F64Idx, F64Krn, FlxKrn;
    int         n, w, N, W;
    size_t      GmlIdx;
@@ -263,7 +263,7 @@ int main(int ArgCnt, char **ArgVec)
    printf("%d tets processed in %g seconds, FP64=%g, ngb access=%g, scater=%g, gather=%g, reduction=%g\n",
           NmbTet, F64Tim + NgbTim + TetTim + VerTim + RedTim, F64Tim, NgbTim, TetTim, VerTim, RedTim);
 
-   printf("%ld MB used, %ld MB transfered\n",
+   printf("%zd MB used, %zd MB transfered\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,
           GmlGetMemoryTransfer(GmlIdx) / 1048576);
 
@@ -278,7 +278,6 @@ int main(int ArgCnt, char **ArgVec)
    GmlFreeData(GmlIdx, VerIdx);
    GmlFreeData(GmlIdx, TetIdx);
    GmlFreeData(GmlIdx, MidIdx);
-   GmlFreeData(GmlIdx, ParIdx);
    GmlStop(GmlIdx);
 
    return(0);

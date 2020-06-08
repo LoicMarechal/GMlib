@@ -6,7 +6,6 @@
 __kernel void reduce_min(__global float *inp, __global float *out, __global void *par, int cnt)
 {
    int i, g=get_global_id(0), l=get_local_id(0);
-   float flt;
    __local float tmp[ MAX_WORKGROUP_SIZE ];
 
    tmp[l] = (g < cnt) ? inp[g] : 1e37;
@@ -20,16 +19,12 @@ __kernel void reduce_min(__global float *inp, __global float *out, __global void
    }
 
    if(!l)
-   {
-      flt = tmp[0] ? tmp[0] : 1e37;
-      out[ get_group_id(0) ] = flt;
-   }
+      out[ get_group_id(0) ] = tmp[0];
 }
 
 __kernel void reduce_max(__global float *inp, __global float *out, __global void *par, int cnt)
 {
    int i, g=get_global_id(0), l=get_local_id(0);
-   float flt;
    __local float tmp[ MAX_WORKGROUP_SIZE ];
 
    tmp[l] = (g < cnt) ? inp[g] : -1e37;
@@ -43,10 +38,7 @@ __kernel void reduce_max(__global float *inp, __global float *out, __global void
    }
 
    if(!l)
-   {
-      flt = tmp[0] ? tmp[0] : -1e37;
-      out[ get_group_id(0) ] = flt;
-   }
+      out[ get_group_id(0) ] = tmp[0];
 }
 
 __kernel void reduce_Linf(__global float *inp, __global float *out, __global void *par, int cnt)

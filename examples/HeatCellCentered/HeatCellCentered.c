@@ -3,7 +3,7 @@
 /*   Description:       Cell-centered heat equation solver                    */
 /*   Author:            Julien VANHAREN                                       */
 /*   Creation date:     apr 15 2020                                           */
-/*   Last modification: jun 05 2020                                           */
+/*   Last modification: jun 08 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
    printf("Total profiling time        = %g seconds\n", TotalTime);
    printf("Wall clock time             = %g seconds\n", GmlGetWallClock() - WallTime);
 
-   GmlExportSolution(GmlIdx, "../../sample_meshes/cube.solb", SolTetIdx, GrdTetIdx, RhsIdx, 0);
+   GmlExportSolution(GmlIdx, "../sample_meshes/cube.solb", SolTetIdx, GrdTetIdx, RhsIdx, 0);
    GmlStop(GmlIdx);
 
    return 0;

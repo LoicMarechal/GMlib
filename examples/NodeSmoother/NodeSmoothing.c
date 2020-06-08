@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.29                           */
+/*                         GPU Meshing Library 3.30                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       tet mesh quality improvement with nodes smoothing     */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 27 2020                                           */
-/*   Last modification: jun 05 2020                                           */
+/*   Last modification: jun 08 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -64,7 +64,7 @@ int CheckLaunch(int KrnIdx, int res)
 int main(int ArgCnt, char **ArgVec)
 {
    int         i, j, res, NmbVer, NmbTet;
-   int         QalIdx, QalKrn, VerIdx, TetIdx, ParIdx, OptIdx, ResIdx;
+   int         QalIdx, QalKrn, VerIdx, TetIdx, OptIdx, ResIdx;
    int         GpuIdx = 0, TetKrn, VerKrn;
    size_t      GmlIdx;
    double      RedTim, TetTim, VerTim, WalTim, AvgQal, OptRes;
@@ -193,7 +193,7 @@ int main(int ArgCnt, char **ArgVec)
    printf(  "%d tets optimized in %g seconds (scatter=%g, gather=%g, reduce=%g), wall clock = %g\n",
             NmbTet, RedTim + TetTim + VerTim, TetTim, VerTim, RedTim, WalTim );
 
-   printf("%ld MB used, %ld MB transfered\n",
+   printf("%zd MB used, %zd MB transfered\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,
           GmlGetMemoryTransfer(GmlIdx) / 1048576);
 
@@ -207,7 +207,6 @@ int main(int ArgCnt, char **ArgVec)
    GmlFreeData(GmlIdx, QalIdx);
    GmlFreeData(GmlIdx, OptIdx);
    GmlFreeData(GmlIdx, ResIdx);
-   GmlFreeData(GmlIdx, ParIdx);
    GmlStop(GmlIdx);
 
    return(0);

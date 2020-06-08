@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.29                           */
+/*                         GPU Meshing Library 3.30                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Compute a tet mesh mean and min qualities             */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 24 2020                                           */
-/*   Last modification: jun 05 2020                                           */
+/*   Last modification: jun 08 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -47,7 +47,7 @@ int main(int ArgCnt, char **ArgVec)
 {
    int         i, j, NmbVer, NmbTet, res;
    int         QalIdx, QalKrn, VerIdx, TetIdx;
-   int         GpuIdx = 0, ParIdx;
+   int         GpuIdx = 0;
    size_t      GmlIdx;
    double      QalTim, AvgTim, MinTim, AvgQal, MinQal;
    GmlParSct   *GmlPar;
@@ -138,7 +138,7 @@ int main(int ArgCnt, char **ArgVec)
    printf("%d tets processed in %g seconds, quality=%g s, min=%g s, mean=%g s\n",
           NmbTet, QalTim + AvgTim + MinTim, QalTim, AvgTim, MinTim);
 
-   printf("%ld MB used, %ld MB transfered\n",
+   printf("%zd MB used, %zd MB transfered\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,
           GmlGetMemoryTransfer(GmlIdx) / 1048576);
 
@@ -153,7 +153,6 @@ int main(int ArgCnt, char **ArgVec)
    GmlFreeData(GmlIdx, VerIdx);
    GmlFreeData(GmlIdx, TetIdx);
    GmlFreeData(GmlIdx, QalIdx);
-   GmlFreeData(GmlIdx, ParIdx);
    GmlStop(GmlIdx);
 
    return(0);

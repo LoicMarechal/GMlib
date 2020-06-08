@@ -2,7 +2,7 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.29                           */
+/*                         GPU Meshing Library 3.30                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
@@ -25,7 +25,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #ifdef WIN32
 #define GMF_WINDOWS
@@ -1316,7 +1315,7 @@ static int NewData(GmlSct *gml, DatSct *dat)
 
    if(!dat->GpuMem)
    {
-      printf(  "Cannot allocate %ld MB on the GPU (%ld MB already used)\n",
+      printf(  "Cannot allocate %zd MB on the GPU (%zd MB already used)\n",
                dat->MemSiz / MB, GmlGetMemoryUsage((size_t)gml) / MB);
       return(0);
    }
@@ -1324,7 +1323,7 @@ static int NewData(GmlSct *gml, DatSct *dat)
    // Allocate the requested memory size on the CPU side
    if( (dat->MemAcs != GmlInternal) && !(dat->CpuMem = calloc(1, dat->MemSiz)) )
    {
-      printf("Cannot allocate %ld MB on the CPU\n", dat->MemSiz/MB);
+      printf("Cannot allocate %zd MB on the CPU\n", dat->MemSiz/MB);
       return(0);
    }
 
@@ -2466,7 +2465,7 @@ static int NewOclKrn(GmlSct *gml, char *KernelSource, char *PrcNam)
                               sizeof(size_t), &len, NULL );
 
       if(res == CL_SUCCESS )
-         printf("binary executable of kernel %s: %ld bytes\n", PrcNam, len);
+         printf("binary executable of kernel %s: %zd bytes\n", PrcNam, len);
       else
          printf("could not get the size of kernel %s executable\n", PrcNam);
    }
