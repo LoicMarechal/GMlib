@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 03 2020                                           */
+/*   Last modification: jun 08 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -28,8 +28,13 @@
 #include <unistd.h>
 
 #ifdef WIN32
+#define GMF_WINDOWS
 #include <windows.h>
 #include <sys/timeb.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <wchar.h>
+#include <io.h>
 #else
 #include <sys/time.h>
 #include <unistd.h>
@@ -1759,6 +1764,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
          continue;
 
       // If not, get the link data index from the conectivity matrix
+      SrcTyp = MshTyp;
       DstTyp = dat->MshTyp;
       LnkItm = LenMatBas[ MshTyp ][ DstTyp ];
       GetCntVec(LnkItm, &NmbItm, &ItmLen, &ItmTyp);

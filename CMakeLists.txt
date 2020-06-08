@@ -7,7 +7,13 @@ cmake_minimum_required (VERSION 3.0.1)
 set (GMlib_VERSION_MAJOR 3)
 set (GMlib_VERSION_MINOR 0)
 project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C)
-set (CMAKE_C_FLAGS "-O3 -DWITH_LIBMESHB")
+
+if (WIN32)
+   set (CMAKE_C_FLAGS "-DWIN32 -DWITH_LIBMESHB")
+   set (CMAKE_CONFIGURATION_TYPES Release)
+else ()
+   set (CMAKE_C_FLAGS "-O3 -DWITH_LIBMESHB")
+endif ()
 
 
 #####################################################
