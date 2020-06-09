@@ -3,12 +3,12 @@
 #define MAX_WORKGROUP_SIZE 1024
 #endif
 
-__kernel void reduce_min(__global float *inp, __global float *out, __global void *par, int cnt)
+__kernel void reduce_min(__global float *inp, __global float *out, __global void *par, int2 cnt)
 {
    int i, g=get_global_id(0), l=get_local_id(0);
    __local float tmp[ MAX_WORKGROUP_SIZE ];
 
-   tmp[l] = (g < cnt) ? inp[g] : 1e37;
+   tmp[l] = (g < cnt.s0) ? inp[g] : 1e37;
    barrier(CLK_LOCAL_MEM_FENCE);
 
    for(i=get_local_size(0)/2; i>0; i=i>>1)
@@ -22,12 +22,12 @@ __kernel void reduce_min(__global float *inp, __global float *out, __global void
       out[ get_group_id(0) ] = tmp[0];
 }
 
-__kernel void reduce_max(__global float *inp, __global float *out, __global void *par, int cnt)
+__kernel void reduce_max(__global float *inp, __global float *out, __global void *par, int2 cnt)
 {
    int i, g=get_global_id(0), l=get_local_id(0);
    __local float tmp[ MAX_WORKGROUP_SIZE ];
 
-   tmp[l] = (g < cnt) ? inp[g] : -1e37;
+   tmp[l] = (g < cnt.s0) ? inp[g] : -1e37;
    barrier(CLK_LOCAL_MEM_FENCE);
 
    for(i=get_local_size(0)/2; i>0; i=i>>1)
@@ -41,12 +41,12 @@ __kernel void reduce_max(__global float *inp, __global float *out, __global void
       out[ get_group_id(0) ] = tmp[0];
 }
 
-__kernel void reduce_Linf(__global float *inp, __global float *out, __global void *par, int cnt)
+__kernel void reduce_Linf(__global float *inp, __global float *out, __global void *par, int2 cnt)
 {
    int i, g=get_global_id(0), l=get_local_id(0);
    __local float tmp[ MAX_WORKGROUP_SIZE ];
 
-   tmp[l] = (g < cnt) ? fabs(inp[g]) : 0;
+   tmp[l] = (g < cnt.s0) ? fabs(inp[g]) : 0;
    barrier(CLK_LOCAL_MEM_FENCE);
 
    for(i=get_local_size(0)/2; i>0; i=i>>1)
@@ -60,12 +60,12 @@ __kernel void reduce_Linf(__global float *inp, __global float *out, __global voi
       out[ get_group_id(0) ] = tmp[0];
 }
 
-__kernel void reduce_sum(__global float *inp, __global float *out, __global void *par, int cnt)
+__kernel void reduce_sum(__global float *inp, __global float *out, __global void *par, int2 cnt)
 {
    int i, g=get_global_id(0), l=get_local_id(0);
    __local float tmp[ MAX_WORKGROUP_SIZE ];
 
-   tmp[l] = (g < cnt) ? inp[g] : 0;
+   tmp[l] = (g < cnt.s0) ? inp[g] : 0;
    barrier(CLK_LOCAL_MEM_FENCE);
 
    for(i=get_local_size(0)/2; i>0; i=i>>1)
@@ -78,12 +78,12 @@ __kernel void reduce_sum(__global float *inp, __global float *out, __global void
       out[ get_group_id(0) ] = tmp[0];
 }
 
-__kernel void reduce_L0(__global float *inp, __global float *out, __global void *par, int cnt)
+__kernel void reduce_L0(__global float *inp, __global float *out, __global void *par, int2 cnt)
 {
    int i, g=get_global_id(0), l=get_local_id(0);
    __local float tmp[ MAX_WORKGROUP_SIZE ];
 
-   if(g < cnt && inp[g])
+   if(g < cnt.s0 && inp[g])
       tmp[l] = 1.;
    else
       tmp[l] = 0.;
@@ -100,12 +100,12 @@ __kernel void reduce_L0(__global float *inp, __global float *out, __global void 
       out[ get_group_id(0) ] = tmp[0];
 }
 
-__kernel void reduce_L1(__global float *inp, __global float *out, __global void *par, int cnt)
+__kernel void reduce_L1(__global float *inp, __global float *out, __global void *par, int2 cnt)
 {
    int i, g=get_global_id(0), l=get_local_id(0);
    __local float tmp[ MAX_WORKGROUP_SIZE ];
 
-   tmp[l] = (g < cnt) ? fabs(inp[g]) : 0.;
+   tmp[l] = (g < cnt.s0) ? fabs(inp[g]) : 0.;
    barrier(CLK_LOCAL_MEM_FENCE);
 
    for(i=get_local_size(0)/2; i>0; i=i>>1)
@@ -118,12 +118,12 @@ __kernel void reduce_L1(__global float *inp, __global float *out, __global void 
       out[ get_group_id(0) ] = tmp[0];
 }
 
-__kernel void reduce_L2(__global float *inp, __global float *out, __global void *par, int cnt)
+__kernel void reduce_L2(__global float *inp, __global float *out, __global void *par, int2 cnt)
 {
    int i, g=get_global_id(0), l=get_local_id(0);
    __local float tmp[ MAX_WORKGROUP_SIZE ];
 
-   tmp[l] = (g < cnt) ? (inp[g] * inp[g]) : 0.;
+   tmp[l] = (g < cnt.s0) ? (inp[g] * inp[g]) : 0.;
    barrier(CLK_LOCAL_MEM_FENCE);
 
    for(i=get_local_size(0)/2; i>0; i=i>>1)

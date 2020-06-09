@@ -777,8 +777,8 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
       return(0);
 
    if(gml->DbgFlg)
-      printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
-               lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
+      printf(  "Hash table: lines=%d, stored items=%d, hash keys=%d\n",
+               (int)lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
 
    // Workaround to avoid reading the number of neighbours
    // in case a type is pointing to itself
@@ -809,8 +809,8 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
    }
 
    if(gml->DbgFlg)
-      printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
-               lnk.NmbDat, (100LL * lnk.NmbHit) / lnk.TabSiz,
+      printf(  "Hashed %d entities: occupency=%d%%, collisions=%g\n",
+               (int)lnk.NmbDat, (int)((100 * lnk.NmbHit) / lnk.TabSiz),
                (double)lnk.NmbMis / (double)lnk.TabSiz );
 
    // Allocate and fill a GPU data type to store the degrees in case uf uplink
@@ -2792,8 +2792,8 @@ int GmlExtractEdges(size_t GmlIdx)
       return(0);
 
    if(gml->DbgFlg)
-      printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
-               EdgHsh.TabSiz, EdgHsh.DatLen, EdgHsh.KeyLen);
+      printf(  "Hash table: lines=%d, stored items=%d, hash keys=%d\n",
+               (int)EdgHsh.TabSiz, EdgHsh.DatLen, EdgHsh.KeyLen);
 
    for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
    {
@@ -2825,8 +2825,8 @@ int GmlExtractEdges(size_t GmlIdx)
    }
 
    if(gml->DbgFlg)
-      printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
-               EdgHsh.NxtDat-1, (100LL * EdgHsh.NmbHit) / EdgHsh.TabSiz,
+      printf(  "Hashed %d entities: occupency=%d%%, collisions=%g\n",
+               (int)EdgHsh.NxtDat-1, (int)((100 * EdgHsh.NmbHit) / EdgHsh.TabSiz),
                (double)EdgHsh.NmbMis / (double)EdgHsh.TabSiz );
 
    // If there are surface edges, save their references and hash them
@@ -3041,13 +3041,13 @@ int GmlExtractFaces(size_t GmlIdx)
    }
 
    if(gml->DbgFlg && NmbTri)
-      printf(  "Hashed %lld triangles: occupency=%lld%%, collisions=%g\n",
-               TriHsh.NxtDat-1, (100LL * TriHsh.NmbHit) / TriHsh.TabSiz,
+      printf(  "Hashed %d triangles: occupency=%d%%, collisions=%g\n",
+               (int)TriHsh.NxtDat-1, (int)((100 * TriHsh.NmbHit) / TriHsh.TabSiz),
                (double)TriHsh.NmbMis / (double)TriHsh.TabSiz );
 
    if(gml->DbgFlg && NmbQad)
-      printf(  "Hashed %lld quads: occupency=%lld%%, collisions=%g\n",
-               QadHsh.NxtDat-1, (100LL * QadHsh.NmbHit) / QadHsh.TabSiz,
+      printf(  "Hashed %d quads: occupency=%d%%, collisions=%g\n",
+               (int)QadHsh.NxtDat-1, (int)((100 * QadHsh.NmbHit) / QadHsh.TabSiz),
                (double)QadHsh.NmbMis / (double)QadHsh.TabSiz );
 
    // Setup a new triangle data type and transfer the old data
@@ -3258,8 +3258,8 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
       return(0);
 
    if(gml->DbgFlg)
-      printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
-               lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
+      printf(  "Hash table: lines=%d, stored items=%d, hash keys=%d\n",
+               (int)lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
 
    NmbItm = NmbTpoLnk[ typ ][ lnk.HshTyp ];
    EleLen = ItmNmbVer[ typ ];
@@ -3278,8 +3278,8 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
    }
 
    if(gml->DbgFlg)
-      printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
-               lnk.NmbDat, (100LL * lnk.NmbHit) / lnk.TabSiz,
+      printf(  "Hashed %d entities: occupency=%d%%, collisions=%g\n",
+               (int)lnk.NmbDat, (int)((100 * lnk.NmbHit) / lnk.TabSiz),
                (double)lnk.NmbMis / (double)lnk.TabSiz );
 
    // Build downlinks and neighbours
