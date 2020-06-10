@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.29                           */
+/*                         GPU Meshing Library 3.30                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 03 2020                                           */
+/*   Last modification: jun 08 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -25,11 +25,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #ifdef WIN32
+#define GMF_WINDOWS
 #include <windows.h>
 #include <sys/timeb.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <wchar.h>
+#include <io.h>
 #else
 #include <sys/time.h>
 #include <unistd.h>
@@ -773,8 +777,8 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
       return(0);
 
    if(gml->DbgFlg)
-      printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
-               lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
+      printf(  "Hash table: lines=%d, stored items=%d, hash keys=%d\n",
+               (int)lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
 
    // Workaround to avoid reading the number of neighbours
    // in case a type is pointing to itself
@@ -805,8 +809,8 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
    }
 
    if(gml->DbgFlg)
-      printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
-               lnk.NmbDat, (100LL * lnk.NmbHit) / lnk.TabSiz,
+      printf(  "Hashed %d entities: occupency=%d%%, collisions=%g\n",
+               (int)lnk.NmbDat, (int)((100 * lnk.NmbHit) / lnk.TabSiz),
                (double)lnk.NmbMis / (double)lnk.TabSiz );
 
    // Allocate and fill a GPU data type to store the degrees in case uf uplink
@@ -1311,7 +1315,7 @@ static int NewData(GmlSct *gml, DatSct *dat)
 
    if(!dat->GpuMem)
    {
-      printf(  "Cannot allocate %ld MB on the GPU (%ld MB already used)\n",
+      printf(  "Cannot allocate %zd MB on the GPU (%zd MB already used)\n",
                dat->MemSiz / MB, GmlGetMemoryUsage((size_t)gml) / MB);
       return(0);
    }
@@ -1319,7 +1323,7 @@ static int NewData(GmlSct *gml, DatSct *dat)
    // Allocate the requested memory size on the CPU side
    if( (dat->MemAcs != GmlInternal) && !(dat->CpuMem = calloc(1, dat->MemSiz)) )
    {
-      printf("Cannot allocate %ld MB on the CPU\n", dat->MemSiz/MB);
+      printf("Cannot allocate %zd MB on the CPU\n", dat->MemSiz/MB);
       return(0);
    }
 
@@ -1759,6 +1763,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
          continue;
 
       // If not, get the link data index from the conectivity matrix
+      SrcTyp = MshTyp;
       DstTyp = dat->MshTyp;
       LnkItm = LenMatBas[ MshTyp ][ DstTyp ];
       GetCntVec(LnkItm, &NmbItm, &ItmLen, &ItmTyp);
@@ -2460,7 +2465,7 @@ static int NewOclKrn(GmlSct *gml, char *KernelSource, char *PrcNam)
                               sizeof(size_t), &len, NULL );
 
       if(res == CL_SUCCESS )
-         printf("binary executable of kernel %s: %ld bytes\n", PrcNam, len);
+         printf("binary executable of kernel %s: %zd bytes\n", PrcNam, len);
       else
          printf("could not get the size of kernel %s executable\n", PrcNam);
    }
@@ -2787,8 +2792,8 @@ int GmlExtractEdges(size_t GmlIdx)
       return(0);
 
    if(gml->DbgFlg)
-      printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
-               EdgHsh.TabSiz, EdgHsh.DatLen, EdgHsh.KeyLen);
+      printf(  "Hash table: lines=%d, stored items=%d, hash keys=%d\n",
+               (int)EdgHsh.TabSiz, EdgHsh.DatLen, EdgHsh.KeyLen);
 
    for(typ=GmlEdges+1; typ<GmlMaxEleTyp; typ++)
    {
@@ -2820,8 +2825,8 @@ int GmlExtractEdges(size_t GmlIdx)
    }
 
    if(gml->DbgFlg)
-      printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
-               EdgHsh.NxtDat-1, (100LL * EdgHsh.NmbHit) / EdgHsh.TabSiz,
+      printf(  "Hashed %d entities: occupency=%d%%, collisions=%g\n",
+               (int)EdgHsh.NxtDat-1, (int)((100 * EdgHsh.NmbHit) / EdgHsh.TabSiz),
                (double)EdgHsh.NmbMis / (double)EdgHsh.TabSiz );
 
    // If there are surface edges, save their references and hash them
@@ -3036,13 +3041,13 @@ int GmlExtractFaces(size_t GmlIdx)
    }
 
    if(gml->DbgFlg && NmbTri)
-      printf(  "Hashed %lld triangles: occupency=%lld%%, collisions=%g\n",
-               TriHsh.NxtDat-1, (100LL * TriHsh.NmbHit) / TriHsh.TabSiz,
+      printf(  "Hashed %d triangles: occupency=%d%%, collisions=%g\n",
+               (int)TriHsh.NxtDat-1, (int)((100 * TriHsh.NmbHit) / TriHsh.TabSiz),
                (double)TriHsh.NmbMis / (double)TriHsh.TabSiz );
 
    if(gml->DbgFlg && NmbQad)
-      printf(  "Hashed %lld quads: occupency=%lld%%, collisions=%g\n",
-               QadHsh.NxtDat-1, (100LL * QadHsh.NmbHit) / QadHsh.TabSiz,
+      printf(  "Hashed %d quads: occupency=%d%%, collisions=%g\n",
+               (int)QadHsh.NxtDat-1, (int)((100 * QadHsh.NmbHit) / QadHsh.TabSiz),
                (double)QadHsh.NmbMis / (double)QadHsh.TabSiz );
 
    // Setup a new triangle data type and transfer the old data
@@ -3253,8 +3258,8 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
       return(0);
 
    if(gml->DbgFlg)
-      printf(  "Hash table: lines=%lld, stored items=%d, hash keys=%d\n",
-               lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
+      printf(  "Hash table: lines=%d, stored items=%d, hash keys=%d\n",
+               (int)lnk.TabSiz, lnk.DatLen, lnk.KeyLen);
 
    NmbItm = NmbTpoLnk[ typ ][ lnk.HshTyp ];
    EleLen = ItmNmbVer[ typ ];
@@ -3273,8 +3278,8 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
    }
 
    if(gml->DbgFlg)
-      printf(  "Hashed %lld entities: occupency=%lld%%, collisions=%g\n",
-               lnk.NmbDat, (100LL * lnk.NmbHit) / lnk.TabSiz,
+      printf(  "Hashed %d entities: occupency=%d%%, collisions=%g\n",
+               (int)lnk.NmbDat, (int)((100 * lnk.NmbHit) / lnk.TabSiz),
                (double)lnk.NmbMis / (double)lnk.TabSiz );
 
    // Build downlinks and neighbours

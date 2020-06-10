@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.23                           */
+/*                         GPU Meshing Library 3.30                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Compute a tet mesh mean and min qualities             */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 24 2020                                           */
-/*   Last modification: may 06 2020                                           */
+/*   Last modification: jun 08 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -24,8 +24,8 @@
 #include <libmeshb7.h>
 #include <gmlib3.h>
 
-#include "Parameters.h"
-#include "MQ_mesh_quality.h"
+#include "parameters.h"
+#include "compute_quality.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -47,7 +47,7 @@ int main(int ArgCnt, char **ArgVec)
 {
    int         i, j, NmbVer, NmbTet, res;
    int         QalIdx, QalKrn, VerIdx, TetIdx;
-   int         GpuIdx = 0, ParIdx;
+   int         GpuIdx = 0;
    size_t      GmlIdx;
    double      QalTim, AvgTim, MinTim, AvgQal, MinQal;
    GmlParSct   *GmlPar;
@@ -70,7 +70,8 @@ int main(int ArgCnt, char **ArgVec)
 
    //GmlDebugOn(GmlIdx);
 
-   GmlImportMesh(GmlIdx, "../sample_meshes/tetrahedra.meshb", GmfVertices, GmfTetrahedra, 0);
+   GmlImportMesh( GmlIdx, "../sample_meshes/tetrahedra.meshb",
+                  GmfVertices, GmfTetrahedra, 0 );
 
    if(!GmlGetMeshInfo(GmlIdx, GmlVertices,   &NmbVer, &VerIdx))
       return(1);
@@ -81,7 +82,7 @@ int main(int ArgCnt, char **ArgVec)
    printf("Imported %d vertices and %d tets from the mesh file\n", NmbVer, NmbTet);
 
    // Allocate a common parameters structure to pass along to every kernels
-   if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), Parameters)))
+   if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), parameters)))
       return(1);
 
    // Create a raw datatype to store the element middles.
@@ -90,7 +91,7 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    // Assemble and compile a neighbours kernel
-   QalKrn = GmlCompileKernel( GmlIdx, MQ_mesh_quality, "MQ_mesh_quality",
+   QalKrn = GmlCompileKernel( GmlIdx, compute_quality, "compute_quality",
                               GmlTetrahedra, 2,
                               VerIdx, GmlReadMode, NULL,
                               QalIdx, GmlWriteMode, NULL );
@@ -137,7 +138,7 @@ int main(int ArgCnt, char **ArgVec)
    printf("%d tets processed in %g seconds, quality=%g s, min=%g s, mean=%g s\n",
           NmbTet, QalTim + AvgTim + MinTim, QalTim, AvgTim, MinTim);
 
-   printf("%ld MB used, %ld MB transfered\n",
+   printf("%zd MB used, %zd MB transfered\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,
           GmlGetMemoryTransfer(GmlIdx) / 1048576);
 
@@ -152,7 +153,6 @@ int main(int ArgCnt, char **ArgVec)
    GmlFreeData(GmlIdx, VerIdx);
    GmlFreeData(GmlIdx, TetIdx);
    GmlFreeData(GmlIdx, QalIdx);
-   GmlFreeData(GmlIdx, ParIdx);
    GmlStop(GmlIdx);
 
    return(0);
