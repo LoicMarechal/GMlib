@@ -12,6 +12,7 @@ if (WIN32)
    set (CMAKE_C_FLAGS "-DWIN32 -DWITH_LIBMESHB")
 else ()
    set (CMAKE_C_FLAGS "-O3 -DWITH_LIBMESHB")
+   set(LINK_LIBRARIES "m")
 endif ()
 
 
