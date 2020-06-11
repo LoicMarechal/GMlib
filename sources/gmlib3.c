@@ -52,6 +52,7 @@
 #define VECPOWOCL    4
 #define VECPOWMAX    7
 #define DEFEVTBLK    100
+#define STRSIZ       1024
 
 enum data_type       {GmlArgDat, GmlRawDat, GmlLnkDat, GmlEleDat, GmlRefDat};
 enum memory_type     {GmlInternal, GmlInput, GmlOutput, GmlInout};
@@ -3636,9 +3637,10 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
 int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
 {
    GETGMLPTR   (gml, GmlIdx);
+   char        RefStr[ STRSIZ ], TmpStr[ STRSIZ ];
    int         i, j, k, NmbLin, GmlTyp, GmfKwd, DatIdx, NmbDat = 0, NmbKwd = 0;
    int         DatTab[10][4], KwdDatTab[10][15] = {0}, NewKwdFlg, SolKwd;
-   int         NmbTyp, TypTab[100], MshKwd, NmbArg, ArgTab[2][10];
+   int         NmbTyp, TypTab[100], MshKwd, NmbArg, NmbFld, ArgTab[2][10];
    float       *AdrTab[10][2], *DatPtr, *PtrTab[2][10];
    DatSct      *dat;
    int64_t     OutSol;
@@ -3734,9 +3736,26 @@ int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
                   ArgTab[0], ArgTab[1], PtrTab[0], PtrTab[1]);
    }
 
-   GmfSetKwd(OutSol, GmfReferenceStrings, NmbKwd);
+   // Set the ref comment strings with user's data names
+   /*GmfSetKwd(OutSol, GmfReferenceStrings, NmbKwd);
+
    for(i=0;i<NmbKwd;i++)
-      GmfSetLin(OutSol, GmfReferenceStrings, GmfSolKwdTab[ Gmf2Gml(KwdDatTab[i][0]) ], 1, "field");
+   {
+      RefStr[0] = '\0';
+      GmfKwd = Gmf2Gml(KwdDatTab[i][0]);
+      SolKwd = GmfSolKwdTab[ GmfKwd ];
+      NmbFld = KwdDatTab[i][1];
+
+      for(j=0;j<NmbFld;j++)
+      {
+         DatIdx = DatTab[ KwdDatTab[i][ j+4 ] ][0];
+         dat = &gml->dat[ DatIdx ];
+         sprintf(TmpStr, "%d %s ", j, dat->nam);
+         strcat(RefStr, TmpStr);
+      }
+
+      GmfSetLin(OutSol, GmfReferenceStrings, SolKwd, NmbFld, RefStr);
+   }*/
 
    // And close the mesh
    GmfCloseMesh(OutSol);
