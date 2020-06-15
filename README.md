@@ -34,8 +34,12 @@ Simply follow these steps:
 Optionally, you may download libMeshb to run the examples:
 - you need to install the [libMeshb](https://github.com/LoicMarechal/libMeshb) from GitHub
 - cd to /usr/local/GMlib/sample_meshes/
-- uncompress them with `lzip -d *.meshb.lz`
+- uncompress them with `lzip -d *.meshb.lz` ([lzip](https://www.nongnu.org/lzip/lzip.html))
 - you may now enter /usr/local/GMlib/examples directory and run the various examples
+
+And the Hilbert renumbering command that is necessary to preprocess meshes before processing them with the GMlib
+- download it from [LPlib](https://github.com/LoicMarechal/LPlib)
+- use the command: "hilbert -in raw.meshb -out renum.meshb -gmlib"
 
 # Usage
 The **GMlib** is written in *ANSI C* with some parts in *OpenCL*.  

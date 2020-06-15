@@ -40,14 +40,14 @@ find_package(OpenCL)
 if (OpenCL_FOUND)
    include_directories (${OpenCL_INCLUDE_DIRS})
 else()
-   message ("Please set OpenCL library path like this:")
-   message ("cmake -DOPENCL_LIB=/cm/shared/apps/cuda70/toolkit/current/lib64/libOpenCL.so")
+   message ("OpenCL could not be found, please set it with:")
+   message ("cmake -DOpenCL_LIBRARIES=PATH_TO_OPENCL_LIB/libOpenCL.so -DOpenCL_INCLUDE_DIRS=PATH_TO_OPENCL_INC/include")
    message (FATAL_ERROR "OpenCL libary could not be found.")
 endif()
 
 include_directories (${PROJECT_SOURCE_DIR}/sources)
 
-find_package(libMeshb 7)
+find_package(libMeshb 7.5)
 
 if(libMeshb_FOUND)
    include_directories (${libMeshb_INCLUDE_DIRS})
@@ -61,9 +61,9 @@ if(libMeshb_FOUND)
    message (STATUS "LibMeshb include directory: " ${libMeshb_INCLUDE_DIRS})
 else()
    message (WARNING "
-   libMeshb.7 could not be found.
+   libMeshb 7.5 could not be found (or you may have an older version installed).
    Consequently, examples and utilities will not be built.
-   You can download it from GitHUB at https://github.com/LoicMarechal/libMeshb")
+   You can download it from GitHub at https://github.com/LoicMarechal/libMeshb")
 endif()
 
 add_subdirectory (sources)
