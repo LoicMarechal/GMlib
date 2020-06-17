@@ -10,6 +10,7 @@ project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C
 
 if (WIN32)
    set (CMAKE_C_FLAGS "-DWIN32 -DWITH_LIBMESHB")
+   set (CMAKE_BUILD_TYPE Release)
 else ()
    set (CMAKE_C_FLAGS "-O3 -DWITH_LIBMESHB")
    set(LINK_LIBRARIES "m")
@@ -76,13 +77,15 @@ install (DIRECTORY sample_meshes DESTINATION share/GMlib)
 # SET PACKAGE AND DEPLOYMENT VARIABLES
 ######################################
 
-include (InstallRequiredSystemLibraries)
-set (CPACK_GENERATOR TXZ)
-set (CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/copyright.txt)
-set (CPACK_PACKAGE_VERSION_MAJOR ${GMlib_VERSION_MAJOR})
-set (CPACK_PACKAGE_VERSION_MINOR ${GMlib_VERSION_MINOR})
-set(CPACK_COMPONENTS_ALL applications examples libraries headers)
-include (CPack)
+if (CPACK)
+   include (InstallRequiredSystemLibraries)
+   set (CPACK_GENERATOR TXZ)
+   set (CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/copyright.txt)
+   set (CPACK_PACKAGE_VERSION_MAJOR ${GMlib_VERSION_MAJOR})
+   set (CPACK_PACKAGE_VERSION_MINOR ${GMlib_VERSION_MINOR})
+   set(CPACK_COMPONENTS_ALL applications examples libraries headers)
+   include (CPack)
+endif ()
 
 
 ######################################

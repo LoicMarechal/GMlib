@@ -27,7 +27,7 @@ Simply follow these steps:
 - `cd GMlib-master`
 - `mkdir build`
 - `cd build`
-- `cmake -DCMAKE_INSTALL_PREFIX=%HOMEPATH%\local -DCMAKE_BUILD_TYPE=Release ..\`
+- `cmake -DCMAKE_INSTALL_PREFIX=%HOMEPATH%\local ..`
 - `cmake --build . --target INSTALL`
 
 # Optional build
