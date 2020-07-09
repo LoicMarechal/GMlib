@@ -10,9 +10,13 @@ project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C
 
 if (WIN32)
    set (CMAKE_C_FLAGS "-DWIN32 -DWITH_LIBMESHB")
+   set (CMAKE_BUILD_TYPE Release)
 else ()
    set (CMAKE_C_FLAGS "-O3 -DWITH_LIBMESHB")
    set(LINK_LIBRARIES "m")
+   if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+     set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/local" CACHE PATH "..." FORCE)
+   endif()
 endif ()
 
 
@@ -40,14 +44,14 @@ find_package(OpenCL)
 if (OpenCL_FOUND)
    include_directories (${OpenCL_INCLUDE_DIRS})
 else()
-   message ("Please set OpenCL library path like this:")
-   message ("cmake -DOPENCL_LIB=/cm/shared/apps/cuda70/toolkit/current/lib64/libOpenCL.so")
+   message ("OpenCL could not be found, please set it with:")
+   message ("cmake -DOpenCL_LIBRARIES=PATH_TO_OPENCL_LIB/libOpenCL.so -DOpenCL_INCLUDE_DIRS=PATH_TO_OPENCL_INC/include")
    message (FATAL_ERROR "OpenCL libary could not be found.")
 endif()
 
 include_directories (${PROJECT_SOURCE_DIR}/sources)
 
-find_package(libMeshb 7)
+find_package(libMeshb 7.5)
 
 if(libMeshb_FOUND)
    include_directories (${libMeshb_INCLUDE_DIRS})
@@ -61,9 +65,9 @@ if(libMeshb_FOUND)
    message (STATUS "LibMeshb include directory: " ${libMeshb_INCLUDE_DIRS})
 else()
    message (WARNING "
-   libMeshb.7 could not be found.
+   libMeshb 7.5 could not be found (or you may have an older version installed).
    Consequently, examples and utilities will not be built.
-   You can download it from GitHUB at https://github.com/LoicMarechal/libMeshb")
+   You can download it from GitHub at https://github.com/LoicMarechal/libMeshb")
 endif()
 
 add_subdirectory (sources)
@@ -76,13 +80,15 @@ install (DIRECTORY sample_meshes DESTINATION share/GMlib)
 # SET PACKAGE AND DEPLOYMENT VARIABLES
 ######################################
 
-include (InstallRequiredSystemLibraries)
-set (CPACK_GENERATOR TXZ)
-set (CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/copyright.txt)
-set (CPACK_PACKAGE_VERSION_MAJOR ${GMlib_VERSION_MAJOR})
-set (CPACK_PACKAGE_VERSION_MINOR ${GMlib_VERSION_MINOR})
-set(CPACK_COMPONENTS_ALL applications examples libraries headers)
-include (CPack)
+if (CPACK)
+   include (InstallRequiredSystemLibraries)
+   set (CPACK_GENERATOR TXZ)
+   set (CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/copyright.txt)
+   set (CPACK_PACKAGE_VERSION_MAJOR ${GMlib_VERSION_MAJOR})
+   set (CPACK_PACKAGE_VERSION_MINOR ${GMlib_VERSION_MINOR})
+   set(CPACK_COMPONENTS_ALL applications examples libraries headers)
+   include (CPack)
+endif ()
 
 
 ######################################

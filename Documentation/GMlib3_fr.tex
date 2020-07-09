@@ -33,7 +33,7 @@
 
 \begin{flushright}
 \Large Lo\"ic MAR\'ECHAL / INRIA, Projet Gamma \\
-\normalsize Juin 2020, document v2.08, librairie v3.29
+\normalsize Juillet 2020, document v2.10, librairie v3.30
 \end{flushright}
 
 \end{titlepage}
@@ -117,7 +117,7 @@ Elle est mise à disposition sous la licence MIT (cf. \cite{MIT}) et peut donc �
 Le déploiement a été testé avec succès sous les systèmes \emph{Linux}, \emph{macOS} et \emph{Windows10}.
 Sous macOS, l'environnement OpenCL fait partie intégrante du système et il n'est donc pas nécessaire d'installer quoique ce soit.
 Ce n'est pas le cas des deux autres systèmes qui nécessitent d'installer un pilote adéquat, le plus souvent fourni par le fabricant de la carte graphique sur laquelle vous souhaitez exécuter les codes OpenCL.
-Les trois principaux constructeurs, \emph{AMD}, \emph{Intel} et \emph{Nvidia}, proposent tous gratuitement des kits de développement GPU pour Linux et Windows10 dont les références sont ici : \cite{driver_amd}, \cite{driver_intel}, \cite{driver_nvidia}.
+Les trois principaux constructeurs, \emph{AMD}, \emph{Intel} et \emph{Nvidia}, proposent tous gratuitement des kits de développement GPU pour Linux et Windows10 dont les références se trouvent ici : \cite{driver_amd}, \cite{driver_intel}, \cite{driver_nvidia}.
 
 La {\tt GMlib} est composée du fichier C \emph{gmlib.c} et d'un header associé \emph{gmlib.h} et peut être simplement copié dans le répertoire source de votre projet pour y être recompilé et lié à la volée.
 Dans ce cas, il est de la responsabilité de l'utilisateur de lier son exécutable avec la librairie OpenCL dont le nom et la localisation peuvent varier d'un système à l'autre.
@@ -509,7 +509,7 @@ Ces calculs inutiles sont en fait plus performants sur GPU, car les itérations 
 Une des problématiques les plus fréquentes des codes accédant à des maillages non structurés de manière concurrente, qu'ils soient multithread, parallèles ou vectoriels, est l'accès en écriture via des indirections mémoires.
 C'est le cas d'une boucle sur les triangles durant laquelle on écrit des données associées à leurs sommets.
 On comprend bien que deux triangles traités simultanément peuvent alors écrire sur un même sommet qu'ils auraient en commun.
-Pour contourner le problème, il existe de nombreuses techniques, comme la découpe en sous-blocs de triangles n'ayant aucun sommet en commun (\cite{lplib}), les micro synchronisations afin d'éviter les conflits d'écritures simultanées (cf. \cite{atomic}) et enfin la duplication des données : c'est la méthode scatter-gather, idéale pour les GPU.
+Pour contourner le problème, il existe de nombreuses techniques, comme la découpe en sous-blocs de triangles n'ayant aucun sommet en commun (cf. \cite{lplib}), les micro synchronisations afin d'éviter les conflits d'écritures simultanées (cf. \cite{atomic}) et enfin la duplication des données : c'est la méthode scatter-gather, idéale pour les GPU.
 
 Il est en effet toujours possible de casser une boucle à écriture indirecte en deux boucles à lecture indirectes, mais écriture directe, qui ne présentent donc plus de conflit d'écriture.
 Pour illustrer le propos, prenons l'exemple d'une boucle calculant une valeur pour chaque triangle et additionnant celle-ci à un champ associé à leurs sommets.
@@ -569,18 +569,11 @@ VerSol = NewSol / VerTriDeg;
 \subsection{Programmation en OpenCL}
 Une description exhaustive ou même une simple présentation du langage OpenCL dépasserait le cadre de ce simple document technique. Le document de référence en la matière est la documentation officielle du Khronos Group \cite{khronos}, un regroupement de fabricants de matériels et d'éditeurs de logiciels supportant cette plate-forme ouverte.
 
-Il est aussi intéressant de lire quelques documents parlant d'optimisation des codes en OpenCL (\cite{nvidia} et \cite{apple}) ou d'expérience de portage de codes préexistants sur GPU (\cite{lohner}).
-
-
-\section{Exemples}
-
-\subsection{Calcul d'une valeur moyenne pour chaque triangle d'un maillage}
-
-\subsection{Boucle à accès mémoire indirect présentant des dépendances mémoires}
+Il est aussi intéressant de lire quelques documents parlant d'optimisation des codes en OpenCL (cf. \cite{nvidia} et \cite{apple}) ou d'expérience de portage de codes préexistants sur GPU (cf. \cite{lohner}).
 
 
 %
-%  3 / COMMANDES
+%  2 / COMMANDES
 %
 
 \section{Liste des commandes}
@@ -740,7 +733,7 @@ Cette fonction copie le contenu de la structure de paramètres, définie avec {\
 
 \subsection{GmlEvaluateNumbering}
 
-Cette fonction calcule un indice synthétique d'efficacité de la numérotation des entités d'un maillage en termes de succès des requêtes à la mémoire cache. Plus l'indice est proche de 100\%, plus les accès mémoires se feront dans le cache et éviteront les couteux accès à la mémoire principale. Inversement, un indice proche de 0\% indique le maillage n'a pas été renuméroté par une \emph{SFC} (\cite{peano_hilbert}) et son exécution sera inefficace, car recourant toujours à des accès en mémoire principale, de 2 ordres de grandeur plus lents que la mémoire cache.
+Cette fonction calcule un indice synthétique d'efficacité de la numérotation des entités d'un maillage en termes de succès des requêtes à la mémoire cache. Plus l'indice est proche de 100\%, plus les accès mémoires se feront dans le cache et éviteront les couteux accès à la mémoire principale. Inversement, un indice proche de 0\% indique le maillage n'a pas été renuméroté par une \emph{SFC} (cf. \cite{peano_hilbert}) et son exécution sera inefficace, car recourant toujours à des accès en mémoire principale, de 2 ordres de grandeur plus lents que la mémoire cache.
 
 \subsubsection*{Syntaxe}
 
@@ -1629,7 +1622,7 @@ Cette fonction copie le contenu de la structure de paramètres, définie avec {\
 
 
 %
-%  4 / GLOSSAIRE
+%  3 / GLOSSAIRE
 %
 
 

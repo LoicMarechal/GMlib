@@ -3,7 +3,7 @@
 /*   Description:       Cell-centered heat equation solver                    */
 /*   Author:            Julien VANHAREN                                       */
 /*   Creation date:     apr 15 2020                                           */
-/*   Last modification: jun 08 2020                                           */
+/*   Last modification: jun 12 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -61,8 +61,12 @@ int main(int argc, char *argv[])
    size_t GmlIdx;
    GmlParSct *GmlPar;
    int i, n=1, NbrVer, NbrTri, NbrTet;
+   int MemByt[6] = {480,768,576,984,72,504};
+   int IntOpp[6] = {312,0,24,24,0,0};
+   int FltOpp[6] = {24,1710,432,918,96,198};
    float Zero[4] = {0.f,0.f,0.f,0.f};
-   double TotalTime = 0., WallTime, Time[6], InitRes, Res;
+   double TotalTime = 0., TotalByte = 0., TotalFlop = 0.;
+   double WallTime, PhysTime, Time[6], InitRes, Res;
    /* Indexes */
    int VerIdx, TriIdx, TetIdx, SolTetIdx, GrdTetIdx, SolExtIdx, GrdExtIdx, RhsIdx, dtIdx;
    /* Kernels */
@@ -174,6 +178,8 @@ int main(int argc, char *argv[])
       n++;
    }while( (Res / InitRes > 1e-6) && (n < 100000) );
 
+   printf("+++ Iteration %6d Residual = %.3E\n\n", n, Res / InitRes);
+
    GmlDownloadParameters(GmlIdx);
 
    Time[0] = GmlGetKernelRunTime(GmlIdx, SolExtKrn);
@@ -183,15 +189,21 @@ int main(int argc, char *argv[])
    Time[4] = GmlGetKernelRunTime(GmlIdx, TimKrn);
    Time[5] = GmlGetReduceRunTime(GmlIdx, GmlL2);
 
-   puts("\n\n");
    for (i = 0; i < 6; i++)
    {
       TotalTime += Time[i];
-      printf("Profiling time for kernel %d = %g seconds\n", i, Time[i]);
+      TotalByte += (double)NbrVer * n * MemByt[i];
+      TotalFlop += (double)NbrVer * n * (IntOpp[i]+FltOpp[i]);
+      printf("Profiling time for kernel %d = %6.2f seconds,", i, Time[i]);
+      printf(" %8.2f GB/s,",    ((double)NbrVer * n * MemByt[i]) / (Time[i] * 1E9));
+      printf(" %8.2f Gflops\n", ((double)NbrVer * n * (IntOpp[i]+FltOpp[i])) / (Time[i] * 1E9));
    }
 
-   printf("Total profiling time        = %g seconds\n", TotalTime);
-   printf("Wall clock time             = %g seconds\n", GmlGetWallClock() - WallTime);
+   PhysTime = GmlGetWallClock() - WallTime;
+   printf("Total profiling time        = %6.2f seconds\n", TotalTime);
+   printf("Wall clock time             = %6.2f seconds,", PhysTime);
+   printf(" %8.2f GB/s,",    TotalByte / (PhysTime * 1E9));
+   printf(" %8.2f Gflops\n", TotalFlop / (PhysTime * 1E9));
 
    GmlExportSolution(GmlIdx, "../sample_meshes/cube.solb", SolTetIdx, GrdTetIdx, RhsIdx, 0);
    GmlStop(GmlIdx);

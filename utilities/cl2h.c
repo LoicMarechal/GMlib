@@ -5,9 +5,9 @@
 
 int main(int ArgCnt, char **ArgVec)
 {
-   char c, *InpNam, *OutNam, *PrcNam;
-   int i;
-   FILE *InpHdl, *OutHdl;
+   char  *InpNam, *OutNam, *PrcNam;
+   int   c, i;
+   FILE  *InpHdl, *OutHdl;
 
    if(ArgCnt != 4)
    {

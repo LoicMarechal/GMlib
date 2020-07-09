@@ -16,8 +16,8 @@ Simply follow these steps:
 - `cd GMlib-master`
 - `mkdir build`
 - `cd build`
-- `cmake ../`
-- `sudo make install`
+- `cmake -DCMAKE_INSTALL_PREFIX=$HOME/local ../`
+- `make install`
 
 # Build for *Windows*
 - You first need to install [CMake](https://cmake.org/files/v3.7/cmake-3.7.2-win64-x64.msi). Do not forget to choose "add cmake to the path for all users", from the install panel.
@@ -27,15 +27,19 @@ Simply follow these steps:
 - `cd GMlib-master`
 - `mkdir build`
 - `cd build`
-- `cmake -DCMAKE_INSTALL_PREFIX=%HOMEPATH%\local -DCMAKE_BUILD_TYPE=Release ..\`
+- `cmake -DCMAKE_INSTALL_PREFIX=%HOMEPATH%\local ..`
 - `cmake --build . --target INSTALL`
 
 # Optional build
 Optionally, you may download libMeshb to run the examples:
 - you need to install the [libMeshb](https://github.com/LoicMarechal/libMeshb) from GitHub
 - cd to /usr/local/GMlib/sample_meshes/
-- uncompress them with `lzip -d *.meshb.lz`
+- uncompress them with `lzip -d *.meshb.lz` ([lzip](https://www.nongnu.org/lzip/lzip.html))
 - you may now enter /usr/local/GMlib/examples directory and run the various examples
+
+And the Hilbert renumbering command that is necessary to preprocess meshes before processing them with the GMlib
+- download it from [LPlib](https://github.com/LoicMarechal/LPlib)
+- use the command: "hilbert -in raw.meshb -out renum.meshb -gmlib"
 
 # Usage
 The **GMlib** is written in *ANSI C* with some parts in *OpenCL*.  

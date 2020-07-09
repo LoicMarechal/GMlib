@@ -4,12 +4,12 @@
 ### Internal source code
 
 - Split the compile kernel procedure into separate modules to better handle uplink kernels
-- Write the neighbors link kernel compilation :heavy_check_mark:
+- Write the neighbours link kernel compilation :heavy_check_mark:
 - Handle user defined topological links :heavy_check_mark:
 - Handle the shell uplinks :heavy_check_mark:
 - Write the tet and triangles shell generation :heavy_check_mark:
 - Write the ball of edges or triangles :heavy_check_mark:
-- Write the triangles and tets neighbors generation :heavy_check_mark:
+- Write the triangles and tets neighbours generation :heavy_check_mark:
 - Add the voyeurs information in all the uplink data and kernel sources :heavy_check_mark:
 - Add a reduction internal kernel with min, max and L1 :heavy_check_mark:
 - Add single float, double float and user selectable real float :heavy_check_mark:
@@ -40,7 +40,7 @@
 - Write a .solb to GMlib import module
 - Write a GMlib to .solb export module :heavy_check_mark:
 - Optional include of LPlib
-- Write a renumbering analyzer preprocessor :heavy_check_mark:
+- Write a renumbering analyser preprocessor :heavy_check_mark:
 - Call the LPlib Hilbert renumbering and renumber the whole input data
 - Provide a plugin functions mechanism available on the GPU side :heavy_check_mark:
 - Develop basic geometric functions on tets, hexes, triangles, quads and edges :heavy_check_mark:
@@ -48,11 +48,15 @@
 - Handle hybrid meshes with prisms and pyramids
 - Update the ball generation to handle hybrid meshes
 - Update the shell generation to handle hybrid meshes
-- Update the neighbors generation to handle hybrid meshes
+- Update the neighbours generation to handle hybrid meshes
 - Add a SetBlock() function for faster upload :heavy_check_mark:
 - Add a GetBlock() function for faster download
-- Add a GetLinkInfo() function to get sizes of vairable width topolinks :heavy_check_mark:
+- Add a GetLinkInfo() function to get sizes of variable width topolinks :heavy_check_mark:
 - Include an optional user's toolkit before a user kernel :heavy_check_mark:
+- Create a dedicated preprocessing command from LPlib's Hilbert command
+- Add Metis partitioning to de preprocessing command
+- Handle distributed parallelism on a single host with multiple GPUs
+- Add a cavity extractor (t1, t2) that extracts the list of entities of type t2 that are edge-connected to entities of type t1
 
 ### Exposed CPU API
 
@@ -67,6 +71,11 @@
 
 ### Exposed GPU API
 
+- `CalLen();` :heavy_check_mark:
+- `CalSrf();` :heavy_check_mark:
+- `CalVol();` :heavy_check_mark:
+- `GetEdgTng();` :heavy_check_mark:
+- `GetTriNrm();` :heavy_check_mark:
 - `CalEdgLen();` :heavy_check_mark:
 - `CalTriSrf();` :heavy_check_mark:
 - `CalQadSrf();` :heavy_check_mark:
@@ -90,7 +99,7 @@
 ### Documentation
 
 - Full PDF documentation with quick setup, install, compile, write OpenCL code and procedure lists :heavy_check_mark:
-- Full GitHub page with examples, sample files, source code and links to OpenCL and GPU programing :heavy_check_mark:
+- Full GitHub page with examples, sample files, source code and links to OpenCL and GPU programming :heavy_check_mark:
 
 ## PHASE 3
 
