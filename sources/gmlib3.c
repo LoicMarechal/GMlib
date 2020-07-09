@@ -2670,8 +2670,8 @@ int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
    // Trim the size of the output vector down to the number of OpenCL groups
    // used by the kernel and download this amount of data
    red = &gml->dat[ dat->RedIdx ];
-   red->MemSiz = dat->MemSiz / gml->CurGrpSiz;
-   NmbLin = dat->NmbLin / gml->CurGrpSiz;
+   red->MemSiz = dat->MemSiz / krn->GrpSiz;
+   NmbLin = dat->NmbLin / krn->GrpSiz;
    DownloadData(gml, dat->RedIdx);
    red->MemSiz = dat->MemSiz;
    vec = (float *)red->CpuMem;
