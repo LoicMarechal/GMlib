@@ -16,8 +16,8 @@ Simply follow these steps:
 - `cd GMlib-master`
 - `mkdir build`
 - `cd build`
-- `cmake -DCMAKE_INSTALL_PREFIX=$HOME/local ../`
-- `make install`
+- `cmake ..`
+- `cmake --build . --target install`
 
 # Build for *Windows*
 - You first need to install [CMake](https://cmake.org/files/v3.7/cmake-3.7.2-win64-x64.msi). Do not forget to choose "add cmake to the path for all users", from the install panel.
