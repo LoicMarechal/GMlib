@@ -33,7 +33,7 @@ You need the right OpenCL development environment specific to your GPU:
 - `mkdir build`
 - `cd build`
 - `cmake ..`
-- `cmake --build . --target INSTALL`
+- `cmake --build . --target install`
 
 ### Optional build
 Optionally, you may download libMeshb to run the examples:

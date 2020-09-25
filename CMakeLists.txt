@@ -3,7 +3,7 @@
 # GLOBAL CONFIGURATION VARIABLES
 ################################
 
-cmake_minimum_required (VERSION 3.0.1)
+cmake_minimum_required (VERSION 3.7.2)
 set (GMlib_VERSION_MAJOR 3)
 set (GMlib_VERSION_MINOR 0)
 project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C)
