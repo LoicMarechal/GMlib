@@ -1,6 +1,6 @@
 ![alt text](https://github.com/LoicMarechal/GMlib/blob/develop/Documentation/GMlib_logo.png "Gmlib logo made with Logo Maker ")
 
-# Overview
+## Overview
 The purpose of the **GMlib** is to provide programmers of solvers or automated meshers in the field of scientific computing with an easy, fast and transparent way to port their codes on *GPUs* (Graphic Processing Units).  
 This library is based on the *OpenCL* language standard, thus taking advantage of almost every architectures supported by most platforms (*Linux*, *macOS*, *Windows*).  
 It is a simple loop parallelization scheme (known as kernels in the realm of GPU computing).  
@@ -9,28 +9,33 @@ Automatically vectorizes unstructured data like the ball of points or the edge s
 It requires some knowledge on OpenCL programing, which akin to C and C++.  
 Handles transparently the transfer and vectorization of mesh data structures.
 
+## Build
 
-# Build for *Linux* or *macOS*
-Simply follow these steps:
-- unarchive the ZIP file
-- `cd GMlib-master`
-- `mkdir build`
-- `cd build`
-- `cmake ..`
-- `cmake --build . --target install`
+### Prerequisites for *Linux* or *macOS*
+- Install [CMake](https://cmake.org/files/v3.7/cmake-3.7.2-win64-x64.msi)
+- A valid C99 compiler
+- Open a shell window
 
-# Build for *Windows*
+### Prerequisites for *Windows*
 - You first need to install [CMake](https://cmake.org/files/v3.7/cmake-3.7.2-win64-x64.msi). Do not forget to choose "add cmake to the path for all users", from the install panel.
 - Then you need a valid C compiler like the free [Visual Studio Community 2019](https://www.visualstudio.com/vs/visual-studio-express/)
+- Open the x64 Native Tools Command Prompt for VS (or x86 if you need to build a 32-bit version)
+
+### Prerequisites for all platforms
+You need the right OpenCL development environment specific to your GPU:
+- [AMD](https://www.amd.com/en/support)
+- [Intel](https://software.intel.com/content/www/us/en/develop/articles/opencl-drivers.html)
+- [Nvidia](https://www.nvidia.com/download/index.aspx))
+
+### Build commands for all platforms
 - unarchive the ZIP file
-- from the VS-2019 menu, open the x64 Native Tools Command Prompt
 - `cd GMlib-master`
 - `mkdir build`
 - `cd build`
 - `cmake ..`
 - `cmake --build . --target INSTALL`
 
-# Optional build
+### Optional build
 Optionally, you may download libMeshb to run the examples:
 - you need to install the [libMeshb](https://github.com/LoicMarechal/libMeshb) from GitHub
 - cd to /usr/local/GMlib/sample_meshes/
@@ -41,7 +46,7 @@ And the Hilbert renumbering command that is necessary to preprocess meshes befor
 - download it from [LPlib](https://github.com/LoicMarechal/LPlib)
 - use the command: "hilbert -in raw.meshb -out renum.meshb -gmlib"
 
-# Usage
+## Usage
 The **GMlib** is written in *ANSI C* with some parts in *OpenCL*.  
 It is made of a single C file and a header file to be compiled and linked alongside the calling program.  
 It may be used in C and C++ programs (Fortran 77 and 90 APIs are under way).  
