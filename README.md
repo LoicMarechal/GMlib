@@ -25,7 +25,7 @@ Handles transparently the transfer and vectorization of mesh data structures.
 You need the right OpenCL development environment specific to your GPU:
 - [AMD](https://www.amd.com/en/support)
 - [Intel](https://software.intel.com/content/www/us/en/develop/articles/opencl-drivers.html)
-- [Nvidia](https://www.nvidia.com/download/index.aspx))
+- [Nvidia](https://www.nvidia.com/download/index.aspx)
 
 ### Build commands for all platforms
 - unarchive the ZIP file
