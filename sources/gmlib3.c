@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 08 2020                                           */
+/*   Last modification: sep 25 2020                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 #define GMF_WINDOWS
 #include <windows.h>
 #include <sys/timeb.h>
@@ -3435,7 +3435,7 @@ double GmlGetReduceRunTime(size_t GmlIdx, int RedOpp)
 
 double GmlGetWallClock()
 {
-#ifdef WIN32
+#ifdef _WIN32
    struct __timeb64 tb;
    _ftime64(&tb);
    return((double)tb.time + (double)tb.millitm/1000.);

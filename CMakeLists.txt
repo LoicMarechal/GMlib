@@ -3,19 +3,20 @@
 # GLOBAL CONFIGURATION VARIABLES
 ################################
 
-cmake_minimum_required (VERSION 3.0.1)
+cmake_minimum_required (VERSION 3.7.2)
 set (GMlib_VERSION_MAJOR 3)
-set (GMlib_VERSION_MINOR 0)
+set (GMlib_VERSION_MINOR 30)
 project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C)
 
-if (WIN32)
-   set (CMAKE_C_FLAGS "-DWIN32 -DWITH_LIBMESHB")
-   set (CMAKE_BUILD_TYPE Release)
-else ()
-   set (CMAKE_C_FLAGS "-O3 -DWITH_LIBMESHB")
-   set(LINK_LIBRARIES "m")
-   if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-     set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/local" CACHE PATH "..." FORCE)
+if (NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif ()
+
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+   if (WIN32)
+      set(CMAKE_INSTALL_PREFIX "$ENV{HOMEPATH}/local" CACHE PATH "..." FORCE)
+   else ()
+      set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/local" CACHE PATH "..." FORCE)
    endif()
 endif ()
 
@@ -54,6 +55,7 @@ include_directories (${PROJECT_SOURCE_DIR}/sources)
 find_package(libMeshb 7.5)
 
 if(libMeshb_FOUND)
+   set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWITH_LIBMESHB")
    include_directories (${libMeshb_INCLUDE_DIRS})
    include_directories (${PROJECT_SOURCE_DIR}/examples)
    add_subdirectory (utilities)
