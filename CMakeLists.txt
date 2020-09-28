@@ -5,7 +5,7 @@
 
 cmake_minimum_required (VERSION 3.7.2)
 set (GMlib_VERSION_MAJOR 3)
-set (GMlib_VERSION_MINOR 0)
+set (GMlib_VERSION_MINOR 30)
 project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C)
 
 if (NOT CMAKE_BUILD_TYPE)
