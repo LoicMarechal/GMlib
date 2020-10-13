@@ -27,7 +27,6 @@
 #include <string.h>
 
 #ifdef _WIN32
-#define GMF_WINDOWS
 #include <windows.h>
 #include <sys/timeb.h>
 #include <sys/stat.h>
