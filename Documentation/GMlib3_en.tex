@@ -75,6 +75,7 @@ On top of that, the GMlib allows the definition of arbitrary storage datatypes m
 
 Henceforth, a program based on the GMlib unfolds in four steps: initialization of the data structures, setting up of data, compilation of the kernels and execution of the kernels on the GPU.
 
+\clearpage
 \paragraph{The initialization and allocation:} the library is first instantiated with a single OpenCL compute device, where the mesh and numerical simulation data structures will be allocated.
 
 \paragraph{Setup the data :} the user has to loop over each entity of each kind to transfer them from its own structures to the library's internal buffers so that they will automatically be stored and transferred to the GPU in the most efficient way.
@@ -228,13 +229,13 @@ This very succinct code brings in a lot of thoughts:
 \item the coordinates, and directions are 3D vectors.
 \end{itemize}
 
-\paragraph{Implicit loop:} there is a loop counter that gets incremented from 1 to NmbVer, but the loop iterator is handled by the OpenCL driver and is hidden from the user who has no way to control the loop ordering or stepping. The user can only provide the inner part of the loop, the kernel, and this code snippet is iterated as many times as specified by the main datatype size, in this case, the number of vertices.
+\paragraph{Implicit loops:} there is a loop counter that gets incremented from 1 to NmbVer, but the loop iterator is handled by the OpenCL driver and is hidden from the user who has no way to control the loop ordering or stepping. The user can only provide the inner part of the loop, the kernel, and this code snippet is iterated as many times as specified by the main datatype size, in this case, the number of vertices.
 
 \paragraph{Implicit variables:} local variables are automatically defined by the library depending on the parameters given during the kernel compilation. As we asked for access to the vertex coordinates (one 4-float vector per vertex), to the speed (one float per vertex) and direction vector (one 4-float vector per vertex), the GMlib added the right definition before the user's kernel source. As a loop iteration only processes a single vertex at a time, the automatic local variables are big enough to store the data associated with one vertex, hence a scalar and two 4-float vectors. The names of those local variables are automatically set: mesh entities' names are preset (VerCrd, for the coordinates or TriNod for the indices of a triangle's nodes), solution fields' names are constructed depending on the loop context, the main loop entity (here a vertex) is used as a base name, and the user given solution name is concatenated to it, resulting in VerSpeed and VerDirection. 
 
 \paragraph{Access to global tables:} a mesh is made of multiple vertices, yet the library defined a variable to store only one set of coordinates. A global table ({\tt VerCrdTab[ NmbVer ]}, was passed as a global argument to the kernel but was not exposed to the user code and the library generated the proper OpenCL code to read the current vertex's coordinates and store it into a local variable {\tt VerCrd}, the only one accessible by the user. Indeed, when the single kernel code execution begins, the library has already set up and filled the data associated with the current vertex {\tt i}: {\tt VerCrd = VerCrdTab[i]}, {\tt VerSpeed = VerSpeedTab[i]}, {\tt VerDirection = VerDirectionTab[i]}, there is no need to worry about accessing global memory, everything is handled by the GMlib so the user can focus on calculation.
 
-\paragraph{Store the result in memory:} as with memory readings, all variables tagged as {\tt GmlWriteMode} at compile time, will be stored in the global tables after the user's kernel calculation. This memory writing is also hidden and transparent. In our example, only the vertex coordinates are accessed in writing mode and the library will add the following line at the end: {\tt VerCrdTab[i] = VerCrd}, so that the updated vertex position is saved in the global GPU memory. Any other calculation results whose datatype was not properly tagged as writable will be lost at the end of the loop iteration !
+\paragraph{Storage of the results:} as with memory readings, all variables tagged as {\tt GmlWriteMode} at compile time, will be stored in the global tables after the user's kernel calculation. This memory writing is also hidden and transparent. In our example, only the vertex coordinates are accessed in writing mode and the library will add the following line at the end: {\tt VerCrdTab[i] = VerCrd}, so that the updated vertex position is saved in the global GPU memory. Any other calculation results whose datatype was not properly tagged as writable will be lost at the end of the loop iteration !
 
 \paragraph{Vector calculation:} the OpenCL language features vector extensions of every scalar type, with size 2,4,8 and 16 available, and uses the \emph{operator overloading} technique from the C++ to adapt the calculation to the variable's type. Their prototype if straightforward as it adds the vector size after the name string: {\tt float4} defines a four entries floating point vector or {\tt int16} for a sixteen-entry integer vector. In our kernel, the {\tt VerCrd} and {\tt VerDirection} are 3D vectors (stored on a float4 for padding consideration) and the operation {\tt VerCrd = VerCrd + VerDirection} triggers a vector operation adding all four components in one go. So what happens when the speed, which a scalar, is multiplied by the direction, which is a vector ? Here again, the OpenCL compiler detects the case and chooses the right scalar vector multiply instruction.
 
@@ -300,16 +301,16 @@ That is easily said and done:
 \begin{tt}
 \begin{verbatim}
 int pyramids[ NmbVer ][ 180 ];
-PyrIdx = GmlNewLinkData(LibIdx, GmlVertices, GmlPyramids, 180, "ValleyOfTheKings");
+PyrIdx = GmlNewLinkData(LibIdx, GmlVertices, GmlPyramids, 180, "PyrTab");
 for(i=0;i<NmbVer;i++)
-   GmlSetDataLine(LibIdx, PyrIdx, pyramids[i]);
+   GmlSetDataLine(LibIdx, PyrIdx, PyrTab[i]);
 \end{verbatim}
 \end{tt}
 \normalfont
 
 Remark: the reverse link would have a pyramid pointing to vertices, which is nothing more than the table of pyramids' nodes itself. By the way, the elements tables could be considered as topological links between elements and vertices.
 
-\subsection{The direct memory access kernel}
+\subsection{Direct memory access kernels}
 \label{sec:kernels_directs}
 It is the most basic kind of kernel, it loops over the elements of a single kind of mesh entity and reads or writes only datatypes associated with this kind. If a kernel loops over the vertices and reads a solution field associated to each vertex, this solution table is accessed directly using the loop counter. While processing the vertex number $i$, any table is accessed through $table[i]$, hence the name direct memory access kernel. This the most efficient access pattern as it allows the GPU to prefetch memory before it is needed by the calculation, thus reaching up almost 100\% of the theoretical bandwidth.
 
@@ -328,7 +329,7 @@ In such situation, the automatic naming convention for the local variables acces
 
 Remark: a direct access pattern allows for read, write, or read \& write memory access without restriction.
 
-\subsection{Indirect memory access kernel}
+\subsection{Indirect memory access kernels}
 \label{sec:kernels_indirects}
 a kernel is called indirect when it accesses table entries through an index that is different from the main loop index. In such case, an indirect memory access looks like {\tt a = u[v[i]]}, while a direct access is {\tt a = u[i]}. This kind if indirect access is slower for two reasons.
 
@@ -364,9 +365,9 @@ As you can see, accessing the triangle's nodes indices to get their coordinates 
 
 \paragraph{Topological link categories, downward, transverse and upward:} a link is called downward (i.e. a downlink) if the source entity is of higher dimensions as the pointed one, for instance, when triangles point to edges. It is called transverse when the two kinds belong to the same dimension, even though they may not be exactly the same kind, for example triangles pointing to neighboring quadrilaterals. Likewise, it is called an uplink when the source entity is of lower dimensions than the destination one, like the vertex's ball that links a vertex with an arbitrary number of tetrahedra. Let's review each link's properties.
 
-\paragraph{Downlink:} this is the most trivial one, it happens when a kernel loops over an element kind and accesses data associated with its nodes. In this case, the downward topological link is simply the mesh elements table that lists each element's nodes. The library does not need to build any intermediary information, it simply transfers the elements table to the GPU. Such link is rather efficient in terms of memory access as the number of nodes for each element is a constant value stored in a power of 2 vector.
+\paragraph{Downlinks:} this is the most trivial one, it happens when a kernel loops over an element kind and accesses data associated with its nodes. In this case, the downward topological link is simply the mesh elements table that lists each element's nodes. The library does not need to build any intermediary information, it simply transfers the elements table to the GPU. Such link is rather efficient in terms of memory access as the number of nodes for each element is a constant value stored in a power of 2 vector.
 
-\paragraph{Transverse link:} the second category is a little bit more subtle as the default link used by the library is the identity. Accessing triangles while performing a loop on triangles means no indirection at all, in this case the kernel is a basic direct access one as seen in the section \ref{sec:kernels_directs}. But the user may override this default direct access by providing his own tailor-made topological table that could link triangles between themselves in a different way for example, providing the list of the three possible neighbors for each triangle. In this case, the kernel is transverse, as the main loop entity and the accessed entity are the same, but it is not a direct link as the library needs to go through the neighbor’s table to access their related data. Here is an example to illustrate this case: as the previous example calculated the triangle barycenter, now we ant to search for each triangle which of its three neighbors' center is closest from it own.
+\paragraph{Transverse links:} the second category is a little bit more subtle as the default link used by the library is the identity. Accessing triangles while performing a loop on triangles means no indirection at all, in this case the kernel is a basic direct access one as seen in the section \ref{sec:kernels_directs}. But the user may override this default direct access by providing his own tailor-made topological table that could link triangles between themselves in a different way for example, providing the list of the three possible neighbors for each triangle. In this case, the kernel is transverse, as the main loop entity and the accessed entity are the same, but it is not a direct link as the library needs to go through the neighbor’s table to access their related data. Here is an example to illustrate this case: as the previous example calculated the triangle barycenter, now we ant to search for each triangle which of its three neighbors' center is closest from it own.
 
 \begin{tt}
 \begin{verbatim}
@@ -395,7 +396,7 @@ min_dist = min(min_dist, d3);
 
 Here, the centers table is named {\tt TriCenter[4]} as the loop entity is the triangle (short name {\tt Tri}) and the accessed data were named {\tt Center} by the user. The first entry {\tt TriCenter[0]} is the barycenter of the triangle being processed and the three others are its neighbors barycenters. Note that a neighbor index might by $0$ if the corresponding edge is on the mesh boundary, in this case, the center is initialized with zeros ${0,0,0}$. To take this case into account, it is useful to check the element's degree variable that is set by the library when dealing with indirect accesses ({\tt int TriDeg}) which indicates the number of non-null neighbors for each triangle. In every indirect kernel, such variable whose name is made of the loop entity short name concatenated to {\tt Deg}, is always set to indicate the degree of the entities. Dor example, the number of triangles in the ball of a vertex (ranging from 0 to 32) or the number of tetrahedra on each side of a triangle (ranging from 0 to 2).
 
-\paragraph{Upward link:} or uplink, this is the most complex one as its size is varying with each loop entity. And dynamic sizing is something inefficient on GPUs that favor constant sizes padded on power of 2. Indeed, as the number of nodes pointed by a triangle is always three and can be stored in an int4 vector, the reverse link, the number triangles sharing a common vertex is not a constant in an unstructured mesh as it is varying from 1 to infinity (the value of infinity has been limited to 32 in the case of the vertex ball of triangles).
+\paragraph{Upward links:} or uplink, this is the most complex one as its size is varying with each loop entity. And dynamic sizing is something inefficient on GPUs that favor constant sizes padded on power of 2. Indeed, as the number of nodes pointed by a triangle is always three and can be stored in an int4 vector, the reverse link, the number triangles sharing a common vertex is not a constant in an unstructured mesh as it is varying from 1 to infinity (the value of infinity has been limited to 32 in the case of the vertex ball of triangles).
 
 In order to process these cases efficiently, a complex system is used beneath the scene by the GMlib. First of all, renumbering the mesh through the provided Hilbert command line is necessary. Its purpose is to sort out vertices according to their degree, the lower degree vertices being stored first and the higher degree ones being moved to the table's end. In the case of vertices pointing to triangles, the lower degree threshold is set to 8 and the maximum higher degree to 32. Consequently, the GMlib splits the topological table linking vertices to triangles into two separate tables: the first one stores the triangle indices in an int8 vector (some elements indices can be $0$ if a vertex degree is lower than 8), and a (hopefully) shorter table with int32 vectors. When a kernel looping over vertices and accessing the triangles-related data is executed, the library runs the kernel in two steps, the first time with the low degree table and a second time with the high degree table. The whole process is transparent and the only thing noticeable to the user is the automatic variable ({\tt VerTriDeg} in this case) storing the degree that varies with each iteration.
 
@@ -1180,7 +1181,16 @@ To make sure that the structure definition is the same from the CPU and the GPU 
 \subsection{GmlNewSolutionData}
 It creates a new freely defined datatype associated with a mesh kind. Although the name refers to a \emph{solution field}, you may store any kind of information related to a mesh datatype. Choose an OpenCL type (integer or float, in scalar on vector form) and optionally build a local table with it by giving a size greater than one. Notice that the size is related to the local table associated with one mesh entity, not the size of the global table which is tied to the size of the referenced mesh kind.
 
-As for this version, it is not possible to store a C-like structure made of different C types. If you need such kind of structure, you may associate as many solution fields with the same mesh datatype. For example, if one wants to store two integers and four floats related to each triangle, this can be achieved by allocating two solutions in this way: {\tt GmlNewSolutionData(LibIdx, GmlTriangles, 1, GmlInt2, "MyInt2")} and {\tt GmlNewSolutionData(LibIdx, GmlTriangles, 1, GmlFloat4, "MyFloat4")}. You may also define them as a table made of two scalar integers and another one made of four floats, which is exactly the same in terms of memory storage: {\tt GmlNewSolutionData(LibIdx, GmlTriangles, 2, GmlInt, "MyIntTable")} and {\tt GmlNewSolutionData(LibIdx, GmlTriangles, 4, GmlFloat, "MyFloatTable")}.
+As for this version, it is not possible to store a C-like structure made of different C types. If you need such kind of structure, you may associate as many solution fields with the same mesh datatype. For example, if one wants to store two integers and four floats related to each triangle, this can be achieved by allocating two solutions in this way:
+\begin{itemize}
+\item {\tt GmlNewSolutionData(LibIdx, GmlTriangles, 1, GmlInt2, "MyInt2")}
+\item {\tt GmlNewSolutionData(LibIdx, GmlTriangles, 1, GmlFloat4, "MyFloat4")}
+\end{itemize}
+You may also define them as a table made of two scalar integers and another one made of four floats, which is exactly the same in terms of memory storage:
+\begin{itemize}
+\item {\tt GmlNewSolutionData(LibIdx, GmlTriangles, 2, GmlInt, "MyIntTable")}
+\item {\tt GmlNewSolutionData(LibIdx, GmlTriangles, 4, GmlFloat, "MyFloatTable")}
+\end{itemize}
 
 \subsubsection*{Syntax}
 {\tt DatIdx = GmlNewSolutionData(LibIdx, MshTyp, NmbDat, ItmTyp, DatNam);}
@@ -1255,7 +1265,13 @@ The reduction kernels are stored in the separate file {\tt reduce.cl} and you ma
 This procedure is similar to {\tt GmlSetDataLine()} but transfer all the datatype's lines in one go instead of one by one. It enables greater performance as well as the possibility to write generic transfer procedures, as the whole data are passed through a pointer on a table that stores each entry. Regardless of the datatype's number of values and types, every call to {\tt GmlSetDataBlock()} must specify the starting and ending line numbers (you may want to transfer only a subset of the table) followed by two pointers, one to the first and one the last lines of your own data structures to be transferred. Optionally, for mesh datatypes, a last pair of pointers to the fist and last references.
 
 \subsubsection*{Syntax}
-{\tt flag = GmlSetDataBlock(LibIdx, TypIdx, BegIdx, EndIdx, DatBeg, DatEnd, RefBeg, RefEnd);}
+\begin{tt}
+\begin{verbatim}
+flag = GmlSetDataBlock(LibIdx, TypIdx, BegIdx, EndIdx, 
+                       DatBeg, DatEnd, RefBeg, RefEnd);
+\end{verbatim}
+\end{tt}
+\normalfont
 
 \subsubsection*{Parameters}
 \begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
