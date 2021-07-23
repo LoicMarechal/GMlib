@@ -1,5 +1,5 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![OpenCL](https://img.shields.io/static/v1?label=OpenCL&message=1.1&color=red&style=flat&logo=khronosgroup)](https://www.khronos.org/opencl/)
+[![OpenCL](https://img.shields.io/static/v1?label=OpenCL&message=1.1&color=red&style=flat)](https://www.khronos.org/opencl/)
 
 ![alt text](https://github.com/LoicMarechal/GMlib/blob/develop/Documentation/GMlib_logo.png "Gmlib logo made with Logo Maker ")
 
