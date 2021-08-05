@@ -46,7 +46,7 @@ typedef struct {
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int         i, res, NmbVer, VerIdx, NmbTri, TriIdx, GpuIdx = 0, ParIdx;
+   int         i, res, NmbVer, VerIdx, NmbTri, TriIdx, GpuIdx = 0;
    int         TriQalKrn, VerQalKrn, TriQalIdx, VerQalIdx;
    float       qal;
    size_t      GmlIdx;

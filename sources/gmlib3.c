@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: aug 04 2021                                           */
+/*   Last modification: aug 05 2021                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -1399,7 +1399,7 @@ int GmlSetDataLine(size_t GmlIdx, int idx, int lin, ...)
       siz = 4;
 
       for(i=0;i<3;i++)
-         CrdTab[ lin * siz + i ] = va_arg(VarArg, double);
+         CrdTab[ lin * siz + i ] = (float)va_arg(VarArg, double);
 
       CrdTab[ lin * siz + 3 ] = 0.;
       RefTab[ lin ] = va_arg(VarArg, int);
@@ -1599,7 +1599,7 @@ static int UploadData(GmlSct *gml, int idx)
    else
    {
       gml->MovSiz += dat->MemSiz;
-      return(dat->MemSiz);
+      return((int)dat->MemSiz);
    }
 }
 
@@ -1630,7 +1630,7 @@ static int DownloadData(GmlSct *gml, int idx)
    else
    {
       gml->MovSiz += dat->MemSiz;
-      return(dat->MemSiz);
+      return((int)dat->MemSiz);
    }
 }
 
