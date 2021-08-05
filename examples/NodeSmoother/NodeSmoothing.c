@@ -9,7 +9,7 @@
 /*   Description:       tet mesh quality improvement with nodes smoothing     */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 27 2020                                           */
-/*   Last modification: jun 08 2020                                           */
+/*   Last modification: aug 05 2021                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -63,7 +63,7 @@ int CheckLaunch(int KrnIdx, int res)
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int         i, j, res, NmbVer, NmbTet;
+   int         res, NmbVer, NmbTet;
    int         QalIdx, QalKrn, VerIdx, TetIdx, OptIdx, ResIdx;
    int         GpuIdx = 0, TetKrn, VerKrn;
    size_t      GmlIdx;
