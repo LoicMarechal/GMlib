@@ -9,7 +9,7 @@
 /*   Description:       Basic loop on tetrahedra                              */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     nov 21 2019                                           */
-/*   Last modification: jun 05 2020                                           */
+/*   Last modification: aug 05 2021                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -48,9 +48,9 @@ typedef struct {
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int         i, j, res, NmbVer=0, NmbTri=0, NmbTet=0, CalMid, OptVer, FlxIdx;
-   int         VerIdx=0, TriIdx=0, TetIdx=0, BalIdx, MidIdx, SolIdx;
-   int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, F64Idx, F64Krn, FlxKrn;
+   int         i, res, NmbVer=0, NmbTri=0, NmbTet=0, CalMid, OptVer;
+   int         VerIdx=0, TriIdx=0, TetIdx=0, MidIdx, SolIdx;
+   int         GpuIdx = 0, ResIdx, NgbIdx, NgbKrn, F64Idx, F64Krn, FlxIdx;
    int         n, w, N, W;
    size_t      GmlIdx;
    float       MidTab[4], SolTab[8], TetChk = 0., VerChk = 0.;
@@ -176,7 +176,7 @@ int main(int ArgCnt, char **ArgVec)
 
    for(i=1;i<=100;i++)
    {
-      GmlPar->res = i;
+      GmlPar->res = (float)i;
       GmlUploadParameters(GmlIdx);
 
       if(F64Krn)

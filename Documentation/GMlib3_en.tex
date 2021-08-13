@@ -122,7 +122,7 @@ That is why a CMakefile ({\tt CMakeLists.txt}) is provided as it wraps up the GM
 All you need to do is the following string of command lines: {\tt cmake .}, {\tt make} and {\tt make install}.
 Afterward, you only need to call {\tt find\_package(GMlib)} from your project's CMakefile, to the include the directories with {\tt include\_directories (\$\{GMlib\_INCLUDE\_DIRS\})}, and add the libraries with {\tt target\_link\_libraries(my\_executable \$\{GMlib\_LIBRARIES\})} commands.
 
-There is also an optional external dependency on the {\tt libMeshb} that is needed to compile the examples provided.
+There is also an optional external dependency on the libMeshb that is needed to compile the examples provided.
 It also enables a very useful import/export procedure in the GMlib that will greatly facilitate all mesh I/O based on the INRIA format {\tt *.meshb}.
 If you compile both libraries using the included CMakefile, all you need to do is to compile and install the libMeshb first and the GMlib afterward, so that the additional I/O commands will be enabled.
 If you prefer to compile both libraries within your own project and Makefile, you just need to pass this additional argument when compiling the GMlib: {\tt -DWITH\_LIBMESHB}.
@@ -948,6 +948,7 @@ A basic clock function that returns the present physical date of the day in seco
 \subsubsection*{Syntax}
 {\tt date = GmlGetWallClock();}
 
+\subsubsection*{Parameters}
 \begin{tabular}{|m{2cm}|m{1.5cm}|m{10.5cm}|}
 \hline
 Return     & type    & description \\
@@ -958,7 +959,7 @@ date       & double & absolute date of the day since the system 0 day expressed 
 
 
 \subsection{GmlImportMesh}
-This \emph{helper} procedure combines every action needed to read, allocate and transfer to the GPU a whole mesh file with a single call. It is available in the GMlib only if it has been compiled with the {\tt -DWITH\_LIBMESHB} set and if the {\tt libMeshb} is present at compile time. The underlying idea is to give a mesh file name and list the requested mesh or solution keywords to import. As the procedure only returns the number of requested keywords found in the file, you need call {\tt GmlGetMeshInfo()} for each one of them to get the specific information like the number of lines.
+This \emph{helper} procedure combines every action needed to read, allocate and transfer to the GPU a whole mesh file with a single call. It is available in the GMlib only if it has been compiled with the {\tt -DWITH\_LIBMESHB} set and if the libMeshb is present at compile time. The underlying idea is to give a mesh file name and list the requested mesh or solution keywords to import. As the procedure only returns the number of requested keywords found in the file, you need call {\tt GmlGetMeshInfo()} for each one of them to get the specific information like the number of lines.
 
 \subsubsection*{Syntax}
 {\tt NmbKwd = GmlImportMesh(LibIdx, FilNam, ...);}
@@ -972,7 +973,7 @@ LibIdx     & size\_t & instance index as returned by GmlInit() \\
 \hline
 FilNam     & char *  & complete access path and filename ended with the extension (.meshb, .solb) \\
 \hline
-...        & int     & list of meshing or solution keywords as defined by the {\tt libMeshb} and terminated by a 0 \\
+...        & int     & list of meshing or solution keywords as defined by the libMeshb and terminated by a 0 \\
 \hline
 \end{tabular}
 
@@ -987,7 +988,7 @@ NmbKwd     & int    & number of keywords found, read and allocated \\
 \end{tabular}
 
 \subsubsection*{Comments}
-Be careful to use the {\tt libMeshb} tags (GmfVertices) and not those of the GMlib (GmlVertices )!
+Be careful to use the libMeshb tags (GmfVertices) and not those of the GMlib (GmlVertices )!
 
 
 \subsection{GmlIncludeUserToolkit}

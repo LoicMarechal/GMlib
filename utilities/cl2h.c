@@ -1,4 +1,8 @@
 
+#ifdef _WIN32
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,7 +10,7 @@
 int main(int ArgCnt, char **ArgVec)
 {
    char  *InpNam, *OutNam, *PrcNam;
-   int   c, i;
+   int   c;
    FILE  *InpHdl, *OutHdl;
 
    if(ArgCnt != 4)

@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: sep 25 2020                                           */
+/*   Last modification: aug 05 2021                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -18,6 +18,10 @@
 /* Includes                                                                   */
 /*----------------------------------------------------------------------------*/
 
+#ifdef _WIN32
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include <assert.h>
 #include <limits.h>
 #include <math.h>
@@ -25,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <float.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -69,7 +74,7 @@ typedef struct
 typedef struct
 {
    int            HshTyp, DatLen, KeyLen, *HshTab;
-   int64_t        NmbMis, NmbHit, TabSiz, NmbDat, NxtDat;
+   int            NmbMis, NmbHit, TabSiz, NmbDat, NxtDat;
    BucSct         *DatTab;
 }HshTabSct;
 
@@ -155,7 +160,6 @@ static void    WriteKernelMemoryReads  (char *, int, int, ArgSct *);
 static void    WriteKernelMemoryWrites (char *, int, int, ArgSct *);
 static void    WriteUserKernel         (char *, char *);
 static void    GetCntVec               (int , int *, int *, int *);
-static int     BldLnk                  (GmlSct *, int, int);
 static void    GetItmNod               (int *, int, int, int, int *);
 static int     CalHshKey               (HshTabSct *, int *);
 static void    AddHsh                  (HshTabSct *, int, int, int, int, int *);
@@ -245,8 +249,6 @@ static const int  MshItmTyp[ GmlMaxEleTyp ]  = {
    GmlFlt4, GmlInt2, GmlInt4, GmlInt4, GmlInt4, GmlInt8, GmlInt8, GmlInt8};
 
 static const int  EleNmbNod[ GmlMaxEleTyp ]  = {0, 2, 3, 4, 4, 5, 6, 8};
-static const int  EleItmLen[ GmlMaxEleTyp ]  = {4, 2, 4, 4, 4, 8, 8, 8};
-static const int  EleNmbItm[ GmlMaxEleTyp ]  = {1, 1, 1, 1, 1, 1, 1, 1};
 static const int  MshTypDim[ GmlMaxEleTyp ]  = {0,1,2,2,3,3,3,3};
 
 static const char *BalTypStr[ GmlMaxEleTyp ]  = {
@@ -293,7 +295,6 @@ static const int NmbTpoLnk[ GmlMaxEleTyp ][ GmlMaxEleTyp ] = {
 static const int NgbTyp[8]    = {-1,0,1,1,2,3,3,3};
 static const int HshLenTab[5] = {0,1,2,3,2};
 static const int ItmNmbVer[8] = {1,2,3,4,4,5,6,8};
-static const int ItmNmbEdg[8] = {0,1,3,4,6,8,9,12};
 
 static const int ItmEdgNod[8][12][2] = {
 { {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
@@ -377,7 +378,7 @@ size_t GmlInit(int DevIdx)
    }
 
    // Check the user choosen device index against the bounds
-   if( (DevIdx < 0) || (DevIdx >= gml->NmbDev) )
+   if( (DevIdx < 0) || (DevIdx >= (int)gml->NmbDev) )
    {
       printf("Selected device Id is out of bounds (1 -> %d)\n", gml->NmbDev - 1);
       return(0);
@@ -470,7 +471,7 @@ void GmlListGPU()
       return;
    }
 
-   for(i=0;i<num_devices;i++)
+   for(i=0;i<(int)num_devices;i++)
       if(clGetDeviceInfo(  device_id[i], CL_DEVICE_NAME, GmlMaxStrSiz,
                            GpuNam, &GpuNamSiz) == CL_SUCCESS )
       {
@@ -704,15 +705,14 @@ int GmlNewLinkData(size_t GmlIdx, int MshTyp, int LnkTyp, int NmbDat, char *nam)
 static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
                         char *BalNam, char *DegNam, char *VoyNam )
 {
-   int         i, j, k, idx, cod[4], cpt, tmp, dir, HshKey, ItmTab[4];
-   int         BalIdx, HghIdx, DegIdx, VerIdx, SrcIdx, DstIdx;
-   int         EleSiz, VecSiz, BalSiz, MaxSiz, HghSiz = 0;
+   int         i, j, idx, cod[4], cpt, dir, HshKey, ItmTab[4];
+   int         BalIdx, HghIdx, DegIdx;
+   int         VecSiz, BalSiz, MaxSiz, HghSiz = 0;
    int         *EleTab, *BalTab, *DegTab, *HghTab, *PtrInt;
    int         MaxDeg = 0, MaxPos = 0, DegTot = 0, VecCnt, ItmTyp, NmbDat;
    int         SrcNmbItm, SrcLen, DstNmbItm, DstLen, *SrcNod, *DstNod, *EleNod;
    const char  *SrcNam, *DstNam;
    DatSct      *src, *dst, *bal, *hgh, *deg, *BalDat, *HghDat, *DegDat;
-   BucSct      *buc;
    HshTabSct   lnk;
 
    // Get and check the source and destination mesh datatypes
@@ -891,7 +891,7 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
             MaxDeg = MAX(MaxDeg, DegTab[i]);
          }
 
-         MaxDeg = pow(2., ceil(log2(MaxDeg)));
+         MaxDeg = (int)pow(2., ceil(log2(MaxDeg)));
 
          // If the max degree is greater than de base size,
          // create an extension ball table for high degree entities
@@ -1399,7 +1399,7 @@ int GmlSetDataLine(size_t GmlIdx, int idx, int lin, ...)
       siz = 4;
 
       for(i=0;i<3;i++)
-         CrdTab[ lin * siz + i ] = va_arg(VarArg, double);
+         CrdTab[ lin * siz + i ] = (float)va_arg(VarArg, double);
 
       CrdTab[ lin * siz + 3 ] = 0.;
       RefTab[ lin ] = va_arg(VarArg, int);
@@ -1442,7 +1442,7 @@ int GmlGetDataLine(size_t GmlIdx, int idx, int lin, ...)
    CHKDATIDX(gml, idx);
    DatSct   *dat = &gml->dat[ idx ], *RefDat;
    char     *adr = (void *)dat->CpuMem;
-   int      i, *EleTab, siz, *RefTab, *tab, RefIdx = 0, *UsrDat;
+   int      i, *EleTab, siz, *RefTab, RefIdx = 0, *UsrDat;
    float    *GpuCrd;
    double   *UsrCrd;
    va_list  VarArg;
@@ -1503,8 +1503,7 @@ int GmlSetDataBlock( size_t GmlIdx, int   TypIdx,
    CHKELETYP(TypIdx);
    int      DatIdx = gml->TypIdx[ TypIdx ], RefIdx = gml->RefIdx[ TypIdx ];
    DatSct   *dat = &gml->dat[ DatIdx ], *RefDat;
-   char     *adr = (void *)dat->CpuMem;
-   int      i, j, *EleTab, siz, *RefTab, *tab, *UsrRef, *UsrEle;
+   int      i, j, *EleTab, siz, *RefTab, *UsrRef, *UsrEle;
    float    *CrdTab, *UsrCrd;
    size_t   DatLen, RefLen;
 
@@ -1600,7 +1599,7 @@ static int UploadData(GmlSct *gml, int idx)
    else
    {
       gml->MovSiz += dat->MemSiz;
-      return(dat->MemSiz);
+      return((int)dat->MemSiz);
    }
 }
 
@@ -1631,7 +1630,7 @@ static int DownloadData(GmlSct *gml, int idx)
    else
    {
       gml->MovSiz += dat->MemSiz;
-      return(dat->MemSiz);
+      return((int)dat->MemSiz);
    }
 }
 
@@ -2193,7 +2192,7 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
    char     str   [ GmlMaxStrSiz ], ArgTd1[ GmlMaxStrSiz ], ArgTd2[ GmlMaxStrSiz ];
    char     LnkTd1[ GmlMaxStrSiz ], LnkTd2[ GmlMaxStrSiz ], LnkNam[ GmlMaxStrSiz ];
    char     CptNam[ GmlMaxStrSiz ], DegTst[ GmlMaxStrSiz ], DegNul[ GmlMaxStrSiz ];
-   char     BalSft[ GmlMaxStrSiz ], BalMsk[ GmlMaxStrSiz ];
+   char     BalSft[ GmlMaxStrSiz ];
    ArgSct   *arg, *LnkArg, *CptArg;
 
    strcat (src, "   int       cnt = get_global_id(0);\n");
@@ -2384,7 +2383,7 @@ static void GetCntVec(int siz, int *cnt, int *vec, int *typ)
 {
    int p;
 
-   p = ceil(log2(siz));
+   p = (int)ceil(log2(siz));
    p = MIN(p, VECPOWMAX);
 
    if(p > VECPOWOCL)
@@ -2670,7 +2669,7 @@ int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
    // used by the kernel and download this amount of data
    red = &gml->dat[ dat->RedIdx ];
    red->MemSiz = dat->MemSiz / krn->GrpSiz;
-   NmbLin = dat->NmbLin / krn->GrpSiz;
+   NmbLin = (int)(dat->NmbLin / krn->GrpSiz);
    DownloadData(gml, dat->RedIdx);
    red->MemSiz = dat->MemSiz;
    vec = (float *)red->CpuMem;
@@ -2680,7 +2679,7 @@ int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
    {
       case GmlMin :
       {
-         res = 1e37;
+         res = FLT_MAX;
          for(i=0;i<NmbLin;i++)
             res = MIN(res, vec[i]);
       }break;
@@ -2694,7 +2693,7 @@ int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
 
       case GmlMax : case GmlLinf :
       {
-         res = -1e37;
+         res = -FLT_MAX;
          for(i=0;i<NmbLin;i++)
             res = MAX(res, vec[i]);
       }break;
@@ -2762,11 +2761,10 @@ int GmlCheckFP64(size_t GmlIdx)
 
 int GmlExtractEdges(size_t GmlIdx)
 {
-   int         i, j, typ, idx, cod, HshKey, ItmTab[3], (*EdgTab)[3] = NULL;
-   int         EdgIdx, EleSiz, NmbItm, EleLen, NmbEdg = 0, *EleNod, *nod;
+   int         i, j, typ, cod, HshKey, ItmTab[3], (*EdgTab)[3] = NULL;
+   int         EdgIdx, NmbItm, EleLen, NmbEdg = 0, *EleNod, *nod;
    int         OldNmbEdg, IdxLst[2], EdgNod[2];
    DatSct      *dat;
-   BucSct      *buc;
    HshTabSct   EdgHsh;
 
    GETGMLPTR(gml, GmlIdx);
@@ -2924,12 +2922,11 @@ int GmlExtractEdges(size_t GmlIdx)
 
 int GmlExtractFaces(size_t GmlIdx)
 {
-   int         i, j, i0, i1, i2, i3, typ, idx, cpt = 0, TriIdx, QadIdx, HshKey;
+   int         i, j, typ, idx, TriIdx, QadIdx, HshKey;
    int         NmbFac, NmbTri = 0, NmbQad = 0, OldNmbTri, OldNmbQad;
-   int         EleSiz, NmbEle, EleLen, *EleNod, *MshNod, FacNod[4], IdxLst[4];
-   int         ref, (*QadTab)[5], (*TriTab)[4], TypTab[4];
+   int         EleLen, *EleNod, *MshNod, FacNod[4], IdxLst[4];
+   int         (*QadTab)[5], (*TriTab)[4], TypTab[4];
    DatSct      *dat;
-   BucSct      *buc;
    HshTabSct   TriHsh, QadHsh;
 
    GETGMLPTR(gml, GmlIdx);
@@ -3227,7 +3224,6 @@ int GmlSetNeighbours(size_t GmlIdx, int typ)
    int         NgbIdx;
    int         NmbItm, EleLen, *EleNod, *nod;
    DatSct      *dat;
-   BucSct      *buc;
    HshTabSct   lnk;
 
    if(typ == GmlPyramids || typ == GmlPrisms)
@@ -3482,7 +3478,7 @@ float GmlEvaluateNumbering(size_t GmlIdx)
          }
    }
 
-   return(100. * (float)NmbHit / (NmbHit + NmbMis));
+   return(100 * (float)NmbHit / (NmbHit + NmbMis));
 }
 
 
@@ -3523,9 +3519,8 @@ static int Gmf2Gml(int kwd)
 
 int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
 {
-   GETGMLPTR   (gml, GmlIdx);
    int         i, j, k, NmbLin, typ, ver, dim, kwd, DatIdx, NmbKwd = 0, EleSiz;
-   int         KwdTab[10][4]={0}, MshIdx = 0, *RefTab, *EleTab;
+   int         KwdTab[10][4]={0}, *RefTab, *EleTab;
    float       (*CrdTab)[3];
    int64_t     InpMsh;
    va_list     VarArg;
@@ -3565,7 +3560,7 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
    for(k=0;k<NmbKwd;k++)
    {
       // Check of the required kwd exists in the mesh file
-      if(!(NmbLin = GmfStatKwd(InpMsh, KwdTab[k][0])))
+      if(!(NmbLin = (int)GmfStatKwd(InpMsh, KwdTab[k][0])))
          continue;
 
       typ = KwdTab[k][1];
@@ -3636,10 +3631,9 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
 int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
 {
    GETGMLPTR   (gml, GmlIdx);
-   char        RefStr[ STRSIZ ], TmpStr[ STRSIZ ];
    int         i, j, k, NmbLin, GmlTyp, GmfKwd, DatIdx, NmbDat = 0, NmbKwd = 0;
    int         DatTab[10][4], KwdDatTab[10][15] = {0}, NewKwdFlg, SolKwd;
-   int         NmbTyp, TypTab[100], MshKwd, NmbArg, NmbFld, ArgTab[2][10];
+   int         NmbTyp, TypTab[100], MshKwd, NmbArg, ArgTab[2][10];
    float       *AdrTab[10][2], *DatPtr, *PtrTab[2][10];
    DatSct      *dat;
    int64_t     OutSol;

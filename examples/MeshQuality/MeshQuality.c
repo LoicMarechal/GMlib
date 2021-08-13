@@ -9,7 +9,7 @@
 /*   Description:       Compute a tet mesh mean and min qualities             */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 24 2020                                           */
-/*   Last modification: jun 08 2020                                           */
+/*   Last modification: aug 05 2021                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -45,7 +45,7 @@ typedef struct {
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int         i, j, NmbVer, NmbTet, res;
+   int         NmbVer, NmbTet, res;
    int         QalIdx, QalKrn, VerIdx, TetIdx;
    int         GpuIdx = 0;
    size_t      GmlIdx;
