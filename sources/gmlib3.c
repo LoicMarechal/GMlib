@@ -3393,7 +3393,7 @@ double GmlGetKernelRunTime(size_t GmlIdx, int KrnIdx)
 
    for(i=0;i<krn->NmbEvt;i++)
    {
-      if( (clGetEventProfilingInfo( krn->EvtTab[i], CL_PROFILING_COMMAND_START,
+      if( (clGetEventProfilingInfo( krn->EvtTab[i], CL_PROFILING_COMMAND_QUEUED,
                                     sizeof(start), &start, NULL) == CL_SUCCESS)
       &&  (clGetEventProfilingInfo( krn->EvtTab[i], CL_PROFILING_COMMAND_END,
                                     sizeof(end),   &end,   NULL) == CL_SUCCESS) )

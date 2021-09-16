@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
    size_t GmlIdx;
    GmlParSct *GmlPar;
    int i, n=1, NbrVer, NbrTri, NbrTet;
-   int MemByt[6] = {480,768,576,984,72,504};
+   int MemByt[6] = {480,768,576,984,72,24};
    int IntOpp[6] = {312,0,24,24,0,0};
    int FltOpp[6] = {24,1710,432,918,96,198};
    float Zero[4] = {0.f,0.f,0.f,0.f};
