@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.30                           */
+/*                         GPU Meshing Library 3.31                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: aug 05 2021                                           */
+/*   Last modification: sep 24 2021                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -3631,9 +3631,10 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
 int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
 {
    GETGMLPTR   (gml, GmlIdx);
+   char        RefStr[100], DimChr[4] = {'x', 'y', 'z', 't'};
    int         i, j, k, NmbLin, GmlTyp, GmfKwd, DatIdx, NmbDat = 0, NmbKwd = 0;
-   int         DatTab[10][4], KwdDatTab[10][15] = {0}, NewKwdFlg, SolKwd;
-   int         NmbTyp, TypTab[100], MshKwd, NmbArg, ArgTab[2][10];
+   int         DatTab[10][4], KwdDatTab[10][15] = {0}, NewKwdFlg, SolKwd, cpt;
+   int         NmbTyp, TypTab[100], MshKwd, NmbArg, ArgTab[2][10], NmbFld;
    float       *AdrTab[10][2], *DatPtr, *PtrTab[2][10];
    DatSct      *dat;
    int64_t     OutSol;
@@ -3729,9 +3730,21 @@ int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
                   ArgTab[0], ArgTab[1], PtrTab[0], PtrTab[1]);
    }
 
-   // Set the ref comment strings with user's data names
-   /*GmfSetKwd(OutSol, GmfReferenceStrings, NmbKwd);
+   // Count the total number of solution fields because the vector fields
+   // need to be expanded into as many scalars
+   cpt = 0;
 
+   for(i=0;i<NmbKwd;i++)
+      for(j=0; j<KwdDatTab[i][1]; j++)
+         for(k=0; k<gml->dat[ DatTab[ KwdDatTab[i][ j+4 ] ][0] ].ItmLen; k++)
+            cpt++;
+
+   // Set the ref comment strings with user's data names
+   GmfSetKwd(OutSol, GmfReferenceStrings, cpt);
+
+   cpt = 0;
+
+   // Write a line with a single scalar field
    for(i=0;i<NmbKwd;i++)
    {
       RefStr[0] = '\0';
@@ -3743,12 +3756,20 @@ int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
       {
          DatIdx = DatTab[ KwdDatTab[i][ j+4 ] ][0];
          dat = &gml->dat[ DatIdx ];
-         sprintf(TmpStr, "%d %s ", j, dat->nam);
-         strcat(RefStr, TmpStr);
-      }
 
-      GmfSetLin(OutSol, GmfReferenceStrings, SolKwd, NmbFld, RefStr);
-   }*/
+         for(k=0;k<dat->ItmLen;k++)
+         {
+            cpt ++;
+
+            if(dat->ItmLen > 1)
+               sprintf(RefStr, "%s.%c %d", dat->nam, DimChr[k], cpt);
+            else
+               sprintf(RefStr, "%s %d", dat->nam, cpt);
+
+            GmfSetLin(OutSol, GmfReferenceStrings, SolKwd, 1, RefStr);
+         }
+      }
+   }
 
    // And close the mesh
    GmfCloseMesh(OutSol);

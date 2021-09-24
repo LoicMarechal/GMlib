@@ -121,30 +121,30 @@ int main(int argc, char *argv[])
 
    /* Kernels compilation. */
    IniTetKrn = GmlCompileKernel(GmlIdx, ini_tet, "ini_tet", GmlTetrahedra, 2,
-                                VerIdx, GmlReadMode, NULL,
+                                VerIdx,    GmlReadMode,  NULL,
                                 SolTetIdx, GmlWriteMode, NULL);
    SolExtKrn = GmlCompileKernel(GmlIdx, sol_ext, "sol_ext", GmlTriangles, 3,
-                                TriIdx, GmlReadMode | GmlRefFlag, NULL,
-                                SolTetIdx, GmlReadMode, NULL,
+                                TriIdx,    GmlReadMode | GmlRefFlag, NULL,
+                                SolTetIdx, GmlReadMode,  NULL,
                                 SolExtIdx, GmlWriteMode, NULL);
    GrdTetKrn = GmlCompileKernel(GmlIdx, grd_tet, "grd_tet", GmlTetrahedra, 3,
-                                VerIdx, GmlReadMode, NULL,
-                                SolExtIdx, GmlReadMode, NULL,
+                                VerIdx,    GmlReadMode,  NULL,
+                                SolExtIdx, GmlReadMode,  NULL,
                                 GrdTetIdx, GmlWriteMode, NULL);
    GrdExtKrn = GmlCompileKernel(GmlIdx, grd_ext, "grd_ext", GmlTriangles, 3,
-                                TriIdx, GmlReadMode | GmlRefFlag, NULL,
-                                GrdTetIdx, GmlReadMode, NULL,
+                                TriIdx,    GmlReadMode | GmlRefFlag, NULL,
+                                GrdTetIdx, GmlReadMode,  NULL,
                                 GrdExtIdx, GmlWriteMode, NULL);
    FlxBalKrn = GmlCompileKernel(GmlIdx, flx_bal, "flx_bal", GmlTetrahedra, 3,
-                                VerIdx, GmlReadMode, NULL,
-                                GrdExtIdx, GmlReadMode, NULL,
-                                RhsIdx, GmlWriteMode, NULL);
+                                VerIdx,    GmlReadMode,  NULL,
+                                GrdExtIdx, GmlReadMode,  NULL,
+                                RhsIdx,    GmlWriteMode, NULL);
    TimKrn    = GmlCompileKernel(GmlIdx, tim_int, "tim_int", GmlTetrahedra, 2,
-                                RhsIdx, GmlReadMode, NULL,
+                                RhsIdx,    GmlReadMode,  NULL,
                                 SolTetIdx, GmlReadMode | GmlWriteMode, NULL);
-   dtKrn     = GmlCompileKernel(GmlIdx, dt, "dt", GmlTetrahedra, 2,
-                                VerIdx, GmlReadMode, NULL,
-                                dtIdx, GmlWriteMode, NULL);
+   dtKrn     = GmlCompileKernel(GmlIdx, dt, "dt",           GmlTetrahedra, 2,
+                                VerIdx,    GmlReadMode,  NULL,
+                                dtIdx,     GmlWriteMode, NULL);
 
    if(!IniTetKrn || !SolExtKrn || !GrdTetKrn || !GrdExtKrn || !FlxBalKrn || !TimKrn || !dtKrn)
    {
