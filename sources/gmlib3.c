@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.31                           */
+/*                         GPU Meshing Library 3.32                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: sep 24 2021                                           */
+/*   Last modification: feb 07 2022                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -295,6 +295,7 @@ static const int NmbTpoLnk[ GmlMaxEleTyp ][ GmlMaxEleTyp ] = {
 static const int NgbTyp[8]    = {-1,0,1,1,2,3,3,3};
 static const int HshLenTab[5] = {0,1,2,3,2};
 static const int ItmNmbVer[8] = {1,2,3,4,4,5,6,8};
+static const int ItmNmbEdg[8] = {0,1,3,4,6,8,9,12};
 
 static const int ItmEdgNod[8][12][2] = {
 { {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
@@ -722,6 +723,9 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
 
    src = &gml->dat[ gml->TypIdx[ SrcTyp ] ];
    dst = &gml->dat[ gml->TypIdx[ DstTyp ] ];
+   printf("build link between typ: %d dat:%d, cpt:%d ->typ: %d dat:%d, cpt:%d\n",
+         SrcTyp, gml->TypIdx[ SrcTyp ], src->NmbLin,
+         DstTyp, gml->TypIdx[ DstTyp ], dst->NmbLin);
 
    SrcNod = (int *)src->CpuMem;
    DstNod = (int *)dst->CpuMem;
@@ -2784,6 +2788,7 @@ int GmlExtractEdges(size_t GmlIdx)
    EdgHsh.NxtDat = 1;
    EdgHsh.HshTab = calloc(EdgHsh.TabSiz, sizeof(int));
    EdgHsh.DatTab = malloc(EdgHsh.TabSiz * sizeof(BucSct));
+   printf("evaluated edges = %d\n",NmbEdg);
    NmbEdg = 0;
 
    if(!EdgHsh.HshTab || !EdgHsh.DatTab)
@@ -2801,7 +2806,7 @@ int GmlExtractEdges(size_t GmlIdx)
       dat = &gml->dat[ gml->TypIdx[ typ ] ];
       EleNod = (int *)dat->CpuMem;
       EleLen = dat->ItmLen;
-      NmbItm = ItmNmbVer[ typ ];
+      NmbItm = ItmNmbEdg[ typ ];
 
       // Add edges to the hash table
       for(i=0;i<dat->NmbLin;i++)
@@ -2821,6 +2826,7 @@ int GmlExtractEdges(size_t GmlIdx)
          }
       }
    }
+   printf("inserted edges = %d\n",NmbEdg);
 
    if(gml->DbgFlg)
       printf(  "Hashed %d entities: occupency=%d%%, collisions=%g\n",
@@ -2878,7 +2884,7 @@ int GmlExtractEdges(size_t GmlIdx)
       dat = &gml->dat[ gml->TypIdx[ typ ] ];
       EleNod = (int *)dat->CpuMem;
       EleLen = dat->ItmLen;
-      NmbItm = ItmNmbVer[ typ ];
+      NmbItm = ItmNmbEdg[ typ ];
 
       // Get edges from the hash table
       for(i=0;i<dat->NmbLin;i++)
