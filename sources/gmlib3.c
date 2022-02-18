@@ -723,9 +723,13 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
 
    src = &gml->dat[ gml->TypIdx[ SrcTyp ] ];
    dst = &gml->dat[ gml->TypIdx[ DstTyp ] ];
-   printf("build link between typ: %d dat:%d, cpt:%d ->typ: %d dat:%d, cpt:%d\n",
-         SrcTyp, gml->TypIdx[ SrcTyp ], src->NmbLin,
-         DstTyp, gml->TypIdx[ DstTyp ], dst->NmbLin);
+
+   if(gml->DbgFlg)
+   {
+      printf("building link between typ: %d dat:%d, cpt:%d ->typ: %d dat:%d, cpt:%d\n",
+               SrcTyp, gml->TypIdx[ SrcTyp ], src->NmbLin,
+               DstTyp, gml->TypIdx[ DstTyp ], dst->NmbLin);
+   }
 
    SrcNod = (int *)src->CpuMem;
    DstNod = (int *)dst->CpuMem;
@@ -2588,12 +2592,16 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
       assert(krn->EvtTab);
    }
 
+   //clFinish(gml->queue);
+
    // Launch GPU code
    if(clEnqueueNDRangeKernel( gml->queue, krn->kernel, 1, NULL, &krn->NmbGrp,
                               &krn->GrpSiz, 0, NULL, &krn->EvtTab[ krn->NmbEvt++ ]) )
    {
       return(-6);
    }
+
+   //clFinish(gml->queue);
 
    return(1);
 }
@@ -2788,7 +2796,7 @@ int GmlExtractEdges(size_t GmlIdx)
    EdgHsh.NxtDat = 1;
    EdgHsh.HshTab = calloc(EdgHsh.TabSiz, sizeof(int));
    EdgHsh.DatTab = malloc(EdgHsh.TabSiz * sizeof(BucSct));
-   printf("evaluated edges = %d\n",NmbEdg);
+
    NmbEdg = 0;
 
    if(!EdgHsh.HshTab || !EdgHsh.DatTab)
@@ -2826,7 +2834,6 @@ int GmlExtractEdges(size_t GmlIdx)
          }
       }
    }
-   printf("inserted edges = %d\n",NmbEdg);
 
    if(gml->DbgFlg)
       printf(  "Hashed %d entities: occupency=%d%%, collisions=%g\n",

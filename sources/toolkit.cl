@@ -16,6 +16,7 @@ float  CalTetQal(float4, float4, float4, float4);
 float  CalPyrQal(float4, float4, float4, float4, float4);
 float  CalPriQal(float4, float4, float4, float4, float4, float4);
 float  CalHexQal(float4, float4, float4, float4, float4, float4, float4, float4);
+float  CalP2TetQal(float4 *, float4 *);
 
 
 float CalLen(float4 a, float4 b)
