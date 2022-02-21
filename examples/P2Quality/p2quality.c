@@ -9,7 +9,7 @@
 /*   Description:       Propagate the surface curvaure to inner P2 edges      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     feb 02 2022                                           */
-/*   Last modification: feb 18 2022                                           */
+/*   Last modification: feb 21 2022                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -24,7 +24,6 @@
 #include <assert.h>
 #include <libmeshb7.h>
 #include <gmlib3.h>
-
 #include "parameters.h"
 #include "quality.h"
 
@@ -63,13 +62,12 @@ int CheckLaunch(int KrnIdx, int res)
 int main(int ArgCnt, char **ArgVec)
 {
    int         res, ref, NmbVer, NmbEdg = 0, NmbTet, ver, dim, NmbItr, *EdgNum;
-   int         QalIdx, QalKrn, VerIdx, MidIdx, EdgIdx, TetIdx, NmbP1Ver = 0;
-   int         i, j, i0, i1, i2, idx, GpuIdx = 0, DbgFlg = 0, (*TetTab)[10];
+   int         QalIdx, QalKrn, VerIdx, MidIdx, EdgIdx, TetIdx, idx, GpuIdx = 0;
+   int         i, j, DbgFlg = 0, (*EdgTab)[3], (*TetTab)[10];
    int         TetEdg[6][2] = { {0,1}, {1,2}, {2,0}, {0,3}, {1,3}, {2,3} };
-   int         (*EdgTab)[3];
    size_t      GmlIdx;
    int64_t     InpMsh;
-   float       MidCrd[4] = {0}, (*CrdTab)[3];
+   float       (*CrdTab)[3];
    double      QalTim, RedTim, WalTim, AvgQal, MinQal;
    char        *InpNam;
    GmlParSct   *GmlPar;
@@ -82,8 +80,8 @@ int main(int ArgCnt, char **ArgVec)
    // If not enough arguments are given, print the help
    if(ArgCnt < 4)
    {
-      puts("\nP2Quality GPU_index");
-      puts(" Usage      : P2Smoother p2_mesh_name GPU_index NB_loops\n");
+      puts("\np2quality");
+      puts(" Usage      : p2quality   p2_mesh_name   GPU_index   NB_loops\n");
       puts(" Choose GPU_index from the following list:");
       GmlListGPU();
       exit(0);

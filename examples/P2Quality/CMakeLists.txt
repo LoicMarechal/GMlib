@@ -1,4 +1,4 @@
-set (example P2Quality)
+set (example p2quality)
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 compile_cl(quality)
 compile_cl(parameters)

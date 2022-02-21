@@ -3,6 +3,7 @@
    float len, MaxLen, srf, volP1, volP2, MinJac, MaxJac, N, s[64];
    float4 n, u[4], v[4], w[4];
 
+   // Search for the longest P2 edge length
    len = CalLen(VerCrd[0], MidCrd[0]) + CalLen( MidCrd[0], VerCrd[1]);
    MaxLen = len;
    len = CalLen(VerCrd[1], MidCrd[1]) + CalLen( MidCrd[1], VerCrd[2]);
@@ -16,6 +17,7 @@
    len = CalLen(VerCrd[3], MidCrd[5]) + CalLen( MidCrd[5], VerCrd[2]);
    MaxLen = max(MaxLen, len);
 
+   // Compute the tet's P2 faces area
    srf = CalSrf(VerCrd[0], MidCrd[0], MidCrd[3])
        + CalSrf(MidCrd[0], MidCrd[4], MidCrd[3])
        + CalSrf(MidCrd[0], VerCrd[1], MidCrd[4])
@@ -33,6 +35,7 @@
        + CalSrf(VerCrd[2], MidCrd[2], MidCrd[5])
        + CalSrf(VerCrd[3], MidCrd[5], MidCrd[3]);
 
+   // Compute the P1 and P2 volumes
    volP1 = CalVol(VerCrd[0], VerCrd[1], VerCrd[2], VerCrd[3]);
 
    volP2 = CalVol(VerCrd[0], MidCrd[0], MidCrd[2], MidCrd[3])
@@ -68,7 +71,7 @@
    w[2] = MidCrd[4] - MidCrd[0];
    w[3] = MidCrd[3] - VerCrd[0];
 
-   // Compute the 64 volumes
+   // Compute the 64 sub volumes
    n = cross(u[0], v[0]);
    s[ 0] = dot(n, w[0]);
    s[ 1] = dot(n, w[1]);
@@ -165,7 +168,7 @@
    s[62] = dot(n, w[2]);
    s[63] = dot(n, w[3]);
 
-   // Compute the 20 coefficient and get their min and max values
+   // Compute the 20 coefficients and get their min and max values
    N = 8.f * s[ 0];
    MinJac = MaxJac = N;
 
@@ -245,7 +248,7 @@
    MinJac = min(MinJac, N);
    MaxJac = max(MaxJac, N);
 
-   // Return the scaled jacobian
+   // Compute the quality criterion
    qal = (MinJac / MaxJac)
          * ((2.f * sqrt(6.f) * volP2) / (MaxLen * srf))
          * (min(volP1, volP2) / max(volP1, volP2));
