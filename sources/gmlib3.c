@@ -2592,7 +2592,7 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
       assert(krn->EvtTab);
    }
 
-   //clFinish(gml->queue);
+   clFinish(gml->queue);
 
    // Launch GPU code
    if(clEnqueueNDRangeKernel( gml->queue, krn->kernel, 1, NULL, &krn->NmbGrp,

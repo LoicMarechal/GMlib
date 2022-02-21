@@ -6,7 +6,7 @@
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*   Description:       Propagate the surface curvaure to inner P2 edges      */
+/*   Description:       Compute a P2 tet mesh minimum and average quality     */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     feb 02 2022                                           */
 /*   Last modification: feb 21 2022                                           */
@@ -80,10 +80,10 @@ int main(int ArgCnt, char **ArgVec)
    // If not enough arguments are given, print the help
    if(ArgCnt < 4)
    {
-      puts("\np2quality");
-      puts(" Usage      : p2quality   p2_mesh_name   GPU_index   NB_loops\n");
+      puts("\n Usage: p2quality   p2_mesh_name   GPU_index   NB_loops\n");
       puts(" Choose GPU_index from the following list:");
       GmlListGPU();
+      puts("");
       exit(0);
    }
    else
@@ -248,7 +248,7 @@ int main(int ArgCnt, char **ArgVec)
       return(1);
 
    WalTim = GmlGetWallClock();
-   printf("Running %d passes of P2 qualities\n", NmbItr);
+   printf("Running %d steps of P2 qualities\n", NmbItr);
 
    // Launch the tetrahedra quality kernel on the GPU
    for(i=1;i<=NmbItr;i++)
@@ -275,10 +275,11 @@ int main(int ArgCnt, char **ArgVec)
    QalTim = GmlGetKernelRunTime(GmlIdx, QalKrn);
    RedTim = GmlGetReduceRunTime(GmlIdx, GmlSum);
 
-   printf(  "%lld P2 tets qualities computed in %gs, wall clock: %gs\n",
-            (int64_t)NmbItr * (int64_t)NmbTet, RedTim + QalTim, WalTim );
+   printf(  "%lld P2 tets qualities computed in: %gs (wall clock)\n",
+            (int64_t)NmbItr * (int64_t)NmbTet, WalTim );
 
-   printf(  "Reduce kernels: %gs\n", RedTim);
+   printf(  "Quality kernel: %gs (OpenCL timer)\n", QalTim);
+   printf(  "Reduce kernels: %gs (OpenCL timer)\n", RedTim);
 
    printf("%zd MB used, %zd MB transfered\n\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,
