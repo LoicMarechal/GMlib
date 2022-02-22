@@ -146,12 +146,12 @@
 - `volume  = CalTetP3Vol(float4 tet[20]);`
 - `quality = CalTriP2Qal(float4 tri[ 6]);`
 - `quality = CalTriP3Qal(float4 tri[10]);`
-- `quality = CalTetP2Qal(float4 tet[10]);`
+- `quality = CalTetP2Qal(float4 tet[10]);` :heavy_check_mark:
 - `quality = CalTetP3Qal(float4 tet[20]);`
 
 ### Examples
 
-- P2 quality mesh calculator
+- P2 quality mesh calculator :heavy_check_mark:
 - P3 quality mesh calculator
 - Compute the Hausdorff distance between two meshes
 
