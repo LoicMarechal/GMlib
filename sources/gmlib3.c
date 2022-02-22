@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.30                           */
+/*                         GPU Meshing Library 3.32                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: aug 05 2021                                           */
+/*   Last modification: feb 07 2022                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -295,6 +295,7 @@ static const int NmbTpoLnk[ GmlMaxEleTyp ][ GmlMaxEleTyp ] = {
 static const int NgbTyp[8]    = {-1,0,1,1,2,3,3,3};
 static const int HshLenTab[5] = {0,1,2,3,2};
 static const int ItmNmbVer[8] = {1,2,3,4,4,5,6,8};
+static const int ItmNmbEdg[8] = {0,1,3,4,6,8,9,12};
 
 static const int ItmEdgNod[8][12][2] = {
 { {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
@@ -722,6 +723,13 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
 
    src = &gml->dat[ gml->TypIdx[ SrcTyp ] ];
    dst = &gml->dat[ gml->TypIdx[ DstTyp ] ];
+
+   if(gml->DbgFlg)
+   {
+      printf("building link between typ: %d dat:%d, cpt:%d ->typ: %d dat:%d, cpt:%d\n",
+               SrcTyp, gml->TypIdx[ SrcTyp ], src->NmbLin,
+               DstTyp, gml->TypIdx[ DstTyp ], dst->NmbLin);
+   }
 
    SrcNod = (int *)src->CpuMem;
    DstNod = (int *)dst->CpuMem;
@@ -2584,12 +2592,16 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
       assert(krn->EvtTab);
    }
 
+   clFinish(gml->queue);
+
    // Launch GPU code
    if(clEnqueueNDRangeKernel( gml->queue, krn->kernel, 1, NULL, &krn->NmbGrp,
                               &krn->GrpSiz, 0, NULL, &krn->EvtTab[ krn->NmbEvt++ ]) )
    {
       return(-6);
    }
+
+   //clFinish(gml->queue);
 
    return(1);
 }
@@ -2784,6 +2796,7 @@ int GmlExtractEdges(size_t GmlIdx)
    EdgHsh.NxtDat = 1;
    EdgHsh.HshTab = calloc(EdgHsh.TabSiz, sizeof(int));
    EdgHsh.DatTab = malloc(EdgHsh.TabSiz * sizeof(BucSct));
+
    NmbEdg = 0;
 
    if(!EdgHsh.HshTab || !EdgHsh.DatTab)
@@ -2801,7 +2814,7 @@ int GmlExtractEdges(size_t GmlIdx)
       dat = &gml->dat[ gml->TypIdx[ typ ] ];
       EleNod = (int *)dat->CpuMem;
       EleLen = dat->ItmLen;
-      NmbItm = ItmNmbVer[ typ ];
+      NmbItm = ItmNmbEdg[ typ ];
 
       // Add edges to the hash table
       for(i=0;i<dat->NmbLin;i++)
@@ -2878,7 +2891,7 @@ int GmlExtractEdges(size_t GmlIdx)
       dat = &gml->dat[ gml->TypIdx[ typ ] ];
       EleNod = (int *)dat->CpuMem;
       EleLen = dat->ItmLen;
-      NmbItm = ItmNmbVer[ typ ];
+      NmbItm = ItmNmbEdg[ typ ];
 
       // Get edges from the hash table
       for(i=0;i<dat->NmbLin;i++)
@@ -3393,7 +3406,7 @@ double GmlGetKernelRunTime(size_t GmlIdx, int KrnIdx)
 
    for(i=0;i<krn->NmbEvt;i++)
    {
-      if( (clGetEventProfilingInfo( krn->EvtTab[i], CL_PROFILING_COMMAND_START,
+      if( (clGetEventProfilingInfo( krn->EvtTab[i], CL_PROFILING_COMMAND_QUEUED,
                                     sizeof(start), &start, NULL) == CL_SUCCESS)
       &&  (clGetEventProfilingInfo( krn->EvtTab[i], CL_PROFILING_COMMAND_END,
                                     sizeof(end),   &end,   NULL) == CL_SUCCESS) )
@@ -3631,9 +3644,10 @@ int GmlImportMesh(size_t GmlIdx, char *MshNam, ...)
 int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
 {
    GETGMLPTR   (gml, GmlIdx);
+   char        RefStr[100], DimChr[4] = {'x', 'y', 'z', 't'};
    int         i, j, k, NmbLin, GmlTyp, GmfKwd, DatIdx, NmbDat = 0, NmbKwd = 0;
-   int         DatTab[10][4], KwdDatTab[10][15] = {0}, NewKwdFlg, SolKwd;
-   int         NmbTyp, TypTab[100], MshKwd, NmbArg, ArgTab[2][10];
+   int         DatTab[10][4], KwdDatTab[10][15] = {0}, NewKwdFlg, SolKwd, cpt;
+   int         NmbTyp, TypTab[100], MshKwd, NmbArg, ArgTab[2][10], NmbFld;
    float       *AdrTab[10][2], *DatPtr, *PtrTab[2][10];
    DatSct      *dat;
    int64_t     OutSol;
@@ -3729,9 +3743,21 @@ int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
                   ArgTab[0], ArgTab[1], PtrTab[0], PtrTab[1]);
    }
 
-   // Set the ref comment strings with user's data names
-   /*GmfSetKwd(OutSol, GmfReferenceStrings, NmbKwd);
+   // Count the total number of solution fields because the vector fields
+   // need to be expanded into as many scalars
+   cpt = 0;
 
+   for(i=0;i<NmbKwd;i++)
+      for(j=0; j<KwdDatTab[i][1]; j++)
+         for(k=0; k<gml->dat[ DatTab[ KwdDatTab[i][ j+4 ] ][0] ].ItmLen; k++)
+            cpt++;
+
+   // Set the ref comment strings with user's data names
+   GmfSetKwd(OutSol, GmfReferenceStrings, cpt);
+
+   cpt = 0;
+
+   // Write a line with a single scalar field
    for(i=0;i<NmbKwd;i++)
    {
       RefStr[0] = '\0';
@@ -3743,12 +3769,20 @@ int GmlExportSolution(size_t GmlIdx, char *SolNam, ...)
       {
          DatIdx = DatTab[ KwdDatTab[i][ j+4 ] ][0];
          dat = &gml->dat[ DatIdx ];
-         sprintf(TmpStr, "%d %s ", j, dat->nam);
-         strcat(RefStr, TmpStr);
-      }
 
-      GmfSetLin(OutSol, GmfReferenceStrings, SolKwd, NmbFld, RefStr);
-   }*/
+         for(k=0;k<dat->ItmLen;k++)
+         {
+            cpt ++;
+
+            if(dat->ItmLen > 1)
+               sprintf(RefStr, "%s.%c %d", dat->nam, DimChr[k], cpt);
+            else
+               sprintf(RefStr, "%s %d", dat->nam, cpt);
+
+            GmfSetLin(OutSol, GmfReferenceStrings, SolKwd, 1, RefStr);
+         }
+      }
+   }
 
    // And close the mesh
    GmfCloseMesh(OutSol);
