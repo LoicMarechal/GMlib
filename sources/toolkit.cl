@@ -1,8 +1,10 @@
+float  DisPow   (float4, float4);
 float  CalLen   (float4, float4);
 float  CalSrf   (float4, float4, float4);
 float  CalVol   (float4, float4, float4, float4);
 float4 GetEdgTng(float4, float4);
 float4 GetTriNrm(float4, float4, float4);
+float4 GetQadNrm(float4, float4, float4, float4);
 float  CalEdgLen(float4, float4);
 float  CalTriSrf(float4, float4, float4);
 float  CalQadSrf(float4, float4, float4, float4);
@@ -16,8 +18,58 @@ float  CalTetQal(float4, float4, float4, float4);
 float  CalPyrQal(float4, float4, float4, float4, float4);
 float  CalPriQal(float4, float4, float4, float4, float4, float4);
 float  CalHexQal(float4, float4, float4, float4, float4, float4, float4, float4);
-float  CalP2TetQal(float4 *, float4 *);
+float4 PrjVerLin(float4, float4, float4);
+float4 PrjVerPla(float4, float4, float4);
+float  DisVerLin(float4, float4, float4);
+float  DisVerPla(float4, float4, float4);
+float4 LinIntLin(float4, float4, float4, float4);
+float4 LinIntPla(float4, float4, float4, float4);
+void   PlaIntPla(float4, float4, float4, float4, float4 *, float4 *);
+float  DisVerEdg(float4, float4, float4, float4);
+double4 MulMatVec(double16, double4);
 
+
+float4 PrjVerLin(float4 VerCrd, float4 LinCrd, float4 LinTng)
+{
+   return(LinCrd + dot(LinTng, VerCrd - LinCrd) * LinTng);
+}
+
+float4 PrjVerPla(float4 VerCrd, float4 PlaCrd, float4 PlaNrm)
+{
+   return(VerCrd + dot(PlaNrm, PlaCrd - VerCrd) * PlaNrm);
+}
+
+float DisVerLin(float4 VerCrd, float4 LinCrd, float4 LinTng)
+{
+   return(distance(VerCrd, PrjVerLin(VerCrd, LinCrd, LinTng)));
+}
+
+float DisVerPla(float4 VerCrd, float4 PlaCrd, float4 PlaNrm)
+{
+   return(dot(VerCrd - PlaCrd, PlaNrm));
+}
+
+float4 LinIntLin(float4 LinCrd1, float4 LinTng1, float4 LinCrd2, float4 LinTng2)
+{
+   float4 ImgCrd = PrjVerLin(LinCrd2, LinCrd1, LinTng1);
+   return(ImgCrd - (distance(ImgCrd, LinCrd2) / dot(LinCrd2 - ImgCrd, LinTng2)) * LinTng1);
+}
+
+float4 LinIntPla(float4 LinCrd, float4 LinTng, float4 PlaCrd, float4 PlaNrm)
+{
+   return(LinCrd - (dot(PlaNrm, LinCrd - PlaCrd) / dot(PlaNrm, LinTng)) * LinTng);
+}
+
+void PlaIntPla(float4 PlaCrd1, float4 PlaNrm1, float4 PlaCrd2, float4 PlaNrm2, float4 *LinCrd1, float4 *LinTng1)
+{
+   *LinTng1 = normalize(cross(PlaNrm1, PlaNrm2));
+   *LinCrd1 = LinIntPla(PlaCrd2, normalize(cross(*LinTng1, PlaNrm2)), PlaCrd1, PlaNrm1);
+}
+
+float DisPow(float4 a, float4 b)
+{
+   return(dot(a-b, a-b));
+}
 
 float CalLen(float4 a, float4 b)
 {
@@ -34,6 +86,17 @@ float CalVol(float4 a, float4 b, float4 c, float4 d)
    return(dot(cross(b-a, c-a), d-a));
 }
 
+float DisVerEdg(float4 VerCrd, float4 EdgCrd1, float4 EdgCrd2, float4 EdgTng)
+{
+   float dis;
+   float4 ImgCrd;
+
+   dis = min(DisPow(VerCrd, EdgCrd1), DisPow(VerCrd, EdgCrd2));
+   ImgCrd = PrjVerLin(VerCrd, EdgCrd1, EdgTng);
+
+   return(sqrt(min(dis, DisPow(VerCrd, ImgCrd))));
+}
+
 float4 GetEdgTng(float4 a, float4 b)
 {
    return(fast_normalize(b-a));
@@ -42,6 +105,11 @@ float4 GetEdgTng(float4 a, float4 b)
 float4 GetTriNrm(float4 a, float4 b, float4 c)
 {
    return(fast_normalize(cross(c-a, b-a)));
+}
+
+float4 GetQadNrm(float4 a, float4 b, float4 c, float4 d)
+{
+   return(fast_normalize(cross(c-a, d-b)));
 }
 
 float CalEdgLen(float4 a, float4 b)
@@ -56,10 +124,7 @@ float CalTriSrf(float4 a, float4 b, float4 c)
 
 float CalQadSrf(float4 a, float4 b, float4 c, float4 d)
 {
-   return(.25 * (CalSrf(a,b,d)
-               + CalSrf(b,c,d)
-               + CalSrf(c,d,a)
-               + CalSrf(d,a,b)) );
+   return(.5 * fast_length(cross(c-a, d-b)));
 }
 
 float CalTetVol(float4 a, float4 b, float4 c, float4 d)
@@ -262,4 +327,14 @@ float CalHexQal(  float4 a, float4 b, float4 c, float4 d,
    v = min(v, CalVol(a,f,c,h));
 
    return(72. * v / (l * s) );
+}
+
+double4 MulMatVec(double16 a, double4 b)
+{
+   double4 x;
+
+   x.s0 = a.s0 * b.s0 + a.s1 * b.s1 + a.s2 * b.s2 + a.s3 * b.s3;
+   x.s1 = a.s4 * b.s0 + a.s5 * b.s1 + a.s6 * b.s2 + a.s7 * b.s3;
+   x.s2 = a.s8 * b.s0 + a.s9 * b.s1 + a.sa * b.s2 + a.sb * b.s3;
+   x.s3 = a.sc * b.s0 + a.sd * b.s1 + a.se * b.s2 + a.sf * b.s3;
 }

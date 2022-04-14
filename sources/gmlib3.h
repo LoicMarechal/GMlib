@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.30                           */
+/*                         GPU Meshing Library 3.34                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 08 2020                                           */
+/*   Last modification: mar 31 2022                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -46,6 +46,7 @@
 #define GmlReadMode  2
 #define GmlWriteMode 4
 #define GmlVoyeurs   8
+#define GmlManual    16
 #ifndef MAX_WORKGROUP_SIZE
 #define MAX_WORKGROUP_SIZE 1024
 #endif
@@ -89,6 +90,7 @@ int      GmlCheckFP64         (size_t);
 int      GmlGetMeshInfo       (size_t, int, int *, int *);
 int      GmlGetLinkInfo       (size_t, int, int, int *, int *, int *, int *);
 int      GmlSetDataBlock      (size_t, int, int, int, void *, void *, int *, int *);
+int      GmlGetDataBlock      (size_t, int, int, int, void *, void *, int *, int *);
 double   GmlGetKernelRunTime  (size_t, int);
 double   GmlGetReduceRunTime  (size_t, int);
 double   GmlGetWallClock      ();

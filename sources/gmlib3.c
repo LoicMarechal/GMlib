@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.32                           */
+/*                         GPU Meshing Library 3.34                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: feb 07 2022                                           */
+/*   Last modification: mar 31 2022                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -156,6 +156,7 @@ static void    WriteUserToolkitSource  (char *, char *);
 static void    WriteUserTypedef        (char *, char *);
 static void    WriteProcedureHeader    (char *, char *, int, int, ArgSct *);
 static void    WriteKernelVariables    (char *, int, int, ArgSct *);
+static void    WriteKernelCounters     (char *, int);
 static void    WriteKernelMemoryReads  (char *, int, int, ArgSct *);
 static void    WriteKernelMemoryWrites (char *, int, int, ArgSct *);
 static void    WriteUserKernel         (char *, char *);
@@ -1310,7 +1311,7 @@ static int GetNewDatIdx(GmlSct *gml)
 
 
 /*----------------------------------------------------------------------------*/
-/* Allocate an OpenCL buffer plus 10% more for resizing                       */
+/* Allocate an OpenCL buffer                                                  */
 /*----------------------------------------------------------------------------*/
 
 static int NewData(GmlSct *gml, DatSct *dat)
@@ -1499,7 +1500,7 @@ int GmlGetDataLine(size_t GmlIdx, int idx, int lin, ...)
 
 
 /*----------------------------------------------------------------------------*/
-/* Set a line of mesh, link or solution data                                  */
+/* Set a range of mesh data lines in a row                                    */
 /*----------------------------------------------------------------------------*/
 
 int GmlSetDataBlock( size_t GmlIdx, int   TypIdx,
@@ -1515,20 +1516,13 @@ int GmlSetDataBlock( size_t GmlIdx, int   TypIdx,
    float    *CrdTab, *UsrCrd;
    size_t   DatLen, RefLen;
 
-   if(EndIdx <= BegIdx)
+   if( (EndIdx <= BegIdx) || (dat->AloTyp != GmlEleDat) )
       return(0);
 
-   if(dat->AloTyp == GmlRawDat)
-   {
-      return(0);
-   }
-   else if(dat->AloTyp == GmlLnkDat)
-   {
-      return(0);
-   }
-   else if( (dat->AloTyp == GmlEleDat) && (dat->MshTyp == GmlVertices) )
+   if(dat->MshTyp == GmlVertices)
    {
       CrdTab = (float *)dat->CpuMem;
+      RefIdx = gml->RefIdx[ TypIdx ];
       RefDat = &gml->dat[ RefIdx ];
       RefTab = (int *)RefDat->CpuMem;
       UsrCrd = (float *)DatBeg;
@@ -1547,10 +1541,11 @@ int GmlSetDataBlock( size_t GmlIdx, int   TypIdx,
             RefTab[i] = UsrRef[ (i - BegIdx) * RefLen ];
       }
    }
-   else if( (dat->AloTyp == GmlEleDat) && (dat->MshTyp > GmlVertices) )
+   else
    {
       EleTab = (int *)dat->CpuMem;
-      siz = TypVecSiz[ MshItmTyp[ dat->MshTyp ] ];
+      RefIdx = gml->RefIdx[ TypIdx ];
+      siz    = TypVecSiz[ MshItmTyp[ dat->MshTyp ] ];
       RefDat = &gml->dat[ gml->RefIdx[ dat->MshTyp ] ];
       RefTab = (int *)RefDat->CpuMem;
       UsrEle = (int *)DatBeg;
@@ -1572,6 +1567,76 @@ int GmlSetDataBlock( size_t GmlIdx, int   TypIdx,
    {
       gml->MovSiz += UploadData(gml, DatIdx);
       gml->MovSiz += UploadData(gml, RefIdx);
+   }
+
+   return(1);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Get a range mesh data lines in a row                                       */
+/*----------------------------------------------------------------------------*/
+
+int GmlGetDataBlock( size_t GmlIdx, int   TypIdx,
+                     int    BegIdx, int   EndIdx,
+                     void  *DatBeg, void *DatEnd,
+                     int   *RefBeg, int  *RefEnd )
+{
+   GETGMLPTR(gml, GmlIdx);
+   CHKELETYP(TypIdx);
+   int      DatIdx = gml->TypIdx[ TypIdx ], RefIdx = gml->RefIdx[ TypIdx ];
+   DatSct   *dat = &gml->dat[ DatIdx ], *RefDat;
+   int      i, j, *EleTab, siz, *RefTab, *UsrRef, *UsrEle;
+   float    *CrdTab, *UsrCrd;
+   size_t   DatLen, RefLen;
+
+   if( (EndIdx <= BegIdx) || (dat->AloTyp != GmlEleDat) )
+      return(0);
+
+   if(BegIdx == 0)
+   {
+      gml->MovSiz += DownloadData(gml, DatIdx);
+      gml->MovSiz += DownloadData(gml, RefIdx);
+   }
+
+   if(dat->MshTyp == GmlVertices)
+   {
+      CrdTab = (float *)dat->CpuMem;
+      RefDat = &gml->dat[ RefIdx ];
+      RefTab = (int *)RefDat->CpuMem;
+      UsrCrd = (float *)DatBeg;
+      UsrRef = (int *)RefBeg;
+      DatLen = ((float *)DatEnd - (float *)DatBeg) / (EndIdx - BegIdx);
+      RefLen = (RefEnd - RefBeg) / (EndIdx - BegIdx);
+
+      for(i=BegIdx;i<=EndIdx;i++)
+      {
+         for(j=0;j<4;j++)
+            UsrCrd[ (i - BegIdx) * DatLen + j ] = CrdTab[ i * 4 + j ];
+
+         if(UsrRef)
+            UsrRef[ (i - BegIdx) * RefLen ] = RefTab[i];
+      }
+   }
+   else
+   {
+      EleTab = (int *)dat->CpuMem;
+      siz = TypVecSiz[ MshItmTyp[ dat->MshTyp ] ];
+      RefDat = &gml->dat[ gml->RefIdx[ dat->MshTyp ] ];
+      RefTab = (int *)RefDat->CpuMem;
+      UsrEle = (int *)DatBeg;
+      UsrRef = (int *)RefBeg;
+      DatLen = ((int *)DatEnd - (int *)DatBeg) / (EndIdx - BegIdx);
+      RefLen = (RefEnd - RefBeg) / (EndIdx - BegIdx);
+
+      for(i=BegIdx;i<=EndIdx;i++)
+      {
+         for(j=0; j<EleNmbNod[ dat->MshTyp ]; j++)
+            UsrEle[ (i - BegIdx) * DatLen + j ] = EleTab[ i * siz + j ];
+
+         if(UsrRef)
+            UsrRef[ (i - BegIdx) * RefLen ] = RefTab[i];
+      }
    }
 
    return(1);
@@ -1967,6 +2032,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    WriteUserTypedef        (src, ParSrc);
    WriteProcedureHeader    (src, PrcNam, MshTyp, NmbArg, ArgTab);
    WriteKernelVariables    (src, MshTyp, NmbArg, ArgTab);
+   WriteKernelCounters     (src, MshTyp);
    WriteKernelMemoryReads  (src, MshTyp, NmbArg, ArgTab);
    WriteUserKernel         (src, KrnSrc);
    WriteKernelMemoryWrites (src, MshTyp, NmbArg, ArgTab);
@@ -2019,6 +2085,7 @@ int GmlCompileKernel(size_t GmlIdx, char *KrnSrc, char *PrcNam,
    WriteUserTypedef        (src, ParSrc);
    WriteProcedureHeader    (src, PrcNam, MshTyp, NmbArg, ArgTab);
    WriteKernelVariables    (src, MshTyp, NmbArg, ArgTab);
+   WriteKernelCounters     (src, MshTyp);
    WriteKernelMemoryReads  (src, MshTyp, NmbArg, ArgTab);
    WriteUserKernel         (src, KrnSrc);
    WriteKernelMemoryWrites (src, MshTyp, NmbArg, ArgTab);
@@ -2140,6 +2207,10 @@ static void WriteKernelVariables(char *src, int MshTyp,
    for(i=0;i<NmbArg;i++)
    {
       arg = &ArgTab[i];
+
+      if(arg->FlgTab & GmlManual)
+         continue;
+
       LnkArg = (arg->LnkIdx != -1) ? &ArgTab[ arg->LnkIdx ] : NULL;
       CptArg = (arg->CntIdx != -1) ? &ArgTab[ arg->CntIdx ] : NULL;
 
@@ -2190,6 +2261,21 @@ static void WriteKernelVariables(char *src, int MshTyp,
 
 
 /*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+
+static void WriteKernelCounters(char *src, int MshTyp)
+{
+   char str[ GmlMaxStrSiz ];
+
+   strcat (src, "// KERNEL COUNTERS\n");
+   strcat (src, "   int       cnt = get_global_id(0);\n");
+   sprintf(str, "   int       %sIdx = cnt + count.s1;\n\n", BalTypStr[ MshTyp ]);
+   strcat (src, str);
+   strcat (src, "   if(cnt >= count.s0)\n      return;\n\n");
+}
+
+
+/*----------------------------------------------------------------------------*/
 /* Write the memory reading from the global structure to the local variables  */
 /*----------------------------------------------------------------------------*/
 
@@ -2203,17 +2289,13 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
    char     BalSft[ GmlMaxStrSiz ];
    ArgSct   *arg, *LnkArg, *CptArg;
 
-   strcat (src, "   int       cnt = get_global_id(0);\n");
-   sprintf(str, "   int       %sIdx = cnt + count.s1;\n\n", BalTypStr[ MshTyp ]);
-   strcat (src, str);
-   strcat (src, "   if(cnt >= count.s0)\n      return;\n\n");
    strcat (src, "// KERNEL MEMORY READINGS\n");
 
    for(i=0;i<NmbArg;i++)
    {
       arg = &ArgTab[i];
 
-      if(!(arg->FlgTab & GmlReadMode))
+      if(!(arg->FlgTab & GmlReadMode) || (arg->FlgTab & GmlManual))
          continue;
 
       LnkArg = (arg->LnkIdx != -1) ? &ArgTab[ arg->LnkIdx ] : NULL;
@@ -2359,7 +2441,7 @@ static void WriteKernelMemoryWrites(char *src, int MshTyp,
    {
       arg = &ArgTab[i];
 
-      if(!(arg->FlgTab & GmlWriteMode))
+      if(!(arg->FlgTab & GmlWriteMode) || (arg->FlgTab & GmlManual))
          continue;
 
       if(arg->NmbItm == 1)
