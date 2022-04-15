@@ -337,4 +337,6 @@ double4 MulMatVec(double16 a, double4 b)
    x.s1 = a.s4 * b.s0 + a.s5 * b.s1 + a.s6 * b.s2 + a.s7 * b.s3;
    x.s2 = a.s8 * b.s0 + a.s9 * b.s1 + a.sa * b.s2 + a.sb * b.s3;
    x.s3 = a.sc * b.s0 + a.sd * b.s1 + a.se * b.s2 + a.sf * b.s3;
+
+   return(x);
 }
