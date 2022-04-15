@@ -49,7 +49,7 @@ int main(int ArgCnt, char **ArgVec)
 {
    int         i, j, k, ret, NmbVer, VerIdx, NmbTet, TetIdx, DegIdx, BalIdx;
    int         SolIdx, RhsIdx, MatIdx, ResIdx, MatVecKrn, UpdRhsKrn, CalResKrn;
-   int         TetDat[4], *DegTab, (*BalTab)[64], idx0, idx1, GpuIdx = 0;
+   int         TetDat[4], *DegTab, (*BalTab)[16], idx0, idx1, GpuIdx = 0;
    int         TetEdg[6][2] = { {0,1}, {0,2}, {0,3}, {1,2}, {1,3}, {2,3} };
    int         BalFlg, ref;
    double      sol[256] = {1};
@@ -78,7 +78,7 @@ int main(int ArgCnt, char **ArgVec)
 
 
    // Inport the volume mesh
-   GmlImportMesh( GmlIdx, "tetrahedra.meshb",
+   GmlImportMesh( GmlIdx, "../sample_meshes/tetrahedra.meshb",
                   GmfVertices, GmfTetrahedra, 0 );
 
    if(!GmlGetMeshInfo(GmlIdx, GmlVertices,   &NmbVer, &VerIdx))
@@ -124,7 +124,7 @@ int main(int ArgCnt, char **ArgVec)
       GmlSetDataLine(GmlIdx, MatIdx, i, &sol);
 
    DegTab = calloc(NmbVer, sizeof(int));
-   BalTab = malloc(NmbVer * 64 * sizeof(int));
+   BalTab = malloc(NmbVer * 16 * sizeof(int));
 
    for(i=0;i<NmbTet;i++)
    {
@@ -145,7 +145,7 @@ int main(int ArgCnt, char **ArgVec)
                break;
             }
 
-         if(!BalFlg && DegTab[ idx0 ] < 64)
+         if(!BalFlg && DegTab[ idx0 ] < 16)
             BalTab[ idx0 ][ DegTab[ idx0 ]++ ] = idx1;
 
          BalFlg = 0;
@@ -157,12 +157,12 @@ int main(int ArgCnt, char **ArgVec)
                break;
             }
 
-         if(!BalFlg && DegTab[ idx1 ] < 64)
+         if(!BalFlg && DegTab[ idx1 ] < 16)
             BalTab[ idx1 ][ DegTab[ idx1 ]++ ] = idx0;
       }
    }
 
-   j = -1;
+   /*j = -1;
    for(i=NmbVer;i>=0;i--)
       if(DegTab[i] > 16)
          j = i;
@@ -174,7 +174,7 @@ int main(int ArgCnt, char **ArgVec)
 
    for(i=0;i<NmbVer;i++)
       if(DegTab[i] > 16)
-         DegTab[i] = 16;
+         DegTab[i] = 16;*/
 
    for(i=0;i<NmbVer;i++)
       GmlSetDataLine(GmlIdx, DegIdx, i, &DegTab[i]);
