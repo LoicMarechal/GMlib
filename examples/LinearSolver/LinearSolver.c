@@ -162,20 +162,6 @@ int main(int ArgCnt, char **ArgVec)
       }
    }
 
-   /*j = -1;
-   for(i=NmbVer;i>=0;i--)
-      if(DegTab[i] > 16)
-         j = i;
-
-   printf("pos high deg: %d\n",j);
-
-   for(i=0;i<NmbVer;i++)
-      printf("%d: %d\n",i,DegTab[i]);
-
-   for(i=0;i<NmbVer;i++)
-      if(DegTab[i] > 16)
-         DegTab[i] = 16;*/
-
    for(i=0;i<NmbVer;i++)
       GmlSetDataLine(GmlIdx, DegIdx, i, &DegTab[i]);
 
