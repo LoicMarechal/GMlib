@@ -97,7 +97,7 @@ int main(int ArgCnt, char **ArgVec)
    if(!(DegIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlInt,   "Deg")))
       return(1);
 
-   if(!(BalIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 16,  GmlInt, "Bal")))
+   if(!(BalIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlInt16, "Bal")))
       return(1);
 
    if(!(MatIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 16, GmlDbl16, "Mat")))

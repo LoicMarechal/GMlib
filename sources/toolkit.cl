@@ -26,7 +26,7 @@ float4 LinIntLin(float4, float4, float4, float4);
 float4 LinIntPla(float4, float4, float4, float4);
 void   PlaIntPla(float4, float4, float4, float4, float4 *, float4 *);
 float  DisVerEdg(float4, float4, float4, float4);
-double4 MulMatVec(double16, double4);
+void   MulMatVec(double16, double4, double4);
 
 
 float4 PrjVerLin(float4 VerCrd, float4 LinCrd, float4 LinTng)
@@ -329,14 +329,10 @@ float CalHexQal(  float4 a, float4 b, float4 c, float4 d,
    return(72. * v / (l * s) );
 }
 
-double4 MulMatVec(double16 a, double4 b)
+void MulMatVec(double16 a, double4 x, double4 b)
 {
-   double4 x;
-
    x.s0 = a.s0 * b.s0 + a.s1 * b.s1 + a.s2 * b.s2 + a.s3 * b.s3;
    x.s1 = a.s4 * b.s0 + a.s5 * b.s1 + a.s6 * b.s2 + a.s7 * b.s3;
    x.s2 = a.s8 * b.s0 + a.s9 * b.s1 + a.sa * b.s2 + a.sb * b.s3;
    x.s3 = a.sc * b.s0 + a.sd * b.s1 + a.se * b.s2 + a.sf * b.s3;
-
-   return(x);
 }
