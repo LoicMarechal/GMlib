@@ -32,7 +32,7 @@ typedef struct
    int BoCo[6];
    int BoCo_Ref[6];
    float BoCo_Val[6];
-   double dt;
+   float dt;
 } GmlParSct;
 
 void Heat_Init(int argc, char *argv[], size_t *GmlIdx)
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
    int FltOpp[6] = {24,1710,432,918,96,198};
    float Zero[4] = {0.f,0.f,0.f,0.f};
    double TotalTime = 0., TotalByte = 0., TotalFlop = 0.;
-   double WallTime, PhysTime, Time[6], InitRes, Res;
+   double WallTime, PhysTime, Time[6], InitRes, Res, Dbldt;
    /* Indexes */
    int VerIdx, TriIdx, TetIdx, SolTetIdx, GrdTetIdx, SolExtIdx, GrdExtIdx, RhsIdx, dtIdx;
    /* Kernels */
@@ -159,7 +159,8 @@ int main(int argc, char *argv[])
 
    WallTime = GmlGetWallClock();
    GmlLaunchKernel(GmlIdx, dtKrn);
-   GmlReduceVector(GmlIdx, dtIdx, GmlMin, &GmlPar->dt);
+   GmlReduceVector(GmlIdx, dtIdx, GmlMin, &Dbldt);
+	GmlPar->dt = (float)Dbldt;
    printf("+++ Time step = %.3E\n", GmlPar->dt);
    GmlUploadParameters(GmlIdx);
 
