@@ -1,6 +1,6 @@
 int      deg;
 int16    bal;
-double4  sol;
+float4   sol;
 
 deg = DegTab[ cnt ];
 bal = BalTab[ cnt ];

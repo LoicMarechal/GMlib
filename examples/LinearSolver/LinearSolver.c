@@ -52,7 +52,7 @@ int main(int ArgCnt, char **ArgVec)
    int         TetDat[4], *DegTab, (*BalTab)[16], idx0, idx1, GpuIdx = 0;
    int         TetEdg[6][2] = { {0,1}, {0,2}, {0,3}, {1,2}, {1,3}, {2,3} };
    int         BalFlg, ref;
-   double      sol[256] = {1};
+   float       sol[256] = {1};
    double      tim, res, TotRes = 0.;
    size_t      GmlIdx;
    GmlParSct   *GmlPar;
@@ -100,13 +100,13 @@ int main(int ArgCnt, char **ArgVec)
    if(!(BalIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlInt16, "Bal")))
       return(1);
 
-   if(!(MatIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 16, GmlDbl16, "Mat")))
+   if(!(MatIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 16, GmlFlt16, "Mat")))
       return(1);
 
-   if(!(SolIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlDbl4,  "Sol")))
+   if(!(SolIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlFlt4,  "Sol")))
       return(1);
 
-   if(!(RhsIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlDbl4,  "Rhs")))
+   if(!(RhsIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlFlt4,  "Rhs")))
       return(1);
 
    if(!(ResIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlFlt,   "Res")))

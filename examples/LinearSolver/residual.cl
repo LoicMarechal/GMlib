@@ -1,4 +1,4 @@
-double4 VerRhs;
+float4 VerRhs;
 
 VerRhs = RhsTab[ cnt ];
 
