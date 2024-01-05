@@ -82,6 +82,20 @@ else()
    You can download it from GitHub at https://github.com/LoicMarechal/libMeshb")
 endif()
 
+#find_package(PkgConfig)
+
+#if(PkgConfig_FOUND)
+#   pkg_check_modules(STARPU REQUIRED starpu-1.3)
+#   if (STARPU_FOUND)
+#       include_directories (${STARPU_INCLUDE_DIRS})
+#       link_directories    (${STARPU_STATIC_LIBRARY_DIRS})
+#   else (STARPU_FOUND)
+#       message(STATUS "StarPU not found")
+#   endif()
+#   add_subdirectory (examples/StarPU)
+#endif()
+
+
 add_subdirectory (sources)
 
 install (FILES LICENSE.txt copyright.txt DESTINATION share/GMlib)

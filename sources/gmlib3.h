@@ -9,9 +9,13 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: mar 31 2022                                           */
+/*   Last modification: jan 04 2024                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
+
+
+#ifndef GMLIB3_H
+#define GMLIB3_H
 
 
 /*----------------------------------------------------------------------------*/
@@ -102,4 +106,6 @@ void     GmlIncludeUserToolkit(size_t, char *);
 #ifdef WITH_LIBMESHB
 int      GmlImportMesh        (size_t, char *, ...);
 int      GmlExportSolution    (size_t, char *, ...);
+#endif
+
 #endif
