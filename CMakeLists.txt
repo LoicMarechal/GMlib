@@ -9,6 +9,7 @@ set (GMlib_VERSION_MINOR 30)
 project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C)
 
 option(WITH_CPACK "Enable cpack target to generate a zip file containing binaries" OFF)
+option(WITH_CTEST "Enable ctest ti run basic validation tests"                     OFF)
 
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -48,6 +49,12 @@ endmacro(compile_cl)
 # SET FILES AND DIRECTORIES TO BE BUILT
 #######################################
 
+if(WITH_CTEST)
+   enable_testing()
+   include_directories(${PROJECT_SOURCE_DIR}/testing)
+   add_subdirectory(testing)
+endif()
+
 find_package(OpenCL)
 
 if (OpenCL_FOUND)
@@ -71,7 +78,7 @@ if(libMeshb_FOUND)
    add_subdirectory (examples/BallQuality)
    add_subdirectory (examples/HeatCellCentered)
    add_subdirectory (examples/MeshQuality)
-   add_subdirectory (examples/NodeSmoother)
+   add_subdirectory (examples/NodeSmoothing)
    add_subdirectory (examples/P2Quality)
    add_subdirectory (examples/TestFeatures)
    message (STATUS "LibMeshb include directory: " ${libMeshb_INCLUDE_DIRS})
@@ -145,4 +152,5 @@ install(FILES
 
 message("-- Build mode            : " ${CMAKE_BUILD_TYPE})
 message("-- cpack target enabled  : " ${WITH_CPACK})
+message("-- ctest target enabled  : " ${WITH_CTEST})
 message("-- Install directory     : " ${CMAKE_INSTALL_PREFIX})
