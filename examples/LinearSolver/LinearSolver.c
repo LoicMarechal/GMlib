@@ -9,7 +9,7 @@
 /*   Description:       Linear solver                                         */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 22 2022                                           */
-/*   Last modification: mar 31 2022                                           */
+/*   Last modification: feb 14 2024                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -53,7 +53,7 @@ int main(int ArgCnt, char **ArgVec)
    int         TetEdg[6][2] = { {0,1}, {0,2}, {0,3}, {1,2}, {1,3}, {2,3} };
    int         BalFlg, ref;
    float       sol[256] = {1};
-   double      tim, res, TotRes = 0.;
+   double      tim, byt, opp, res, TotRes = 0.;
    size_t      GmlIdx;
    GmlParSct   *GmlPar;
 
@@ -233,7 +233,18 @@ int main(int ArgCnt, char **ArgVec)
       fflush(stdout);
    }
 
-   printf("\n wall clock = %g\n", GmlGetWallClock() - tim);
+   // Get the total physical runtime
+   tim = GmlGetWallClock() - tim;
+
+   // Compute the total number of bytes read or written by each kernel
+   byt = 1000. * NmbVer * (32+1376+20+8);
+
+   // Compute the total number of calculations done by each kernel
+   opp = 1000. * NmbVer * (4+416+3+1);
+
+   printf("\n wall clock = %g\n", tim);
+   printf(" %8.2f GBytes/s,",  byt / (tim * 1E9));
+   printf(" %8.2f GFlops/s\n", opp / (tim * 1E9));
 
    /*for(i=0;i<10;i++)
    {
