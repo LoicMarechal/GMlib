@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.34                           */
+/*                         GPU Meshing Library 3.40                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jan 04 2024                                           */
+/*   Last modification: may 02 2024                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -42,6 +42,7 @@
 /*----------------------------------------------------------------------------*/
 
 #define GmlMaxDat    100
+#define GmlMaxMat    10
 #define GmlMaxKrn    100
 #define GmlMaxSrcSiz 50000
 #define GmlMaxStrSiz 200
@@ -77,6 +78,7 @@ void    *GmlNewParameters     (size_t, int, char *);
 int      GmlNewMeshData       (size_t, int, int);
 int      GmlNewSolutionData   (size_t, int, int, int, char *);
 int      GmlNewLinkData       (size_t, int, int, int, char *);
+int      GmlNewMatrix         (size_t, int, int, int, int, double *, int *, int *, char *);
 int      GmlFreeData          (size_t, int);
 int      GmlSetDataLine       (size_t, int, int, ...);
 int      GmlGetDataLine       (size_t, int, int, ...);
@@ -85,6 +87,8 @@ int      GmlLaunchKernel      (size_t, int);
 int      GmlReduceVector      (size_t, int, int, double *);
 size_t   GmlGetMemoryUsage    (size_t);
 size_t   GmlGetMemoryTransfer (size_t);
+float    GmlGetMemoryAccess   (size_t);
+float    GmlGetFlops          (size_t);
 void     GmlDebugOn           (size_t);
 void     GmlDebugOff          (size_t);
 int      GmlExtractEdges      (size_t);
@@ -102,6 +106,7 @@ int      GmlUploadParameters  (size_t);
 int      GmlDownloadParameters(size_t);
 float    GmlEvaluateNumbering (size_t);
 void     GmlIncludeUserToolkit(size_t, char *);
+int      GmlMultMatVec        (size_t, int, int, int);
 
 #ifdef WITH_LIBMESHB
 int      GmlImportMesh        (size_t, char *, ...);
