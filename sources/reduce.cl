@@ -100,7 +100,7 @@ __kernel void reduce_L0(__global float *inp, __global float *out, __global void 
       out[ get_group_id(0) ] = tmp[0];
 }
 
-__kernel void reduce_L1(__global float *inp, __global float *out, __global void *par, int2 cnt)
+__kernel void reduce_L1(__global float *inp, __global float *out, __global void *par, const int2 cnt)
 {
    int i, g=get_global_id(0), l=get_local_id(0);
    __local float tmp[ MAX_WORKGROUP_SIZE ];

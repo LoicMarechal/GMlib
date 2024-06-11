@@ -59,6 +59,7 @@ find_package(OpenCL)
 
 if (OpenCL_FOUND)
    include_directories (${OpenCL_INCLUDE_DIRS})
+   add_definitions(-DCL_TARGET_OPENCL_VERSION=120)
 else()
    message ("OpenCL could not be found, please set it with:")
    message ("cmake -DOpenCL_LIBRARIES=PATH_TO_OPENCL_LIB/libOpenCL.so -DOpenCL_INCLUDE_DIRS=PATH_TO_OPENCL_INC/include")

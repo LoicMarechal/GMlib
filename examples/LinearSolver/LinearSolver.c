@@ -9,7 +9,7 @@
 /*   Description:       Linear solver                                         */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     mar 22 2022                                           */
-/*   Last modification: may 02 2024                                           */
+/*   Last modification: may 27 2024                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -57,24 +57,24 @@ typedef struct {
 
 int main(int ArgCnt, char **ArgVec)
 {
-   int         i, j, k, l, ret, NmbVer, VerIdx, NmbTet, TetIdx, DegIdx, BalIdx;
-   int         SolIdx, RhsIdx, MatIdx, ResIdx, MatVecKrn, UpdRhsKrn, CalResKrn;
-   int         TetDat[4], *DegTab, (*BalTab)[16], idx0, idx1, GpuIdx = 0;
-   int         TetEdg[6][2] = { {0,1}, {0,2}, {0,3}, {1,2}, {1,3}, {2,3} };
-   int         BalFlg, ref, NmbEdg, EdgIdx, deg[32] = {0}, NmbDeg, DegMax = 0;
-   int         NmbItr, LowDeg, LowMax=0, UprDeg, UprMax=0, LowUprDeg[32][32]={0};
-   int         (*TmpDeg)[2], *LinTab, *ColTab;
-   float       sol[256] = {1};
-   double      tim, byt=0, opp=0, res, TotRes = 0., *ValTab;
+   int         i, j, k, l, ret, NmbVer, VerIdx, NmbTet, TetIdx, SolIdx, RhsIdx;
+   int         MatIdx, ResIdx, UpdRhsKrn, CalResKrn, *DegTab, GpuIdx = 0, ref;
+   int         NmbEdg, EdgIdx, NmbItr, *LinTab, *ColTab, BlkSiz, FltSiz, FltTyp;
+   int         VecTyp;
+   float       MemByt, FltOpp, res;
+   double      tim, TotRes = 0.;
+   float       SolFlt[8] = {-1,-2,-3,-4,-5,-6,-7,-8}, *ValTabFlt;
+   double      SolDbl[8] = {-1,-2,-3,-4,-5,-6,-7,-8}, *ValTabDbl;
    size_t      GmlIdx, nnz = 0;
+   void        *ValTab, *sol;
    char        *InpNam;
    GmlParSct   *GmlPar;
 
 
    // If no arguments are give, print the help
-   if(ArgCnt != 4)
+   if(ArgCnt != 6)
    {
-      puts("\nLinearSolver tetmesh_name GPU_index NB_loops");
+      puts("\nLinearSolver tetmesh_name GPU_index NB_loops Block_size (4,5 or 7) Float_size (32 or 64)");
       puts(" Choose GPU_index from the following list:");
       GmlListGPU();
       exit(0);
@@ -84,9 +84,34 @@ int main(int ArgCnt, char **ArgVec)
       InpNam = ArgVec[1];
       GpuIdx = atoi(ArgVec[2]);
       NmbItr = atoi(ArgVec[3]);
-
+      BlkSiz = atoi(ArgVec[4]);
+      FltSiz = atoi(ArgVec[5]);
    }
 
+   if(BlkSiz != 4 && BlkSiz != 5 && BlkSiz != 7)
+   {
+      printf("Invalid block size %d\n", BlkSiz);
+      exit(1);
+   }
+
+   if(FltSiz != 32 && FltSiz != 64)
+   {
+      printf("Invalid float size %d\n", FltSiz);
+      exit(1);
+   }
+
+   if(FltSiz == 32)
+   {
+      FltTyp = GmlFlt;
+      VecTyp = (BlkSiz <= 4) ? GmlFlt4 : GmlFlt8;
+      sol = (void *)SolFlt;
+   }
+   else
+   {
+      FltTyp = GmlDbl;
+      VecTyp = (BlkSiz <= 4) ? GmlDbl4 : GmlDbl8;
+      sol = (void *)SolDbl;
+   }
 
    // Init the GMLIB and compile the OpenCL source code
    if(!(GmlIdx = GmlInit(GpuIdx)))
@@ -144,8 +169,18 @@ int main(int ArgCnt, char **ArgVec)
    ColTab = calloc(nnz, sizeof(int));
    assert(ColTab);
 
-   ValTab = calloc(nnz, 16 * sizeof(double));
-   assert(ValTab);
+   if(FltTyp == GmlFlt)
+   {
+      ValTabFlt = calloc(nnz, POW(BlkSiz) * sizeof(float));
+      assert(ValTabFlt);
+      ValTab = (void *)ValTabFlt;
+   }
+   else
+   {
+      ValTabDbl = calloc(nnz, POW(BlkSiz) * sizeof(double));
+      assert(ValTabDbl);
+      ValTab = (void *)ValTabDbl;
+   }
 
    for(i=0;i<NmbEdg;i++)
    {
@@ -153,39 +188,60 @@ int main(int ArgCnt, char **ArgVec)
       ColTab[ LinTab[j] + DegTab[j] ] = k;
       ColTab[ LinTab[k] + DegTab[k] ] = j;
 
-      for(l=0;l<64;l++)
+      for(l=0;l<POW(BlkSiz);l++)
       {
-         ValTab[ (LinTab[j] + DegTab[j]) * 16 + l ] = 1.;
-         ValTab[ (LinTab[k] + DegTab[k]) * 16 + l ] = 1.;
+         if(FltTyp == GmlFlt)
+         {
+            ValTabFlt[ (LinTab[j] + DegTab[j]) * POW(BlkSiz) + l ] += 1.;
+            ValTabFlt[ (LinTab[k] + DegTab[k]) * POW(BlkSiz) + l ] += 1.;
+         }
+         else
+         {
+            ValTabDbl[ (LinTab[j] + DegTab[j]) * POW(BlkSiz) + l ] += 1.;
+            ValTabDbl[ (LinTab[k] + DegTab[k]) * POW(BlkSiz) + l ] += 1.;
+         }
       }
 
       DegTab[j]++;
       DegTab[k]++;
    }
 
-   MatIdx = GmlNewMatrix(GmlIdx, NmbVer, nnz, 4, GmlFlt, ValTab, ColTab, LinTab, "matrix");
+   MatIdx = GmlNewMatrix(GmlIdx, NmbVer, nnz, BlkSiz, ValTab, ColTab, LinTab, FltTyp);
 
    // Allocate a common parameters structure to pass along to every kernels
    if(!(GmlPar = GmlNewParameters(GmlIdx, sizeof(GmlParSct), parameters)))
       return(1);
 
-   if(!(SolIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlFlt4,  "Sol")))
+   if(!(SolIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1, VecTyp,  "Sol")))
       return(1);
 
-   if(!(RhsIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlFlt4,  "Rhs")))
+   if(!(RhsIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1, VecTyp,  "Rhs")))
       return(1);
 
-   if(!(ResIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlFlt,   "Res")))
+   if(!(ResIdx = GmlNewSolutionData(GmlIdx, GmlVertices, 1,  GmlFlt, "Res")))
       return(1);
-
 
    // Init the matrix and vectors with 1
    for(i=0;i<NmbVer;i++)
-      GmlSetDataLine(GmlIdx, SolIdx, i, &sol);
+      GmlSetDataLine(GmlIdx, SolIdx, i, sol);
 
    for(i=0;i<NmbVer;i++)
-      GmlSetDataLine(GmlIdx, RhsIdx, i, &sol);
+      GmlSetDataLine(GmlIdx, RhsIdx, i, sol);
 
+   if(BlkSiz == 4)
+   {
+      if(FltTyp == GmlFlt)
+         GmlSetCompilerOptions(GmlIdx, " -DVECTYP=float4 -DVECINC=0.1,0.2,0.3,0.4 ");
+      else
+         GmlSetCompilerOptions(GmlIdx, " -DVECTYP=double4 -DVECINC=0.1,0.2,0.3,0.4 ");
+   }
+   else if(BlkSiz == 5)
+   {
+      if(FltTyp == GmlFlt)
+         GmlSetCompilerOptions(GmlIdx, " -DVECTYP=float8 -DVECINC=0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8 ");
+      else
+         GmlSetCompilerOptions(GmlIdx, " -DVECTYP=double8 -DVECINC=0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8 ");
+   }
 
    // Assemble and compile the kernels
    UpdRhsKrn = GmlCompileKernel( GmlIdx, updrhs, "updrhs", GmlVertices, 1,
@@ -201,7 +257,6 @@ int main(int ArgCnt, char **ArgVec)
 
    if(!CalResKrn)
       return(1);
-
 
    // Start the resolution loop
    tim = GmlGetWallClock();
@@ -222,7 +277,7 @@ int main(int ArgCnt, char **ArgVec)
 
       if(ret < 0)
       {
-         printf("Launch kernel %d failled with error: %d\n", MatVecKrn, ret);
+         printf("Launch kernel GmlMultMatVec failled with error: %d\n", ret);
          exit(0);
       }
 
@@ -244,17 +299,27 @@ int main(int ArgCnt, char **ArgVec)
    // Get the total physical runtime
    tim = GmlGetWallClock() - tim;
 
-   puts("");
+   MemByt = GmlGetMemoryAccess(GmlIdx) + 56. * NmbVer;
+   FltOpp = GmlGetFlops(GmlIdx) + 8. * NmbVer;
+
    printf(" GPU memory used: %.2f GBytes\n", (float)GmlGetMemoryUsage(GmlIdx) / 1073741824.);
    printf(" wall clock = %g\n", tim);
-   printf(" %8.2f GBytes/s,",  (float)GmlGetMemoryAccess(GmlIdx) / (tim * 1E9));
-   printf(" %8.2f GFlops/s\n", (float)GmlGetFlops(GmlIdx) / (tim * 1E9));
+   printf(" %8.2f GBytes/s,",  MemByt / (tim * 1E9));
+   printf(" %8.2f GFlops/s\n", FltOpp / (tim * 1E9));
 
-   /*for(i=0;i<10;i++)
+   for(i=0;i<10;i++)
    {
-      GmlGetDataLine(GmlIdx, VerSolIdx, i, &sol);
-      printf("solution of vertex %d: %g\n", i, sol);
-   }*/
+      GmlGetDataLine(GmlIdx, SolIdx, i, sol);
+      printf("solution of vertex %d:", i);
+      for(j=0;j<BlkSiz;j++)
+      {
+         if(FltTyp == GmlFlt)
+            printf(" %g", SolFlt[j]);
+         else
+            printf(" %g", SolDbl[j]);
+      }
+      puts("");
+   }
 
    GmlStop(GmlIdx);
 

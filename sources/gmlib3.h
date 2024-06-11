@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 02 2024                                           */
+/*   Last modification: may 30 2024                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -78,13 +78,14 @@ void    *GmlNewParameters     (size_t, int, char *);
 int      GmlNewMeshData       (size_t, int, int);
 int      GmlNewSolutionData   (size_t, int, int, int, char *);
 int      GmlNewLinkData       (size_t, int, int, int, char *);
-int      GmlNewMatrix         (size_t, int, int, int, int, double *, int *, int *, char *);
+int      GmlNewMatrix         (size_t, int, int, int, void *, int *, int *, int);
 int      GmlFreeData          (size_t, int);
 int      GmlSetDataLine       (size_t, int, int, ...);
 int      GmlGetDataLine       (size_t, int, int, ...);
+void     GmlSetCompilerOptions(size_t, char *);
 int      GmlCompileKernel     (size_t, char *, char *, int, int, ...);
 int      GmlLaunchKernel      (size_t, int);
-int      GmlReduceVector      (size_t, int, int, double *);
+int      GmlReduceVector      (size_t, int, int, float *);
 size_t   GmlGetMemoryUsage    (size_t);
 size_t   GmlGetMemoryTransfer (size_t);
 float    GmlGetMemoryAccess   (size_t);

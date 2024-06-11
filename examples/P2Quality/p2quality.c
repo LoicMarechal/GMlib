@@ -276,8 +276,8 @@ int main(int ArgCnt, char **ArgVec)
    QalTim = GmlGetKernelRunTime(GmlIdx, QalKrn);
    RedTim = GmlGetReduceRunTime(GmlIdx, GmlSum);
 
-   printf(  "%lld P2 tets qualities computed in: %gs (wall clock)\n",
-            (int64_t)NmbItr * (int64_t)NmbTet, WalTim );
+   printf(  "%g P2 tets qualities computed in: %gs (wall clock)\n",
+            (float)NmbItr * (float)NmbTet, WalTim );
 
    printf(  "Quality kernel: %gs (OpenCL timer)\n", QalTim);
    printf(  "Reduce kernels: %gs (OpenCL timer)\n", RedTim);

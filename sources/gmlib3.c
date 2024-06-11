@@ -9,7 +9,7 @@
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 02 2024                                           */
+/*   Last modification: may 30 2024                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -102,7 +102,7 @@ typedef struct
 {
    int            NmbSlc, NmbLin, BlkSiz, FltTyp, MatSlc[ MAXSLC+1 ][5];
    int            KrnIdx[ MAXSLC ], ValIdx[ MAXSLC ], ColIdx[ MAXSLC ];
-   int            DegIdx[ MAXSLC ];
+   int            DegIdx[ MAXSLC ], NmbValTyp, VecValSiz, MatValSiz[10];
    float          FltOpp, MemAcc;
    char           use;
 }MatSct;
@@ -119,7 +119,7 @@ typedef struct
 
 typedef struct
 {
-   int            NmbKrn, ParIdx, CurDev, DbgFlg, DblExt, FpnSiz;
+   int            NmbKrn, ParIdx, CurDev, DbgFlg, DblExt;
    int            TypIdx[ GmlMaxEleTyp ];
    int            RefIdx[ GmlMaxEleTyp ];
    int            NmbEle[ GmlMaxEleTyp ];
@@ -128,7 +128,7 @@ typedef struct
    int            CntMat[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
    int            SizMatHgh[ GmlMaxEleTyp ][ GmlMaxEleTyp ];
    int            RedKrn[ GmlMaxRed ];
-   char           *UsrTlk;
+   char           *UsrTlk, cflags[100];
    cl_uint        NmbDev;
    size_t         MemSiz, CurGrpSiz, MovSiz;
    float          MemAcc, FltOpp;
@@ -431,7 +431,6 @@ size_t GmlInit(int DevIdx)
 
    if(strstr(str, "cl_khr_fp64"))
       gml->DblExt = 1;
-
 
    // Return a pointer on the allocated and initialize GMlib structure
    return(GmlIdx);
@@ -1157,16 +1156,14 @@ static int NewBallData( GmlSct *gml, int SrcTyp, int DstTyp,
 /*----------------------------------------------------------------------------*/
 
 int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
-                  int FltTyp, double *val, int *col, int *lin, char *nam )
+                  void *val, int *col, int *lin, int FltTyp )
 {
-   char     *PtrCol, *PtrVal;
-   char     *PrcNam[5] = { "MatVec16Blk4x4", "MatVec32Blk4x4", "MatVec64Blk4x4",
-                           "MatVec128Blk4x4", "MatVec256Blk4x4" };
+   char     *PtrCol, *PtrVal, src[ GmlMaxSrcSiz ] = "\0";
+   char     PrcNam[100], OptStr[100] = "\0";
    int      i, j, k, deg, vec, VecNnz = 0;
    int      VecNmbLin[9] = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
    int      *VecCol[9], PowTab[256], LenTab[9], MatIdx, FltSiz, SlcSiz, *IntPtr;
    size_t   ValSiz, ColSiz;
-   double   *VecVal[9];
    DatSct   *dat;
    MatSct   *mat;
 
@@ -1185,11 +1182,31 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
    mat->NmbLin = NmbLin;
    mat->BlkSiz = BlkSiz;
    mat->FltTyp = FltTyp;
+   FltSiz = FltTyp == GmlFlt ? sizeof(float) : sizeof(double);
 
-   if(FltTyp == GmlFlt)
-      FltSiz = sizeof(float);
-   else if(FltTyp == GmlDbl)
-      FltSiz = sizeof(double);
+   if(BlkSiz == 4)
+   {
+      mat->NmbValTyp = 1;
+      mat->MatValSiz[0] = 16;
+      mat->VecValSiz = 4;
+   }
+   else if(BlkSiz == 5)
+   {
+      mat->NmbValTyp = 3;
+      mat->MatValSiz[0] = 16;
+      mat->MatValSiz[1] = 8;
+      mat->MatValSiz[2] = 1;
+      mat->VecValSiz = 8;
+   }
+   else if(BlkSiz == 7)
+   {
+      mat->NmbValTyp = 4;
+      mat->MatValSiz[0] = 16;
+      mat->MatValSiz[1] = 16;
+      mat->MatValSiz[2] = 16;
+      mat->MatValSiz[3] = 1;
+      mat->VecValSiz = 8;
+   }
    else
       return(0);
 
@@ -1274,7 +1291,6 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
       dat->LinSiz = dat->NmbItm * dat->ItmSiz;
       dat->MemSiz = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
       dat->GpuMem = dat->CpuMem = NULL;
-      dat->nam    = nam;
       dat->use    = 1;
 
       if(!NewData(gml, dat))
@@ -1305,7 +1321,6 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
       dat->LinSiz = dat->NmbItm * dat->ItmSiz;
       dat->MemSiz = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
       dat->GpuMem = dat->CpuMem = NULL;
-      dat->nam    = nam;
       dat->use    = 1;
 
        if(!NewData(gml, dat))
@@ -1332,14 +1347,13 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
       dat->MshTyp = GmlMatDat;
       dat->MemAcs = GmlInput;
       dat->ItmTyp = mat->FltTyp;
-      dat->NmbItm = BlkSiz * BlkSiz;
+      dat->NmbItm = mat->MatSlc[i][0] * BlkSiz * BlkSiz;
       dat->ItmSiz = OclTypSiz[ dat->ItmTyp ];
       dat->ItmLen = TypVecSiz[ dat->ItmTyp ];
-      dat->NmbLin = NmbBlk;
+      dat->NmbLin = SlcSiz;
       dat->LinSiz = dat->NmbItm * dat->ItmSiz;
       dat->MemSiz = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
       dat->GpuMem = dat->CpuMem = NULL;
-      dat->nam    = nam;
       dat->use    = 1;
 
       if(!NewData(gml, dat))
@@ -1349,16 +1363,25 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
 
       for(j=mat->MatSlc[i][1]; j<mat->MatSlc[ i+1 ][1]; j++)
       {
-         memcpy(  PtrVal, &val[ lin[j] * dat->NmbItm ],
-                  (lin[j+1] - lin[j]) * dat->NmbItm * FltSiz );
+         memcpy(  PtrVal, &val[ lin[j] * BlkSiz * BlkSiz ],
+                  (lin[j+1] - lin[j]) * BlkSiz * BlkSiz * FltSiz );
 
          PtrVal += dat->LinSiz;
       }
 
+      // Upload this matrix slice to the GPU memory
       gml->MovSiz += UploadData(gml, mat->ValIdx[i]);
 
-      mat->KrnIdx[i] = NewOclKrn(gml, multmatvec, PrcNam[i]);
+      sprintf(PrcNam, "MulMatVecSlc%d", mat->MatSlc[i][0]);
+      puts(PrcNam);
 
+      if(FltTyp == GmlFlt)
+         sprintf(OptStr, " -DBLKSIZ=%d -DREAL32 ", BlkSiz);
+      else
+         sprintf(OptStr, " -DBLKSIZ=%d ", BlkSiz);
+
+      GmlSetCompilerOptions(GmlIdx, OptStr);
+      mat->KrnIdx[i] = NewOclKrn(gml, multmatvec, PrcNam);
    }
 
    for(i=0;i<mat->NmbSlc;i++)
@@ -1366,8 +1389,8 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
                   * (1 + mat->MatSlc[i][0]) * sizeof(int);
 
    mat->MemAcc += ((float)(NmbLin * BlkSiz)
-               +   (float)(NmbBlk * BlkSiz * (BlkSiz + 1))) * sizeof(float);
-   mat->FltOpp = (float)NmbBlk * BlkSiz * BlkSiz;
+               +   (float)(NmbBlk * BlkSiz * (BlkSiz + 1))) * FltSiz;
+   mat->FltOpp = (float)NmbBlk * BlkSiz * BlkSiz * 2;
 
    printf("  sparse nnz = %d, vectorized nnz = %d, occupency = %.1f%%\n",
             NmbBlk, VecNnz, (100. * NmbBlk) / VecNnz);
@@ -2001,6 +2024,16 @@ int GmlDownloadParameters(size_t idx)
 
 
 /*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+
+void GmlSetCompilerOptions(size_t GmlIdx, char *OptStr)
+{
+   GETGMLPTR(gml, GmlIdx);
+   strcpy(gml->cflags, OptStr);
+}
+
+
+/*----------------------------------------------------------------------------*/
 /* Generate the kernel from user's source and data and compile it             */
 /*----------------------------------------------------------------------------*/
 
@@ -2523,6 +2556,7 @@ static void WriteKernelVariables(char *src, int MshTyp,
 
 
 /*----------------------------------------------------------------------------*/
+/* Define, read and compute the main kernel loop counter                      */
 /*----------------------------------------------------------------------------*/
 
 static void WriteKernelCounters(char *src, int MshTyp)
@@ -2545,9 +2579,9 @@ static void WriteKernelMemoryReads( char *src, int MshTyp,
                                     int NmbArg, ArgSct *ArgTab)
 {
    int      i, j, k, l, siz;
-   char     str   [ GmlMaxStrSiz ], ArgTd1[ GmlMaxStrSiz ], ArgTd2[ GmlMaxStrSiz ];
+   char     str   [ 15*GmlMaxStrSiz ], ArgTd1[ 2*GmlMaxStrSiz ], ArgTd2[ GmlMaxStrSiz ];
    char     LnkTd1[ GmlMaxStrSiz ], LnkTd2[ GmlMaxStrSiz ], LnkNam[ GmlMaxStrSiz ];
-   char     CptNam[ GmlMaxStrSiz ], DegTst[ GmlMaxStrSiz ], DegNul[ GmlMaxStrSiz ];
+   char     CptNam[ GmlMaxStrSiz ], DegTst[ 2*GmlMaxStrSiz ], DegNul[ 2*GmlMaxStrSiz ];
    char     BalSft[ GmlMaxStrSiz ];
    ArgSct   *arg, *LnkArg, *CptArg;
 
@@ -2759,7 +2793,7 @@ static void GetCntVec(int siz, int *cnt, int *vec, int *typ)
 
 static int NewOclKrn(GmlSct *gml, char *KernelSource, char *PrcNam)
 {
-   char     *buffer, *StrTab[1];
+   char     *buffer, *StrTab[1], OptStr[200] = "\0";
    int      err, res, idx = ++gml->NmbKrn;
    KrnSct   *krn = &gml->krn[ idx ];
    size_t   len, LenTab[1];
@@ -2779,8 +2813,9 @@ static int NewOclKrn(GmlSct *gml, char *KernelSource, char *PrcNam)
       return(0);
    }
 
-   res = clBuildProgram(krn->program, 0, NULL,
-                        "-cl-single-precision-constant -cl-mad-enable", NULL, NULL);
+   sprintf(OptStr, "-cl-single-precision-constant -cl-mad-enable %s", gml->cflags);
+
+   res = clBuildProgram(krn->program, 0, NULL, OptStr, NULL, NULL);
 
    if(res != CL_SUCCESS)
    {
@@ -2897,7 +2932,7 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
          return(-3);
       }
 
-      res = clSetKernelArg(krn->kernel, krn->NmbDat+1, 2 * sizeof(int), krn->NmbLin);
+      res = clSetKernelArg(krn->kernel, krn->NmbDat+1, sizeof(cl_int2), krn->NmbLin);
 
       if(res != CL_SUCCESS)
       {
@@ -2928,6 +2963,7 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
       krn->IniFlg = 1;
       krn->NmbGrp = NmbGrp;
       krn->GrpSiz = GrpSiz;
+      //printf("NmbGrp=%zu, GrpSiz=%zu\n\n\n",NmbGrp,GrpSiz);
    }
 
    if(krn->NmbEvt == krn->EvtBlk)
@@ -2941,7 +2977,7 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
 
    // Launch GPU code
    if(clEnqueueNDRangeKernel( gml->queue, krn->kernel, 1, NULL, &krn->NmbGrp,
-                              &krn->GrpSiz, 0, NULL, &krn->EvtTab[ krn->NmbEvt++ ]) )
+                              NULL, 0, NULL, &krn->EvtTab[ krn->NmbEvt++ ]) )
    {
       return(-6);
    }
@@ -2956,7 +2992,7 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
 /* Compute various reduction functions: min,max,L1,L2 norms                   */
 /*----------------------------------------------------------------------------*/
 
-int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
+int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, float *nrm)
 {
    GETGMLPTR(gml, GmlIdx);
    int      i, NmbLin, ret;
@@ -3109,7 +3145,6 @@ int GmlMultMatVec(size_t GmlIdx, int MatIdx, int VecIdx1, int VecIdx2)
    // Launch the matrix kernels on the GPU
    for(i=0;i<mat->NmbSlc;i++)
    {
-
       // Store information usefull to the kernel: loop indices and arguments list
       krn = &gml->krn[ mat->KrnIdx[i] ];
       krn->NmbDat = 5;
@@ -3354,7 +3389,6 @@ int GmlExtractEdges(size_t GmlIdx)
          }
       }
    }
-
    if(EdgTab)
       free(EdgTab);
 
@@ -3772,6 +3806,9 @@ int GmlGetMeshInfo(size_t GmlIdx, int typ, int *NmbLin, int *DatIdx)
    CHKELETYP   (typ);
    DatSct      *dat;
    int         idx;
+
+   // Clear the values to avoid returning garbage in case it returns on error
+   *NmbLin = *DatIdx = 0;
 
    if(!(idx = gml->TypIdx[ typ ]))
       return(0);
