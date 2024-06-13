@@ -3149,7 +3149,7 @@ int GmlMultMatVec(size_t GmlIdx, int MatIdx, int VecIdx1, int VecIdx2)
       krn = &gml->krn[ mat->KrnIdx[i] ];
       krn->NmbDat = 5;
       krn->NmbLin[0] = mat->MatSlc[ i+1 ][1] - mat->MatSlc[i][1];
-      krn->NmbLin[1] = 0;
+      krn->NmbLin[1] = mat->MatSlc[i][1];
       krn->DatTab[0] = mat->DegIdx[i];
       krn->DatTab[1] = mat->ColIdx[i];
       krn->DatTab[2] = mat->ValIdx[i];
