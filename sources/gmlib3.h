@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.40                           */
+/*                         GPU Meshing Library 3.41                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 30 2024                                           */
+/*   Last modification: jun 24 2024                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -43,6 +43,7 @@
 
 #define GmlMaxDat    100
 #define GmlMaxMat    10
+#define GmlMaxVec    10
 #define GmlMaxKrn    100
 #define GmlMaxSrcSiz 50000
 #define GmlMaxStrSiz 200
@@ -79,6 +80,7 @@ int      GmlNewMeshData       (size_t, int, int);
 int      GmlNewSolutionData   (size_t, int, int, int, char *);
 int      GmlNewLinkData       (size_t, int, int, int, char *);
 int      GmlNewMatrix         (size_t, int, int, int, void *, int *, int *, int);
+int      GmlNewVector         (size_t, int, int, void *, int);
 int      GmlFreeData          (size_t, int);
 int      GmlSetDataLine       (size_t, int, int, ...);
 int      GmlGetDataLine       (size_t, int, int, ...);
@@ -108,6 +110,10 @@ int      GmlDownloadParameters(size_t);
 float    GmlEvaluateNumbering (size_t);
 void     GmlIncludeUserToolkit(size_t, char *);
 int      GmlMultMatVec        (size_t, int, int, int);
+int      GmlMultDiagMatVec    (size_t, int, int);
+int      GmlAddVec            (size_t, int, int);
+int      GmlScaleVec          (size_t, int, double *);
+int      GmlNormVec           (size_t, int, int, float *);
 
 #ifdef WITH_LIBMESHB
 int      GmlImportMesh        (size_t, char *, ...);

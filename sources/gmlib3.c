@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.40                           */
+/*                         GPU Meshing Library 3.41                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: may 30 2024                                           */
+/*   Last modification: jun 24 2024                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -47,6 +47,10 @@
 #include "reduce.h"
 #include "toolkit.h"
 #include "multmatvec.h"
+#include "addvec.h"
+#include "scalevec.h"
+#include "multdiagmatvec.h"
+#include "normvec.h"
 
 
 /*----------------------------------------------------------------------------*/
@@ -60,7 +64,8 @@
 #define STRSIZ       1024
 #define MAXSLC       5
 
-enum data_type       {GmlArgDat, GmlRawDat, GmlLnkDat, GmlEleDat, GmlRefDat, GmlMatDat};
+enum data_type       {GmlArgDat, GmlRawDat, GmlLnkDat, GmlEleDat,
+                      GmlRefDat, GmlMatDat, GmlVecDat};
 enum memory_type     {GmlInternal, GmlInput, GmlOutput, GmlInout};
 
 
@@ -109,6 +114,14 @@ typedef struct
 
 typedef struct
 {
+   int            NmbLin, BlkSiz, FltTyp, idx, NmbValTyp, VecValSiz;
+   int            AddKrnIdx, SclKrnIdx, MulDiaKrnIdx, NrmKrnIdx, FltSiz;
+   float          FltOpp, MemAcc;
+   char           use;
+}VecSct;
+
+typedef struct
+{
    int            idx, HghIdx, NmbLin[2], NmbDat, DatTab[ GmlMaxDat ];
    int            NmbEvt, EvtBlk, IniFlg;
    cl_event       *EvtTab;
@@ -134,6 +147,7 @@ typedef struct
    float          MemAcc, FltOpp;
    DatSct         dat[ GmlMaxDat + 1 ];
    MatSct         mat[ GmlMaxMat + 1 ];
+   VecSct         vec[ GmlMaxVec + 1 ];
    KrnSct         krn[ GmlMaxKrn + 1 ];
    cl_device_id   device_id[ MaxGpu ];
    cl_context     context;
@@ -147,6 +161,7 @@ typedef struct
 
 #define MIN(a,b)        ((a) < (b) ? (a) : (b))
 #define MAX(a,b)        ((a) > (b) ? (a) : (b))
+#define POW(a)          ((a)*(a))
 #define CHKDATIDX(p, i) if( ((i) < 1) || ((i) > GmlMaxDat) || !p->dat[(i)].use) return(0);
 #define CHKELETYP(t)    if( ((t) < 0) || ((t) >= GmlMaxEleTyp)) return(0)
 #define CHKOCLTYP(t)    if( ((t) < GmlInt) || ((t) >= GmlMaxOclTyp)) return(0)
@@ -164,6 +179,7 @@ static int     DownloadData            (GmlSct *, int);
 static int     NewOclKrn               (GmlSct *, char *, char *);
 static int     GetNewDatIdx            (GmlSct *);
 static int     GetNewMatIdx            (GmlSct *);
+static int     GetNewVecIdx            (GmlSct *);
 static int     RunOclKrn               (GmlSct *, KrnSct *);
 static void    WriteToolkitSource      (char *, char *);
 static void    WriteUserToolkitSource  (char *, char *);
@@ -1163,6 +1179,8 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
    int      i, j, k, deg, vec, VecNnz = 0;
    int      VecNmbLin[9] = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
    int      *VecCol[9], PowTab[256], LenTab[9], MatIdx, FltSiz, SlcSiz, *IntPtr;
+   float    *FltVal = (float *)val;
+   double   *DblVal = (double *)val;
    size_t   ValSiz, ColSiz;
    DatSct   *dat;
    MatSct   *mat;
@@ -1361,12 +1379,25 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
 
       PtrVal = (char *)dat->CpuMem;
 
-      for(j=mat->MatSlc[i][1]; j<mat->MatSlc[ i+1 ][1]; j++)
+      if(FltTyp == GmlFlt)
       {
-         memcpy(  PtrVal, &val[ lin[j] * BlkSiz * BlkSiz ],
-                  (lin[j+1] - lin[j]) * BlkSiz * BlkSiz * FltSiz );
+         for(j=mat->MatSlc[i][1]; j<mat->MatSlc[ i+1 ][1]; j++)
+         {
+            memcpy(  PtrVal, &FltVal[ lin[j] * BlkSiz * BlkSiz ],
+                     (lin[j+1] - lin[j]) * BlkSiz * BlkSiz * FltSiz );
 
-         PtrVal += dat->LinSiz;
+            PtrVal += dat->LinSiz;
+         }
+      }
+      else
+      {
+         for(j=mat->MatSlc[i][1]; j<mat->MatSlc[ i+1 ][1]; j++)
+         {
+            memcpy(  PtrVal, &DblVal[ lin[j] * BlkSiz * BlkSiz ],
+                     (lin[j+1] - lin[j]) * BlkSiz * BlkSiz * FltSiz );
+
+            PtrVal += dat->LinSiz;
+         }
       }
 
       // Upload this matrix slice to the GPU memory
@@ -1397,6 +1428,139 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
    printf("  swipe = %.2f GB, %.2f GFlops\n", mat->MemAcc / 1.E9, mat->FltOpp / 1.E9);
 
    return(MatIdx);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Allocate and fill a block vector                                           */
+/*----------------------------------------------------------------------------*/
+
+int GmlNewVector(size_t GmlIdx, int NmbLin, int BlkSiz, void *val, int FltTyp)
+{
+   char     *PtrVal, src[ GmlMaxSrcSiz ] = "\0";
+   char     PrcNam[100], OptStr[100] = "\0";
+   int      i, j;
+   int      VecIdx, *IntPtr;
+   float    *FltVal = (float *)val;
+   double   *DblVal = (double *)val;
+   DatSct   *dat;
+   VecSct   *vec;
+
+   GETGMLPTR(gml, GmlIdx);
+
+   if(NmbLin < 1 || BlkSiz < 1 || BlkSiz > 64)
+      return(0);
+
+   if(!(VecIdx = GetNewVecIdx(gml)))
+      return(0);
+
+   vec = &gml->vec[ VecIdx ];
+   memset(vec, 0, sizeof(VecSct));
+
+   vec->use = 1;
+   vec->NmbLin = NmbLin;
+   vec->BlkSiz = BlkSiz;
+   vec->FltTyp = FltTyp;
+   vec->FltSiz = (FltTyp == GmlFlt) ? sizeof(float) : sizeof(double);
+
+   if(BlkSiz == 1)
+   {
+      vec->NmbValTyp = 1;
+      vec->VecValSiz = 1;
+   }
+   else if(BlkSiz == 2)
+   {
+      vec->NmbValTyp = 1;
+      vec->VecValSiz = 2;
+   }
+   else if(BlkSiz <= 4)
+   {
+      vec->NmbValTyp = 1;
+      vec->VecValSiz = 4;
+   }
+   else if(BlkSiz <= 8)
+   {
+      vec->NmbValTyp = 1;
+      vec->VecValSiz = 8;
+   }
+   else if(BlkSiz <= 16)
+   {
+      vec->NmbValTyp = 1;
+      vec->VecValSiz = 16;
+   }
+   else if(BlkSiz <= 32)
+   {
+      vec->NmbValTyp = 2;
+      vec->VecValSiz = 16;
+   }
+   else if(BlkSiz <= 48)
+   {
+      vec->NmbValTyp = 3;
+      vec->VecValSiz = 16;
+   }
+   else
+   {
+      vec->NmbValTyp = 4;
+      vec->VecValSiz = 16;
+   }
+
+   // Set the vector values
+   if(!(vec->idx = GetNewDatIdx(gml)))
+      return(0);
+
+   dat = &gml->dat[ vec->idx ];
+   memset(dat, 0, sizeof(DatSct));
+
+   dat->AloTyp = GmlRawDat;
+   dat->MshTyp = GmlVecDat;
+   dat->MemAcs = GmlInput;
+   dat->ItmTyp = vec->FltTyp;
+   dat->NmbItm = vec->NmbValTyp * vec->VecValSiz;
+   dat->ItmSiz = OclTypSiz[ dat->ItmTyp ];
+   dat->ItmLen = TypVecSiz[ dat->ItmTyp ];
+   dat->NmbLin = vec->NmbLin;
+   dat->LinSiz = dat->NmbItm * dat->ItmSiz;
+   dat->MemSiz = (size_t)dat->NmbLin * (size_t)dat->LinSiz;
+   dat->GpuMem = dat->CpuMem = NULL;
+   dat->use    = 1;
+
+   if(!NewData(gml, dat))
+      return(0);
+
+   PtrVal = (char *)dat->CpuMem;
+
+   if(FltTyp == GmlFlt)
+   {
+      for(i=0;i<NmbLin;i++)
+      {
+         memcpy(PtrVal, &FltVal[ i * BlkSiz ], BlkSiz * vec->FltSiz);
+         PtrVal += dat->LinSiz;
+      }
+   }
+   else
+   {
+      for(i=0;i<NmbLin;i++)
+      {
+         memcpy(PtrVal, &DblVal[ i * BlkSiz ], BlkSiz * vec->FltSiz);
+         PtrVal += dat->LinSiz;
+      }
+   }
+
+   // Upload this vector to the GPU memory
+   gml->MovSiz += UploadData(gml, vec->idx);
+
+   if(FltTyp == GmlFlt)
+      sprintf(OptStr, " -DBLKSIZ=%d -DREAL32 ", BlkSiz);
+   else
+      sprintf(OptStr, " -DBLKSIZ=%d ", BlkSiz);
+
+   GmlSetCompilerOptions(GmlIdx, OptStr);
+   vec->AddKrnIdx = NewOclKrn(gml, addvec, "AddVec");
+   vec->SclKrnIdx = NewOclKrn(gml, scalevec, "ScaleVec");
+   vec->MulDiaKrnIdx = NewOclKrn(gml, multdiagmatvec, "MultDiaglMatVec");
+   vec->NrmKrnIdx = NewOclKrn(gml, normvec, "L2Norm");
+
+   return(VecIdx);
 }
 
 
@@ -1562,7 +1726,7 @@ static int GetHsh(   HshTabSct *lnk, int HshKey, int EleIdx,
 
 
 /*----------------------------------------------------------------------------*/
-/* Find and return a free data slot int the GML structure                     */
+/* Find and return a free data slot in the GML structure                      */
 /*----------------------------------------------------------------------------*/
 
 static int GetNewDatIdx(GmlSct *gml)
@@ -1579,7 +1743,7 @@ static int GetNewDatIdx(GmlSct *gml)
 
 
 /*----------------------------------------------------------------------------*/
-/* Find and return a free data slot int the GML structure                     */
+/* Find and return a free matrix slot in the GML structure                    */
 /*----------------------------------------------------------------------------*/
 
 static int GetNewMatIdx(GmlSct *gml)
@@ -1588,6 +1752,23 @@ static int GetNewMatIdx(GmlSct *gml)
       if(!gml->mat[i].use)
       {
          gml->mat[i].use = 1;
+         return(i);
+      }
+
+   return(0);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Find and return a free vector slot in the GML structure                    */
+/*----------------------------------------------------------------------------*/
+
+static int GetNewVecIdx(GmlSct *gml)
+{
+   for(int i=1;i<=GmlMaxVec;i++)
+      if(!gml->vec[i].use)
+      {
+         gml->vec[i].use = 1;
          return(i);
       }
 
@@ -3107,7 +3288,7 @@ int GmlMultMatVec(size_t GmlIdx, int MatIdx, int VecIdx1, int VecIdx2)
    int i, res;
    GETGMLPTR(gml, GmlIdx);
    MatSct *mat;
-   DatSct *vec1, *vec2;
+   VecSct *vec1, *vec2;
    KrnSct *krn;
 
    // Check indices and data conformity
@@ -3125,7 +3306,7 @@ int GmlMultMatVec(size_t GmlIdx, int MatIdx, int VecIdx1, int VecIdx2)
       return(-2);
    }
 
-   vec1 = &gml->dat[ VecIdx1 ];
+   vec1 = &gml->vec[ VecIdx1 ];
 
    if( (VecIdx2 < 1) || (VecIdx2 > GmlMaxDat) )
    {
@@ -3133,12 +3314,12 @@ int GmlMultMatVec(size_t GmlIdx, int MatIdx, int VecIdx1, int VecIdx2)
       return(-3);
    }
 
-   vec2 = &gml->dat[ VecIdx2 ];
+   vec2 = &gml->vec[ VecIdx2 ];
 
    if(mat->NmbLin != vec1->NmbLin || mat->NmbLin != vec2->NmbLin)
    {
-      printf("vectors and matrix size differ: %d %d %d\n",
-            MatIdx, VecIdx1, VecIdx2);
+      printf("vectors and matrix size differ: %d(%d) %d(%d) %d(%d)\n",
+            MatIdx, mat->NmbLin, VecIdx1, vec1->NmbLin, VecIdx2, vec2->NmbLin);
       return(-4);
    }
 
@@ -3153,8 +3334,8 @@ int GmlMultMatVec(size_t GmlIdx, int MatIdx, int VecIdx1, int VecIdx2)
       krn->DatTab[0] = mat->DegIdx[i];
       krn->DatTab[1] = mat->ColIdx[i];
       krn->DatTab[2] = mat->ValIdx[i];
-      krn->DatTab[3] = VecIdx1;
-      krn->DatTab[4] = VecIdx2;
+      krn->DatTab[3] = vec1->idx;
+      krn->DatTab[4] = vec2->idx;
 
       res = RunOclKrn(gml, krn);
 
@@ -3165,6 +3346,207 @@ int GmlMultMatVec(size_t GmlIdx, int MatIdx, int VecIdx1, int VecIdx2)
    // Ipdate the stats on bytes read/written and flops performed by the kernels
    gml->MemAcc += mat->MemAcc;
    gml->FltOpp += mat->FltOpp;
+
+   return(1);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Add two vectors term by term                                               */
+/*----------------------------------------------------------------------------*/
+
+int GmlAddVec(size_t GmlIdx, int VecIdx1, int VecIdx2)
+{
+   int i, res;
+   GETGMLPTR(gml, GmlIdx);
+   VecSct *vec1, *vec2;
+   KrnSct *krn;
+
+   if( (VecIdx1 < 1) || (VecIdx1 > GmlMaxDat) )
+   {
+      printf("Invalid data index: %d\n", VecIdx1);
+      return(-2);
+   }
+
+   vec1 = &gml->vec[ VecIdx1 ];
+
+   if( (VecIdx2 < 1) || (VecIdx2 > GmlMaxDat) )
+   {
+      printf("Invalid data index: %d\n", VecIdx2);
+      return(-3);
+   }
+
+   vec2 = &gml->vec[ VecIdx2 ];
+
+   if( (vec1->NmbLin != vec2->NmbLin) || (vec1->BlkSiz != vec2->BlkSiz) )
+   {
+      printf(  "vector sizes differ: ID %d (%d x %d) and ID %d (%d x %d)\n",
+               VecIdx1, vec1->NmbLin, vec1->BlkSiz,
+               VecIdx2, vec2->NmbLin, vec2->BlkSiz );
+
+      return(-4);
+   }
+
+   // Store information usefull to the kernel: loop indices and arguments list
+   krn = &gml->krn[ vec1->AddKrnIdx ];
+   krn->NmbDat = 2;
+   krn->NmbLin[0] = vec1->NmbLin;
+   krn->DatTab[0] = vec1->idx;
+   krn->DatTab[1] = vec2->idx;
+
+   // Launch the vector kernel on the GPU
+   res = RunOclKrn(gml, krn);
+
+   if(res != 1)
+      return(res);
+
+   // Ipdate the stats on bytes read/written and flops performed by the kernels
+   gml->MemAcc += vec1->NmbLin * vec1->BlkSiz * vec1->FltSiz * 3;
+   gml->FltOpp += vec1->NmbLin * vec1->BlkSiz;
+
+   return(1);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Multiply each term by a scalar                                             */
+/*----------------------------------------------------------------------------*/
+
+int GmlScaleVec(size_t GmlIdx, int VecIdx, double *mul)
+{
+   int i, res;
+   GETGMLPTR(gml, GmlIdx);
+   VecSct *vec;
+   KrnSct *krn;
+
+   if( (VecIdx < 1) || (VecIdx > GmlMaxDat) )
+   {
+      printf("Invalid data index: %d\n", VecIdx);
+      return(-2);
+   }
+
+   vec = &gml->vec[ VecIdx ];
+
+   // Store information usefull to the kernel: loop indices and arguments list
+   krn = &gml->krn[ vec->SclKrnIdx ];
+   krn->NmbDat = 1;
+   krn->NmbLin[0] = vec->NmbLin;
+   krn->DatTab[0] = vec->idx;
+
+   // Launch the vector kernel on the GPU
+   res = RunOclKrn(gml, krn);
+
+   if(res != 1)
+      return(res);
+
+   // Ipdate the stats on bytes read/written and flops performed by the kernels
+   gml->MemAcc += vec->NmbLin * vec->BlkSiz * vec->FltSiz * 2;
+   gml->FltOpp += vec->NmbLin * vec->BlkSiz;
+
+   return(1);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Compute each field's L2 norm                                               */
+/*----------------------------------------------------------------------------*/
+
+int GmlNormVec(size_t GmlIdx, int VecIdx, int RedIdx, float *nrm)
+{
+   int i, res;
+   GETGMLPTR(gml, GmlIdx);
+   VecSct *vec;
+   KrnSct *krn;
+
+   if( (VecIdx < 1) || (VecIdx > GmlMaxVec) )
+   {
+      printf("Invalid data index: %d\n", VecIdx);
+      return(-2);
+   }
+
+   vec = &gml->vec[ VecIdx ];
+
+   // Store information usefull to the kernel: loop indices and arguments list
+   krn = &gml->krn[ vec->NrmKrnIdx ];
+   krn->NmbDat = 2;
+   krn->NmbLin[0] = vec->NmbLin;
+   krn->DatTab[0] = vec->idx;
+   krn->DatTab[1] = RedIdx;
+
+   // Launch the vector kernel on the GPU
+   res = RunOclKrn(gml, krn);
+
+   if(res != 1)
+      return(res);
+
+   *nrm = 0.;
+   res = GmlReduceVector(GmlIdx, RedIdx, GmlL1, nrm);
+
+   if(res != 1)
+      return(res);
+
+   *nrm = sqrt(*nrm);
+
+   // Ipdate the stats on bytes read/written and flops performed by the kernels
+   gml->MemAcc += vec->NmbLin * vec->BlkSiz * vec->FltSiz * 2;
+   gml->FltOpp += vec->NmbLin * vec->BlkSiz * 2;
+
+   return(1);
+}
+
+
+/*----------------------------------------------------------------------------*/
+/* Multiply a diagonal matrix by a vector                                     */
+/*----------------------------------------------------------------------------*/
+
+int GmlMultDiagMatVec(size_t GmlIdx, int VecIdx1, int VecIdx2)
+{
+   int i, res;
+   GETGMLPTR(gml, GmlIdx);
+   VecSct *vec1, *vec2;
+   KrnSct *krn;
+
+   if( (VecIdx1 < 1) || (VecIdx1 > GmlMaxDat) )
+   {
+      printf("Invalid data index: %d\n", VecIdx1);
+      return(-2);
+   }
+
+   vec1 = &gml->vec[ VecIdx1 ];
+
+   if( (VecIdx2 < 1) || (VecIdx2 > GmlMaxDat) )
+   {
+      printf("Invalid data index: %d\n", VecIdx2);
+      return(-3);
+   }
+
+   vec2 = &gml->vec[ VecIdx2 ];
+
+   if( (vec1->NmbLin != vec2->NmbLin) || (vec1->BlkSiz != POW(vec2->BlkSiz)) )
+   {
+      printf(  "vector sizes differ: ID %d (%d x %d) and ID %d (%d x %d)\n",
+               VecIdx1, vec1->NmbLin, vec1->BlkSiz,
+               VecIdx2, vec2->NmbLin, vec2->BlkSiz );
+
+      return(-4);
+   }
+
+   // Store information usefull to the kernel: loop indices and arguments list
+   krn = &gml->krn[ vec1->MulDiaKrnIdx ];
+   krn->NmbDat = 2;
+   krn->NmbLin[0] = vec1->NmbLin;
+   krn->DatTab[0] = vec1->idx;
+   krn->DatTab[1] = vec2->idx;
+
+   // Launch the vector kernel on the GPU
+   res = RunOclKrn(gml, krn);
+
+   if(res != 1)
+      return(res);
+
+   // Ipdate the stats on bytes read/written and flops performed by the kernels
+   gml->MemAcc += vec1->NmbLin * (vec1->BlkSiz + 2 * vec2->BlkSiz) * vec1->FltSiz;
+   gml->FltOpp += vec1->NmbLin * 2 * vec1->BlkSiz;
 
    return(1);
 }

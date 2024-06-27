@@ -1,1 +1,0 @@
-RhsTab[ cnt ] += (VECTYP){VECINC};

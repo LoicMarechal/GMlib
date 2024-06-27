@@ -1,4 +1,4 @@
 typedef struct {
    int   foo;
-   float res;
+   float res, scale;
 }GmlParSct;
