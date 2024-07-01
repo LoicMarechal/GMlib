@@ -307,6 +307,10 @@ int main(int ArgCnt, char **ArgVec)
 
    for(i=1;i<=NmbItr;i++)
    {
+      // Launch the D.X kernel on the GPU
+      ret = GmlMultDiagMatVec(GmlIdx, DiaIdx, Xk1Idx);
+      ChkGmlErr(ret, "GmlMultDiagMatVec");
+
       // Launch the A.X kernel on the GPU
       ret = GmlMultMatVec(GmlIdx, MatIdx, Xk0Idx, Xk1Idx);
       ChkGmlErr(ret, "GmlMultMatVec");
@@ -314,10 +318,6 @@ int main(int ArgCnt, char **ArgVec)
       // Launch the X+B kernel on the GPU
       ret = GmlAddVec(GmlIdx, RhsIdx, Xk1Idx);
       ChkGmlErr(ret, "GmlAddVec");
-
-      // Launch the D.X kernel on the GPU
-      ret = GmlMultDiagMatVec(GmlIdx, DiaIdx, Xk1Idx);
-      ChkGmlErr(ret, "GmlMultDiagMatVec");
 
       // Compute and print the residual value
       ret = GmlNormVec(GmlIdx, Xk1Idx, RedIdx, &res);
