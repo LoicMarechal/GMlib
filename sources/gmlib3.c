@@ -3173,7 +3173,7 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
 /* Compute various reduction functions: min,max,L1,L2 norms                   */
 /*----------------------------------------------------------------------------*/
 
-int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, float *nrm)
+int GmlReduceVector(size_t GmlIdx, int DatIdx, int RedOpp, double *nrm)
 {
    GETGMLPTR(gml, GmlIdx);
    int      i, NmbLin, ret;
@@ -3451,7 +3451,7 @@ int GmlScaleVec(size_t GmlIdx, int VecIdx, double *mul)
 /* Compute each field's L2 norm                                               */
 /*----------------------------------------------------------------------------*/
 
-int GmlNormVec(size_t GmlIdx, int VecIdx, int RedIdx, float *nrm)
+int GmlNormVec(size_t GmlIdx, int VecIdx, int RedIdx, double *nrm)
 {
    int i, res;
    GETGMLPTR(gml, GmlIdx);

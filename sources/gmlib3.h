@@ -87,7 +87,7 @@ int      GmlGetDataLine       (size_t, int, int, ...);
 void     GmlSetCompilerOptions(size_t, char *);
 int      GmlCompileKernel     (size_t, char *, char *, int, int, ...);
 int      GmlLaunchKernel      (size_t, int);
-int      GmlReduceVector      (size_t, int, int, float *);
+int      GmlReduceVector      (size_t, int, int, double *);
 size_t   GmlGetMemoryUsage    (size_t);
 size_t   GmlGetMemoryTransfer (size_t);
 float    GmlGetMemoryAccess   (size_t);
@@ -113,7 +113,7 @@ int      GmlMultMatVec        (size_t, int, int, int);
 int      GmlMultDiagMatVec    (size_t, int, int);
 int      GmlAddVec            (size_t, int, int);
 int      GmlScaleVec          (size_t, int, double *);
-int      GmlNormVec           (size_t, int, int, float *);
+int      GmlNormVec           (size_t, int, int, double *);
 
 #ifdef WITH_LIBMESHB
 int      GmlImportMesh        (size_t, char *, ...);

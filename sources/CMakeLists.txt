@@ -4,6 +4,11 @@
 ##########################
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
+compile_cl(addvec)
+compile_cl(multdiagmatvec)
+compile_cl(multmatvec)
+compile_cl(normvec)
+compile_cl(scalevec)
 compile_cl(reduce)
 compile_cl(toolkit)
 add_library(GM.3 gmlib3.c ${CMAKE_CURRENT_BINARY_DIR}/reduce.h ${CMAKE_CURRENT_BINARY_DIR}/toolkit.h)

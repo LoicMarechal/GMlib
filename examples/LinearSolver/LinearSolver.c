@@ -73,8 +73,8 @@ int main(int ArgCnt, char **ArgVec)
    int         MatIdx, ResIdx, *DegTab, GpuIdx = 0, ref, VerIdx, TetIdx, tmp;
    int         NmbEdg, EdgIdx, NmbItr, *LinTab, *ColTab, BlkSiz, FltSiz, FltTyp;
    int         VecTyp, RedIdx;
-   float       res, MemByt, FltOpp, *ValTabFlt;
-   double      tim, TotRes = 0., *ValTabDbl;
+   float       MemByt, FltOpp, *ValTabFlt;
+   double      res, tim, TotRes = 0., *ValTabDbl;
    size_t      GmlIdx, nnz = 0;
    void        *ValTab, *sol;
    char        *InpNam;
