@@ -63,7 +63,7 @@ __kernel void MultDiaglMatVec(__global fpn16 (*D)[2],
    v.s0 = da.s0 * u.s0 + da.s1 * u.s1 + da.s2 * u.s2 + da.s3 * u.s3 + da.s4 * u.s4;
    v.s1 = da.s5 * u.s0 + da.s6 * u.s1 + da.s7 * u.s2 + da.s8 * u.s3 + da.s9 * u.s4;
    v.s2 = da.sa * u.s0 + da.sb * u.s1 + da.sc * u.s2 + da.sd * u.s3 + da.se * u.s4;
-   v.s3 = da.se * u.s0 + db.s0 * u.s1 + db.s1 * u.s2 + db.s2 * u.s3 + db.s3 * u.s4;
+   v.s3 = da.sf * u.s0 + db.s0 * u.s1 + db.s1 * u.s2 + db.s2 * u.s3 + db.s3 * u.s4;
    v.s4 = db.s4 * u.s0 + db.s5 * u.s1 + db.s6 * u.s2 + db.s7 * u.s3 + db.s8 * u.s4;
    v.s5 = v.s6 = v.s7 = 0.;
 

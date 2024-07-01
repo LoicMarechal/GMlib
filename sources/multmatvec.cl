@@ -771,7 +771,7 @@ fpn8 MulMatVec04(fpn16 ma, fpn16 mb, fpn16 mc, fpn8 x)
 
    b.s0 = ma.sb * x.s0 + ma.sc * x.s1 + ma.sd * x.s2 + ma.se * x.s3 + ma.sf * x.s4;
    b.s1 = mb.s0 * x.s0 + mb.s1 * x.s1 + mb.s2 * x.s2 + mb.s3 * x.s3 + mb.s4 * x.s4;
-   b.s2 = mb.s5 * x.s0 + mb.s6 * x.s1 + mb.s7 * x.s2 + mb.s9 * x.s3 + mb.s9 * x.s4;
+   b.s2 = mb.s5 * x.s0 + mb.s6 * x.s1 + mb.s7 * x.s2 + mb.s8 * x.s3 + mb.s9 * x.s4;
    b.s3 = mb.sa * x.s0 + mb.sb * x.s1 + mb.sc * x.s2 + mb.sd * x.s3 + mb.se * x.s4;
    b.s4 = mb.sf * x.s0 + mc.s0 * x.s1 + mc.s1 * x.s2 + mc.s2 * x.s3 + mc.s3 * x.s4;
    b.s5 = b.s6 = b.s7 = 0.;
@@ -982,7 +982,7 @@ __kernel void MulMatVecSlc16( __global int   *D,
    if(d > 12)  b += MulMatVec13(A[l][18], A[l][19], A[l][20], X[ c.sc ]);
    if(d > 13)  b += MulMatVec14(A[l][20], A[l][21],           X[ c.sd ]);
    if(d > 14)  b += MulMatVec15(A[l][21], A[l][22], A[l][23], X[ c.se ]);
-   if(d > 15)  b += MulMatVec16(A[l][24], A[l][24],           X[ c.sf ]);
+   if(d > 15)  b += MulMatVec16(A[l][23], A[l][24],           X[ c.sf ]);
 
    B[l+N.s1] = b;
 }
@@ -1022,7 +1022,7 @@ __kernel void MulMatVecSlc32( __global int   *D,
       + MulMatVec13(A[l][18], A[l][19], A[l][20], X[ c.sc ]);
       + MulMatVec14(A[l][20], A[l][21],           X[ c.sd ]);
       + MulMatVec15(A[l][21], A[l][22], A[l][23], X[ c.se ]);
-      + MulMatVec16(A[l][24], A[l][24],           X[ c.sf ]);
+      + MulMatVec16(A[l][23], A[l][24],           X[ c.sf ]);
 
    c = C[l][1];
 
@@ -1041,7 +1041,7 @@ __kernel void MulMatVecSlc32( __global int   *D,
    if(d > 28)  b += MulMatVec13(A[l][18+25], A[l][19+25], A[l][20+25], X[ c.sc ]);
    if(d > 29)  b += MulMatVec14(A[l][20+25], A[l][21+25],              X[ c.sd ]);
    if(d > 30)  b += MulMatVec15(A[l][21+25], A[l][22+25], A[l][23+25], X[ c.se ]);
-   if(d > 31)  b += MulMatVec16(A[l][24+25], A[l][24+25],              X[ c.sf ]);
+   if(d > 31)  b += MulMatVec16(A[l][23+25], A[l][24+25],              X[ c.sf ]);
 
    B[l+N.s1] = b;
 }
@@ -1081,7 +1081,7 @@ __kernel void MulMatVecSlc64( __global int   *D,
       + MulMatVec13(A[l][18], A[l][19], A[l][20], X[ c.sc ]);
       + MulMatVec14(A[l][20], A[l][21],           X[ c.sd ]);
       + MulMatVec15(A[l][21], A[l][22], A[l][23], X[ c.se ]);
-      + MulMatVec16(A[l][24], A[l][24],           X[ c.sf ]);
+      + MulMatVec16(A[l][23], A[l][24],           X[ c.sf ]);
 
    c = C[l][1];
 
@@ -1100,7 +1100,7 @@ __kernel void MulMatVecSlc64( __global int   *D,
       + MulMatVec13(A[l][18+25], A[l][19+25], A[l][20+25], X[ c.sc ]);
       + MulMatVec14(A[l][20+25], A[l][21+25],              X[ c.sd ]);
       + MulMatVec15(A[l][21+25], A[l][22+25], A[l][23+25], X[ c.se ]);
-      + MulMatVec16(A[l][24+25], A[l][24+25],              X[ c.sf ]);
+      + MulMatVec16(A[l][23+25], A[l][24+25],              X[ c.sf ]);
 
       c = C[l][2];
 
@@ -1119,7 +1119,7 @@ __kernel void MulMatVecSlc64( __global int   *D,
    if(d > 44)  b += MulMatVec13(A[l][18+50], A[l][19+50], A[l][20+50], X[ c.sc ]);
    if(d > 45)  b += MulMatVec14(A[l][20+50], A[l][21+50],              X[ c.sd ]);
    if(d > 46)  b += MulMatVec15(A[l][21+50], A[l][22+50], A[l][23+50], X[ c.se ]);
-   if(d > 47)  b += MulMatVec16(A[l][24+50], A[l][24+50],              X[ c.sf ]);
+   if(d > 47)  b += MulMatVec16(A[l][23+50], A[l][24+50],              X[ c.sf ]);
 
    c = C[l][3];
 
@@ -1138,7 +1138,7 @@ __kernel void MulMatVecSlc64( __global int   *D,
    if(d > 60)  b += MulMatVec13(A[l][18+75], A[l][19+75], A[l][20+75], X[ c.sc ]);
    if(d > 61)  b += MulMatVec14(A[l][20+75], A[l][21+75],              X[ c.sd ]);
    if(d > 62)  b += MulMatVec15(A[l][21+75], A[l][22+75], A[l][23+75], X[ c.se ]);
-   if(d > 63)  b += MulMatVec16(A[l][24+75], A[l][24+75],              X[ c.sf ]);
+   if(d > 63)  b += MulMatVec16(A[l][23+75], A[l][24+75],              X[ c.sf ]);
 
    B[l+N.s1] = b;
 }
@@ -1178,7 +1178,7 @@ __kernel void MulMatVecSlc128(__global int   *D,
       + MulMatVec13(A[l][18], A[l][19], A[l][20], X[ c.sc ]);
       + MulMatVec14(A[l][20], A[l][21],           X[ c.sd ]);
       + MulMatVec15(A[l][21], A[l][22], A[l][23], X[ c.se ]);
-      + MulMatVec16(A[l][24], A[l][24],           X[ c.sf ]);
+      + MulMatVec16(A[l][23], A[l][24],           X[ c.sf ]);
 
    c = C[l][1];
 
@@ -1197,7 +1197,7 @@ __kernel void MulMatVecSlc128(__global int   *D,
       + MulMatVec13(A[l][18+25], A[l][19+25], A[l][20+25], X[ c.sc ]);
       + MulMatVec14(A[l][20+25], A[l][21+25],              X[ c.sd ]);
       + MulMatVec15(A[l][21+25], A[l][22+25], A[l][23+25], X[ c.se ]);
-      + MulMatVec16(A[l][24+25], A[l][24+25],              X[ c.sf ]);
+      + MulMatVec16(A[l][23+25], A[l][24+25],              X[ c.sf ]);
 
    c = C[l][2];
 
@@ -1216,7 +1216,7 @@ __kernel void MulMatVecSlc128(__global int   *D,
       + MulMatVec13(A[l][18+50], A[l][19+50], A[l][20+50], X[ c.sc ]);
       + MulMatVec14(A[l][20+50], A[l][21+50],              X[ c.sd ]);
       + MulMatVec15(A[l][21+50], A[l][22+50], A[l][23+50], X[ c.se ]);
-      + MulMatVec16(A[l][24+50], A[l][24+50],              X[ c.sf ]);
+      + MulMatVec16(A[l][23+50], A[l][24+50],              X[ c.sf ]);
 
    c = C[l][3];
 
@@ -1235,7 +1235,7 @@ __kernel void MulMatVecSlc128(__global int   *D,
       + MulMatVec13(A[l][18+75], A[l][19+75], A[l][20+75], X[ c.sc ]);
       + MulMatVec14(A[l][20+75], A[l][21+75],              X[ c.sd ]);
       + MulMatVec15(A[l][21+75], A[l][22+75], A[l][23+75], X[ c.se ]);
-      + MulMatVec16(A[l][24+75], A[l][24+75],              X[ c.sf ]);
+      + MulMatVec16(A[l][23+75], A[l][24+75],              X[ c.sf ]);
 
    c = C[l][4];
 
@@ -1254,7 +1254,7 @@ __kernel void MulMatVecSlc128(__global int   *D,
    if(d > 76)  b += MulMatVec13(A[l][18+100], A[l][19+100], A[l][20+100], X[ c.sc ]);
    if(d > 77)  b += MulMatVec14(A[l][20+100], A[l][21+100],               X[ c.sd ]);
    if(d > 78)  b += MulMatVec15(A[l][21+100], A[l][22+100], A[l][23+100], X[ c.se ]);
-   if(d > 79)  b += MulMatVec16(A[l][24+100], A[l][24+100],               X[ c.sf ]);
+   if(d > 79)  b += MulMatVec16(A[l][23+100], A[l][24+100],               X[ c.sf ]);
 
    c = C[l][5];
 
@@ -1273,7 +1273,7 @@ __kernel void MulMatVecSlc128(__global int   *D,
    if(d > 92)  b += MulMatVec13(A[l][18+125], A[l][19+125], A[l][20+125], X[ c.sc ]);
    if(d > 93)  b += MulMatVec14(A[l][20+125], A[l][21+125],               X[ c.sd ]);
    if(d > 94)  b += MulMatVec15(A[l][21+125], A[l][22+125], A[l][23+125], X[ c.se ]);
-   if(d > 95)  b += MulMatVec16(A[l][24+125], A[l][24+125],               X[ c.sf ]);
+   if(d > 95)  b += MulMatVec16(A[l][23+125], A[l][24+125],               X[ c.sf ]);
 
    c = C[l][6];
 
@@ -1292,7 +1292,7 @@ __kernel void MulMatVecSlc128(__global int   *D,
    if(d > 108) b += MulMatVec13(A[l][18+150], A[l][19+150], A[l][20+150], X[ c.sc ]);
    if(d > 109) b += MulMatVec14(A[l][20+150], A[l][21+150],               X[ c.sd ]);
    if(d > 110) b += MulMatVec15(A[l][21+150], A[l][22+150], A[l][23+150], X[ c.se ]);
-   if(d > 111) b += MulMatVec16(A[l][24+150], A[l][24+150],               X[ c.sf ]);
+   if(d > 111) b += MulMatVec16(A[l][23+150], A[l][24+150],               X[ c.sf ]);
 
    c = C[l][7];
 
@@ -1311,7 +1311,7 @@ __kernel void MulMatVecSlc128(__global int   *D,
    if(d > 124) b += MulMatVec13(A[l][18+175], A[l][19+175], A[l][20+175], X[ c.sc ]);
    if(d > 125) b += MulMatVec14(A[l][20+175], A[l][21+175],               X[ c.sd ]);
    if(d > 126) b += MulMatVec15(A[l][21+175], A[l][22+175], A[l][23+175], X[ c.se ]);
-   if(d > 127) b += MulMatVec16(A[l][24+175], A[l][24+175],               X[ c.sf ]);
+   if(d > 127) b += MulMatVec16(A[l][23+175], A[l][24+175],               X[ c.sf ]);
 
    B[l+N.s1] = b;
 }
@@ -1351,7 +1351,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
       + MulMatVec13(A[l][18], A[l][19], A[l][20], X[ c.sc ]);
       + MulMatVec14(A[l][20], A[l][21],           X[ c.sd ]);
       + MulMatVec15(A[l][21], A[l][22], A[l][23], X[ c.se ]);
-      + MulMatVec16(A[l][24], A[l][24],           X[ c.sf ]);
+      + MulMatVec16(A[l][23], A[l][24],           X[ c.sf ]);
 
    c = C[l][1];
 
@@ -1370,7 +1370,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
       + MulMatVec13(A[l][18+25], A[l][19+25], A[l][20+25], X[ c.sc ]);
       + MulMatVec14(A[l][20+25], A[l][21+25],              X[ c.sd ]);
       + MulMatVec15(A[l][21+25], A[l][22+25], A[l][23+25], X[ c.se ]);
-      + MulMatVec16(A[l][24+25], A[l][24+25],              X[ c.sf ]);
+      + MulMatVec16(A[l][23+25], A[l][24+25],              X[ c.sf ]);
 
    c = C[l][2];
 
@@ -1389,7 +1389,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
       + MulMatVec13(A[l][18+50], A[l][19+50], A[l][20+50], X[ c.sc ]);
       + MulMatVec14(A[l][20+50], A[l][21+50],              X[ c.sd ]);
       + MulMatVec15(A[l][21+50], A[l][22+50], A[l][23+50], X[ c.se ]);
-      + MulMatVec16(A[l][24+50], A[l][24+50],              X[ c.sf ]);
+      + MulMatVec16(A[l][23+50], A[l][24+50],              X[ c.sf ]);
 
    c = C[l][3];
 
@@ -1408,7 +1408,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
       + MulMatVec13(A[l][18+75], A[l][19+75], A[l][20+75], X[ c.sc ]);
       + MulMatVec14(A[l][20+75], A[l][21+75],              X[ c.sd ]);
       + MulMatVec15(A[l][21+75], A[l][22+75], A[l][23+75], X[ c.se ]);
-      + MulMatVec16(A[l][24+75], A[l][24+75],              X[ c.sf ]);
+      + MulMatVec16(A[l][23+75], A[l][24+75],              X[ c.sf ]);
 
    c = C[l][4];
 
@@ -1427,7 +1427,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
       + MulMatVec13(A[l][18+100], A[l][19+100], A[l][20+100], X[ c.sc ]);
       + MulMatVec14(A[l][20+100], A[l][21+100],               X[ c.sd ]);
       + MulMatVec15(A[l][21+100], A[l][22+100], A[l][23+100], X[ c.se ]);
-      + MulMatVec16(A[l][24+100], A[l][24+100],               X[ c.sf ]);
+      + MulMatVec16(A[l][23+100], A[l][24+100],               X[ c.sf ]);
 
    c = C[l][5];
 
@@ -1446,7 +1446,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
       + MulMatVec13(A[l][18+125], A[l][19+125], A[l][20+125], X[ c.sc ]);
       + MulMatVec14(A[l][20+125], A[l][21+125],               X[ c.sd ]);
       + MulMatVec15(A[l][21+125], A[l][22+125], A[l][23+125], X[ c.se ]);
-      + MulMatVec16(A[l][24+125], A[l][24+125],               X[ c.sf ]);
+      + MulMatVec16(A[l][23+125], A[l][24+125],               X[ c.sf ]);
 
    c = C[l][6];
 
@@ -1465,7 +1465,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
       + MulMatVec13(A[l][18+150], A[l][19+150], A[l][20+150], X[ c.sc ]);
       + MulMatVec14(A[l][20+150], A[l][21+150],               X[ c.sd ]);
       + MulMatVec15(A[l][21+150], A[l][22+150], A[l][23+150], X[ c.se ]);
-      + MulMatVec16(A[l][24+150], A[l][24+150],               X[ c.sf ]);
+      + MulMatVec16(A[l][23+150], A[l][24+150],               X[ c.sf ]);
 
    c = C[l][7];
 
@@ -1484,7 +1484,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
       + MulMatVec13(A[l][18+175], A[l][19+175], A[l][20+175], X[ c.sc ]);
       + MulMatVec14(A[l][20+175], A[l][21+175],               X[ c.sd ]);
       + MulMatVec15(A[l][21+175], A[l][22+175], A[l][23+175], X[ c.se ]);
-      + MulMatVec16(A[l][24+175], A[l][24+175],               X[ c.sf ]);
+      + MulMatVec16(A[l][23+175], A[l][24+175],               X[ c.sf ]);
 
    c = C[l][8];
 
@@ -1503,7 +1503,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
    if(d > 140) b += MulMatVec13(A[l][18+200], A[l][19+200], A[l][20+200], X[ c.sc ]);
    if(d > 141) b += MulMatVec14(A[l][20+200], A[l][21+200],               X[ c.sd ]);
    if(d > 142) b += MulMatVec15(A[l][21+200], A[l][22+200], A[l][23+200], X[ c.se ]);
-   if(d > 143) b += MulMatVec16(A[l][24+200], A[l][24+200],               X[ c.sf ]);
+   if(d > 143) b += MulMatVec16(A[l][23+200], A[l][24+200],               X[ c.sf ]);
 
    c = C[l][9];
 
@@ -1522,7 +1522,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
    if(d > 156) b += MulMatVec13(A[l][18+225], A[l][19+225], A[l][20+225], X[ c.sc ]);
    if(d > 157) b += MulMatVec14(A[l][20+225], A[l][21+225],               X[ c.sd ]);
    if(d > 158) b += MulMatVec15(A[l][21+225], A[l][22+225], A[l][23+225], X[ c.se ]);
-   if(d > 159) b += MulMatVec16(A[l][24+225], A[l][24+225],               X[ c.sf ]);
+   if(d > 159) b += MulMatVec16(A[l][23+225], A[l][24+225],               X[ c.sf ]);
 
    c = C[l][10];
 
@@ -1541,7 +1541,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
    if(d > 172) b += MulMatVec13(A[l][18+250], A[l][19+250], A[l][20+250], X[ c.sc ]);
    if(d > 173) b += MulMatVec14(A[l][20+250], A[l][21+250],               X[ c.sd ]);
    if(d > 174) b += MulMatVec15(A[l][21+250], A[l][22+250], A[l][23+250], X[ c.se ]);
-   if(d > 175) b += MulMatVec16(A[l][24+250], A[l][24+250],               X[ c.sf ]);
+   if(d > 175) b += MulMatVec16(A[l][23+250], A[l][24+250],               X[ c.sf ]);
 
    c = C[l][11];
 
@@ -1560,7 +1560,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
    if(d > 188) b += MulMatVec13(A[l][18+275], A[l][19+275], A[l][20+275], X[ c.sc ]);
    if(d > 189) b += MulMatVec14(A[l][20+275], A[l][21+275],               X[ c.sd ]);
    if(d > 190) b += MulMatVec15(A[l][21+275], A[l][22+275], A[l][23+275], X[ c.se ]);
-   if(d > 191) b += MulMatVec16(A[l][24+275], A[l][24+275],               X[ c.sf ]);
+   if(d > 191) b += MulMatVec16(A[l][23+275], A[l][24+275],               X[ c.sf ]);
 
    c = C[l][12];
 
@@ -1579,7 +1579,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
    if(d > 204) b += MulMatVec13(A[l][18+300], A[l][19+300], A[l][20+300], X[ c.sc ]);
    if(d > 205) b += MulMatVec14(A[l][20+300], A[l][21+300],               X[ c.sd ]);
    if(d > 206) b += MulMatVec15(A[l][21+300], A[l][22+300], A[l][23+300], X[ c.se ]);
-   if(d > 207) b += MulMatVec16(A[l][24+300], A[l][24+300],               X[ c.sf ]);
+   if(d > 207) b += MulMatVec16(A[l][23+300], A[l][24+300],               X[ c.sf ]);
 
    c = C[l][13];
 
@@ -1598,7 +1598,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
    if(d > 220) b += MulMatVec13(A[l][18+325], A[l][19+325], A[l][20+325], X[ c.sc ]);
    if(d > 221) b += MulMatVec14(A[l][20+325], A[l][21+325],               X[ c.sd ]);
    if(d > 222) b += MulMatVec15(A[l][21+325], A[l][22+325], A[l][23+325], X[ c.se ]);
-   if(d > 223) b += MulMatVec16(A[l][24+325], A[l][24+325],               X[ c.sf ]);
+   if(d > 223) b += MulMatVec16(A[l][23+325], A[l][24+325],               X[ c.sf ]);
 
    c = C[l][14];
 
@@ -1617,7 +1617,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
    if(d > 236) b += MulMatVec13(A[l][18+350], A[l][19+350], A[l][20+350], X[ c.sc ]);
    if(d > 237) b += MulMatVec14(A[l][20+350], A[l][21+350],               X[ c.sd ]);
    if(d > 238) b += MulMatVec15(A[l][21+350], A[l][22+350], A[l][23+350], X[ c.se ]);
-   if(d > 239) b += MulMatVec16(A[l][24+350], A[l][24+350],               X[ c.sf ]);
+   if(d > 239) b += MulMatVec16(A[l][23+350], A[l][24+350],               X[ c.sf ]);
 
    c = C[l][15];
 
@@ -1636,7 +1636,7 @@ __kernel void MulMatVecSlc256(__global int   *D,
    if(d > 252) b += MulMatVec13(A[l][18+375], A[l][19+375], A[l][20+375], X[ c.sc ]);
    if(d > 253) b += MulMatVec14(A[l][20+375], A[l][21+375],               X[ c.sd ]);
    if(d > 254) b += MulMatVec15(A[l][21+375], A[l][22+375], A[l][23+375], X[ c.se ]);
-   if(d > 255) b += MulMatVec16(A[l][24+375], A[l][24+375],               X[ c.sf ]);
+   if(d > 255) b += MulMatVec16(A[l][23+375], A[l][24+375],               X[ c.sf ]);
 
    B[l+N.s1] = b;
 }

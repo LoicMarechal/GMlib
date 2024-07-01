@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <float.h>
 #include <assert.h>
 #include <libmeshb7.h>
 #include <gmlib3.h>
@@ -242,9 +243,9 @@ int main(int ArgCnt, char **ArgVec)
    for(i=0;i<NmbVer;i++)
       for(j=0;j<POW(BlkSiz);j++)
          if(FltTyp == GmlFlt)
-            ValTabFlt[ i * POW(BlkSiz) + j ] = i + j;
+            ValTabFlt[ i * POW(BlkSiz) + j ] = FLT_MIN;
          else
-            ValTabDbl[ i * POW(BlkSiz) + j ] = i + j;
+            ValTabDbl[ i * POW(BlkSiz) + j ] = DBL_MIN;
 
    // Allocate and setup the diagonal matrix as a vector
    DiaIdx = GmlNewVector(GmlIdx, NmbVer, POW(BlkSiz), ValTab, FltTyp);
