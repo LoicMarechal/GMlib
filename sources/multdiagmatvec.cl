@@ -17,6 +17,7 @@
 
 __kernel void MultDiaglMatVec(__global fpn16 *D,
                               __global fpn4 *U,
+                              __global fpn4 *V,
                               __global void *par,
                               const int2 N)
 {
@@ -37,13 +38,14 @@ __kernel void MultDiaglMatVec(__global fpn16 *D,
    v.s2 = d.s8 * u.s0 + d.s9 * u.s1 + d.sa * u.s2 + d.sb * u.s3;
    v.s3 = d.sc * u.s0 + d.sd * u.s1 + d.se * u.s2 + d.sf * u.s3;
 
-   U[l] = v;
+   V[l] = v;
 }
 
 #else
 
 __kernel void MultDiaglMatVec(__global fpn16 (*D)[2],
                               __global fpn8 *U,
+                              __global fpn8 *V,
                               __global void *par,
                               const int2 N)
 {
@@ -67,7 +69,7 @@ __kernel void MultDiaglMatVec(__global fpn16 (*D)[2],
    v.s4 = db.s4 * u.s0 + db.s5 * u.s1 + db.s6 * u.s2 + db.s7 * u.s3 + db.s8 * u.s4;
    v.s5 = v.s6 = v.s7 = 0.;
 
-   U[l] = v;
+   V[l] = v;
 }
 
 #endif

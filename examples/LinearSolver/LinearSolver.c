@@ -25,6 +25,7 @@
 #include <assert.h>
 #include <libmeshb7.h>
 #include <gmlib3.h>
+#include <lplib3.h>
 
 #include "parameters.h"
 
@@ -47,6 +48,11 @@ typedef struct {
    int   foo;
    float res;
 }GmlParSct;
+
+typedef struct {
+   int *LinTab, *ColTab;
+   double *mat, nrm[256], *b, *x;
+}ParSct;
 
 
 /*----------------------------------------------------------------------------*/
@@ -72,9 +78,10 @@ int main(int ArgCnt, char **ArgVec)
    int         i, j, k, l, ret, NmbVer, NmbTet, RhsIdx, DiaIdx, Xk0Idx, Xk1Idx;
    int         MatIdx, ResIdx, *DegTab, GpuIdx = 0, ref, VerIdx, TetIdx, tmp;
    int         NmbEdg, EdgIdx, NmbItr, *LinTab, *ColTab, BlkSiz, FltSiz, FltTyp;
-   int         VecTyp, RedIdx;
+   int         VecTyp, RedIdx, TmpIdx;
    float       MemByt, FltOpp, *ValTabFlt;
-   double      res, tim, TotRes = 0., *ValTabDbl;
+   double      tim, res, TotRes = 0., *ValTabDbl;
+   double      TimAdd = 0., TimNrm = 0., TimDia = 0., TimMul = 0., TimTot;
    size_t      GmlIdx, nnz = 0;
    void        *ValTab, *sol;
    char        *InpNam;
@@ -213,13 +220,13 @@ int main(int ArgCnt, char **ArgVec)
       {
          if(FltTyp == GmlFlt)
          {
-            ValTabFlt[ (LinTab[j] + DegTab[j]) * POW(BlkSiz) + l ] += 1.;
-            ValTabFlt[ (LinTab[k] + DegTab[k]) * POW(BlkSiz) + l ] += 1.;
+            ValTabFlt[ ((int64_t)LinTab[j] + (int64_t)DegTab[j]) * POW((int64_t)BlkSiz) + l ] += 1E-5;
+            ValTabFlt[ ((int64_t)LinTab[k] + (int64_t)DegTab[k]) * POW((int64_t)BlkSiz) + l ] += 1E-5;
          }
          else
          {
-            ValTabDbl[ (LinTab[j] + DegTab[j]) * POW(BlkSiz) + l ] += 1.;
-            ValTabDbl[ (LinTab[k] + DegTab[k]) * POW(BlkSiz) + l ] += 1.;
+            ValTabDbl[ ((int64_t)LinTab[j] + (int64_t)DegTab[j]) * POW((int64_t)BlkSiz) + l ] += 1E-5;
+            ValTabDbl[ ((int64_t)LinTab[k] + (int64_t)DegTab[k]) * POW((int64_t)BlkSiz) + l ] += 1E-5;
          }
       }
 
@@ -243,47 +250,44 @@ int main(int ArgCnt, char **ArgVec)
    for(i=0;i<NmbVer;i++)
       for(j=0;j<POW(BlkSiz);j++)
          if(FltTyp == GmlFlt)
-            ValTabFlt[ i * POW(BlkSiz) + j ] = FLT_MIN;
+            ValTabFlt[ i * POW(BlkSiz) + j ] = 1E-5;
          else
-            ValTabDbl[ i * POW(BlkSiz) + j ] = DBL_MIN;
+            ValTabDbl[ i * POW(BlkSiz) + j ] = 1E-5;
 
    // Allocate and setup the diagonal matrix as a vector
    DiaIdx = GmlNewVector(GmlIdx, NmbVer, POW(BlkSiz), ValTab, FltTyp);
    assert(DiaIdx);
 
 
-   // ------------------------------------
-   // ALLOCATE AND SETUP THE THREE VECTORS
-   // ------------------------------------
+   // -----------------------------------
+   // ALLOCATE AND SETUP THE FOUR VECTORS
+   // -----------------------------------
 
    for(i=0;i<NmbVer;i++)
       for(j=0;j<BlkSiz;j++)
          if(FltTyp == GmlFlt)
-            ValTabFlt[ i * BlkSiz + j ] = 1.;
+            ValTabFlt[ i * BlkSiz + j ] = 1E-5;
          else
-            ValTabDbl[ i * BlkSiz + j ] = 1.;
+            ValTabDbl[ i * BlkSiz + j ] = 1E-5;
 
    // Allocate and setup the even iteration solution vector
    Xk0Idx = GmlNewVector(GmlIdx, NmbVer, BlkSiz, ValTab, FltTyp);
    assert(Xk0Idx);
 
-   for(i=0;i<NmbVer;i++)
-      for(j=0;j<BlkSiz;j++)
-         if(FltTyp == GmlFlt)
-            ValTabFlt[ i * BlkSiz + j ] = 0.;
-         else
-            ValTabDbl[ i * BlkSiz + j ] = 0.;
-
    // Allocate and setup the odd iteration solution vector
    Xk1Idx = GmlNewVector(GmlIdx, NmbVer, BlkSiz, ValTab, FltTyp);
    assert(Xk1Idx);
 
+   // Allocate and setup the right handside vector
+   TmpIdx = GmlNewVector(GmlIdx, NmbVer, BlkSiz, ValTab, FltTyp);
+   assert(TmpIdx);
+
    for(i=0;i<NmbVer;i++)
       for(j=0;j<BlkSiz;j++)
          if(FltTyp == GmlFlt)
-            ValTabFlt[ i * BlkSiz + j ] = .1;
+            ValTabFlt[ i * BlkSiz + j ] = FLT_MIN;
          else
-            ValTabDbl[ i * BlkSiz + j ] = .1;
+            ValTabDbl[ i * BlkSiz + j ] = DBL_MIN;
 
    // Allocate and setup the right handside vector
    RhsIdx = GmlNewVector(GmlIdx, NmbVer, BlkSiz, ValTab, FltTyp);
@@ -303,24 +307,32 @@ int main(int ArgCnt, char **ArgVec)
       free(ValTabDbl);
 
    // Start the resolution loop
-   tim = GmlGetWallClock();
+   TimTot = GmlGetWallClock();
 
    for(i=1;i<=NmbItr;i++)
    {
       // Launch the D.X kernel on the GPU
-      ret = GmlMultDiagMatVec(GmlIdx, DiaIdx, Xk1Idx);
+      tim = GmlGetWallClock();
+      ret = GmlMultDiagMatVec(GmlIdx, DiaIdx, Xk0Idx, Xk1Idx);
+      TimDia += GmlGetWallClock() - tim;
       ChkGmlErr(ret, "GmlMultDiagMatVec");
 
       // Launch the A.X kernel on the GPU
-      ret = GmlMultMatVec(GmlIdx, MatIdx, Xk0Idx, Xk1Idx);
+      tim = GmlGetWallClock();
+      ret = GmlMultMatVec(GmlIdx, MatIdx, Xk0Idx, TmpIdx);
+      TimMul += GmlGetWallClock() - tim;
       ChkGmlErr(ret, "GmlMultMatVec");
 
       // Launch the X+B kernel on the GPU
-      ret = GmlAddVec(GmlIdx, RhsIdx, Xk1Idx);
+      tim = GmlGetWallClock();
+      ret = GmlAddVec3(GmlIdx, RhsIdx, TmpIdx, Xk1Idx, Xk0Idx);
+      TimAdd += GmlGetWallClock() - tim;
       ChkGmlErr(ret, "GmlAddVec");
 
       // Compute and print the residual value
-      ret = GmlNormVec(GmlIdx, Xk1Idx, RedIdx, &res);
+      tim = GmlGetWallClock();
+      ret = GmlNormVec(GmlIdx, Xk0Idx, RedIdx, &res);
+      TimNrm += GmlGetWallClock() - tim;
       ChkGmlErr(ret, "GmlNormVec");
 
       TotRes += res;
@@ -328,18 +340,22 @@ int main(int ArgCnt, char **ArgVec)
       fflush(stdout);
 
       // Swap the odd and even iteration vectors
-      tmp = Xk0Idx;
+      /*tmp = Xk0Idx;
       Xk0Idx = Xk1Idx;
-      Xk1Idx = tmp;
+      Xk1Idx = tmp;*/
    }
 
    // Get the total physical runtime
-   tim = GmlGetWallClock() - tim;
+   TimTot = GmlGetWallClock() - TimTot;
 
    printf(" GPU memory used: %.2f GBytes\n", (float)GmlGetMemoryUsage(GmlIdx) / 1073741824.);
-   printf(" wall clock = %g\n", tim);
-   printf(" %8.2f GBytes/s,",  GmlGetMemoryAccess(GmlIdx) / (tim * 1E9));
-   printf(" %8.2f GFlops/s\n", GmlGetFlops(GmlIdx) / (tim * 1E9));
+   printf(" Wall Clock            = %gs\n", TimTot);
+   printf(" Mult Diagonal Mat Vec = %gs\n", TimDia);
+   printf(" Mult Sparse Mat Vec   = %gs\n", TimMul);
+   printf(" Add Vec               = %gs\n", TimAdd);
+   printf(" Norm Vec              = %gs\n", TimNrm);
+   printf(" %8.2f GBytes/s,",  GmlGetMemoryAccess(GmlIdx) / (TimTot * 1E9));
+   printf(" %8.2f GFlops/s\n", GmlGetFlops(GmlIdx) / (TimTot * 1E9));
 
 /*   for(i=0;i<10;i++)
    {

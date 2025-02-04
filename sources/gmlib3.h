@@ -22,6 +22,8 @@
 /* Includes                                                                   */
 /*----------------------------------------------------------------------------*/
 
+#define CL_TARGET_OPENCL_VERSION 120
+
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
@@ -110,8 +112,8 @@ int      GmlDownloadParameters(size_t);
 float    GmlEvaluateNumbering (size_t);
 void     GmlIncludeUserToolkit(size_t, char *);
 int      GmlMultMatVec        (size_t, int, int, int);
-int      GmlMultDiagMatVec    (size_t, int, int);
-int      GmlAddVec            (size_t, int, int);
+int      GmlMultDiagMatVec    (size_t, int, int, int);
+int      GmlAddVec3           (size_t, int, int, int, int);
 int      GmlScaleVec          (size_t, int, double *);
 int      GmlNormVec           (size_t, int, int, double *);
 

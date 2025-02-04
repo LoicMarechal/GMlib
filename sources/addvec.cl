@@ -17,6 +17,8 @@
 
 __kernel void AddVec(__global fpn4 *U,
                      __global fpn4 *V,
+                     __global fpn4 *W,
+                     __global fpn4 *Y,
                      __global void *par,
                      const int2 N)
 {
@@ -27,13 +29,15 @@ __kernel void AddVec(__global fpn4 *U,
    if(l >= N.s0)
       return;
 
-   V[l] += U[l];
+   Y[l] = U[l] + V[l] + W[l];
 }
 
 #else
 
 __kernel void AddVec(__global fpn8 *U,
                      __global fpn8 *V,
+                     __global fpn8 *W,
+                     __global fpn8 *Y,
                      __global void *par,
                      const int2 N)
 {
@@ -44,7 +48,7 @@ __kernel void AddVec(__global fpn8 *U,
    if(l >= N.s0)
       return;
 
-   V[l] += U[l];
+   Y[l] = U[l] + V[l] + W[l];
 }
 
 #endif

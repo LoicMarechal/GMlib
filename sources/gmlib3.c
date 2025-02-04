@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.41                           */
+/*                         GPU Meshing Library 3.42                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 24 2024                                           */
+/*   Last modification: feb 03 2025                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -123,9 +123,10 @@ typedef struct
 typedef struct
 {
    int            idx, HghIdx, NmbLin[2], NmbDat, DatTab[ GmlMaxDat ];
-   int            NmbEvt, EvtBlk, IniFlg;
+   int            NmbEvt, EvtBlk, IniFlg, TstDat;
+   double         TstTim[20];
    cl_event       *EvtTab;
-   size_t         NmbGrp, GrpSiz;
+   size_t         NmbGrp, GrpSiz, OptSiz, NxtSiz, MaxSiz;
    cl_kernel      kernel;
    cl_program     program; 
 }KrnSct;
@@ -143,7 +144,7 @@ typedef struct
    int            RedKrn[ GmlMaxRed ];
    char           *UsrTlk, cflags[100];
    cl_uint        NmbDev;
-   size_t         MemSiz, CurGrpSiz, MovSiz;
+   size_t         MemSiz, MovSiz;
    float          MemAcc, FltOpp;
    DatSct         dat[ GmlMaxDat + 1 ];
    MatSct         mat[ GmlMaxMat + 1 ];
@@ -1176,12 +1177,12 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
 {
    char     *PtrCol, *PtrVal, src[ GmlMaxSrcSiz ] = "\0";
    char     PrcNam[100], OptStr[100] = "\0";
-   int      i, j, k, deg, vec, VecNnz = 0;
+   int      i, j, k, deg, vec;
    int      VecNmbLin[9] = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
    int      *VecCol[9], PowTab[256], LenTab[9], MatIdx, FltSiz, SlcSiz, *IntPtr;
    float    *FltVal = (float *)val;
    double   *DblVal = (double *)val;
-   size_t   ValSiz, ColSiz;
+   size_t   ValSiz, ColSiz, VecNnz = 0;
    DatSct   *dat;
    MatSct   *mat;
 
@@ -1253,7 +1254,6 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
       if(VecNmbLin[ PowTab[ deg ] ] == -1)
          VecNmbLin[ PowTab[ deg ] ] = i;
    }
-
 
    for(i=0;i<=8;i++)
       if(VecNmbLin[i] != -1)
@@ -1415,15 +1415,12 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
       mat->KrnIdx[i] = NewOclKrn(gml, multmatvec, PrcNam);
    }
 
-   for(i=0;i<mat->NmbSlc;i++)
-      mat->MemAcc += (mat->MatSlc[i+1][1] - mat->MatSlc[i][1])
-                  * (1 + mat->MatSlc[i][0]) * sizeof(int);
-
    mat->MemAcc += ((float)(NmbLin * BlkSiz)
                +   (float)(NmbBlk * BlkSiz * (BlkSiz + 1))) * FltSiz;
+
    mat->FltOpp = (float)NmbBlk * BlkSiz * BlkSiz * 2;
 
-   printf("  sparse nnz = %d, vectorized nnz = %d, occupency = %.1f%%\n",
+   printf("  sparse nnz = %d, vectorized nnz = %zu, occupency = %.1f%%\n",
             NmbBlk, VecNnz, (100. * NmbBlk) / VecNnz);
    printf("  swipe = %.2f GB, %.2f GFlops\n", mat->MemAcc / 1.E9, mat->FltOpp / 1.E9);
 
@@ -2977,7 +2974,7 @@ static int NewOclKrn(GmlSct *gml, char *KernelSource, char *PrcNam)
    char     *buffer, *StrTab[1], OptStr[200] = "\0";
    int      err, res, idx = ++gml->NmbKrn;
    KrnSct   *krn = &gml->krn[ idx ];
-   size_t   len, LenTab[1];
+   size_t   len, LenTab[1], GrpSiz, RetSiz = 0;
 
    if(idx > GmlMaxKrn)
       return(0);
@@ -3037,6 +3034,20 @@ static int NewOclKrn(GmlSct *gml, char *KernelSource, char *PrcNam)
          printf("could not get the size of kernel %s executable\n", PrcNam);
    }
 
+   // Get the maximum GPU workgroup size
+   res = clGetKernelWorkGroupInfo(  krn->kernel, gml->device_id[ gml->CurDev ],
+                                    CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t),
+                                    &GrpSiz, &RetSiz );
+
+   if(res != CL_SUCCESS )
+   {
+      printf("Geting the kernel workgroup size failed with error %d\n", res);
+      return(-5);
+   }
+
+   krn->OptSiz = 0;
+   krn->NxtSiz = -1;
+   krn->MaxSiz = GrpSiz;
    krn->EvtBlk = DEFEVTBLK;
    krn->NmbEvt = 0;
    krn->IniFlg = 0;
@@ -3079,11 +3090,15 @@ int GmlLaunchKernel(size_t GmlIdx, int idx)
 static int RunOclKrn(GmlSct *gml, KrnSct *krn)
 {
    int      i, res;
-   size_t   NmbGrp, GrpSiz, RetSiz = 0;
+   double   MinTim;
    DatSct   *dat;
 
+   // The first time this kernel is called we add the arguments list
    if(!krn->IniFlg)
    {
+      krn->IniFlg = 1;
+
+      // Loop and add user's arguments
       for(i=0;i<krn->NmbDat;i++)
       {
          dat = &gml->dat[ krn->DatTab[i] ];
@@ -3113,6 +3128,7 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
          return(-3);
       }
 
+      // Add a last argument with the number of loop elements
       res = clSetKernelArg(krn->kernel, krn->NmbDat+1, sizeof(cl_int2), krn->NmbLin);
 
       if(res != CL_SUCCESS)
@@ -3120,31 +3136,58 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
          printf("Adding the kernel loop counter argument failed with error %d\n", res);
          return(-4);
       }
+   }
 
-      // Fit data loop size to the GPU kernel size
-      res = clGetKernelWorkGroupInfo(  krn->kernel, gml->device_id[ gml->CurDev ],
-                                       CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t),
-                                       &GrpSiz, &RetSiz );
-
-      if(res != CL_SUCCESS )
+   // The first 8 or 10 kernel runs are used to calibrate
+   // the run time according to the group size
+   if(!krn->OptSiz)
+   {
+      // First run: the calibration is unreliable so we use 16 as
+      // the default group size and do not take this timing into account
+      if(krn->NxtSiz == -1)
       {
-         printf("Geting the kernel workgroup size failed with error %d\n", res);
-         return(-5);
+         krn->TstDat = 0;
+         krn->NxtSiz = 0;
+         krn->GrpSiz = 16;
+      }
+      else if(krn->NxtSiz == 0)
+      {
+         // Begin the calibration with group size 1
+         krn->TstDat = 0;
+         krn->NxtSiz = 1;
+         krn->GrpSiz = krn->NxtSiz;
+      }
+      else if(krn->NxtSiz <= krn->MaxSiz / 2)
+      {
+         // Double the group size at each successive run until the maximum is reached
+         krn->TstDat++;
+         krn->NxtSiz *= 2;
+         krn->GrpSiz = krn->NxtSiz;
+      }
+      else
+      {
+         // We all sizes have been run, look for the fastest one
+         //  and store the optimal size
+         MinTim = krn->TstTim[0];
+         krn->OptSiz = 1;
+
+         for(i=0;i<=krn->TstDat;i++)
+            if(krn->TstTim[i] < MinTim)
+            {
+               MinTim = krn->TstTim[i];
+               krn->OptSiz = 1 << i;
+            }
+
+         printf("Kernel %d: opt size = %zu\n", krn->idx, krn->OptSiz);
+         krn->GrpSiz = krn->OptSiz;
       }
 
-      // Compute the hyperthreading level
-      gml->CurGrpSiz = GrpSiz;
-      NmbGrp = krn->NmbLin[0] / GrpSiz;
-      NmbGrp *= GrpSiz;
+      // Compute the hyperthreading level and set the workgroup size and counter
+      krn->NmbGrp = krn->NmbLin[0] / krn->GrpSiz;
+      krn->NmbGrp *= krn->GrpSiz;
 
-      if(NmbGrp < krn->NmbLin[0])
-         NmbGrp += GrpSiz;
-
-      // Set the workgroup size and counter
-      krn->IniFlg = 1;
-      krn->NmbGrp = NmbGrp;
-      krn->GrpSiz = GrpSiz;
-      //printf("NmbGrp=%zu, GrpSiz=%zu\n\n\n",NmbGrp,GrpSiz);
+      if(krn->NmbGrp < krn->NmbLin[0])
+         krn->NmbGrp += krn->GrpSiz;
    }
 
    if(krn->NmbEvt == krn->EvtBlk)
@@ -3154,16 +3197,27 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
       assert(krn->EvtTab);
    }
 
+   // Wait for any previous runing kernel to complete
    clFinish(gml->queue);
+
+   // If the optimal size is yet to be found, start the timer
+   if(!krn->OptSiz)
+      krn->TstTim[ krn->TstDat ] = GmlGetWallClock();
 
    // Launch GPU code
    if(clEnqueueNDRangeKernel( gml->queue, krn->kernel, 1, NULL, &krn->NmbGrp,
-                              NULL, 0, NULL, &krn->EvtTab[ krn->NmbEvt++ ]) )
+                              &krn->GrpSiz, 0, NULL, &krn->EvtTab[ krn->NmbEvt++ ]) )
    {
       return(-6);
    }
 
-   //clFinish(gml->queue);
+   // If the optimal size is yet to be found, stop the timer
+   // and store the run time associated to this work group size
+   if(!krn->OptSiz)
+   {
+      clFinish(gml->queue);
+      krn->TstTim[ krn->TstDat ] = GmlGetWallClock() - krn->TstTim[ krn->TstDat ];
+   }
 
    return(1);
 }
@@ -3355,17 +3409,17 @@ int GmlMultMatVec(size_t GmlIdx, int MatIdx, int VecIdx1, int VecIdx2)
 /* Add two vectors term by term                                               */
 /*----------------------------------------------------------------------------*/
 
-int GmlAddVec(size_t GmlIdx, int VecIdx1, int VecIdx2)
+int GmlAddVec3(size_t GmlIdx, int VecIdx1, int VecIdx2, int VecIdx3, int VecIdx4)
 {
    int i, res;
    GETGMLPTR(gml, GmlIdx);
-   VecSct *vec1, *vec2;
+   VecSct *vec1, *vec2, *vec3, *vec4;
    KrnSct *krn;
 
    if( (VecIdx1 < 1) || (VecIdx1 > GmlMaxDat) )
    {
       printf("Invalid data index: %d\n", VecIdx1);
-      return(-2);
+      return(-1);
    }
 
    vec1 = &gml->vec[ VecIdx1 ];
@@ -3373,10 +3427,26 @@ int GmlAddVec(size_t GmlIdx, int VecIdx1, int VecIdx2)
    if( (VecIdx2 < 1) || (VecIdx2 > GmlMaxDat) )
    {
       printf("Invalid data index: %d\n", VecIdx2);
-      return(-3);
+      return(-2);
    }
 
    vec2 = &gml->vec[ VecIdx2 ];
+
+   if( (VecIdx3 < 1) || (VecIdx3 > GmlMaxDat) )
+   {
+      printf("Invalid data index: %d\n", VecIdx3);
+      return(-3);
+   }
+
+   vec3 = &gml->vec[ VecIdx3 ];
+
+   if( (VecIdx4 < 1) || (VecIdx4 > GmlMaxDat) )
+   {
+      printf("Invalid data index: %d\n", VecIdx4);
+      return(-4);
+   }
+
+   vec4 = &gml->vec[ VecIdx4 ];
 
    if( (vec1->NmbLin != vec2->NmbLin) || (vec1->BlkSiz != vec2->BlkSiz) )
    {
@@ -3387,12 +3457,23 @@ int GmlAddVec(size_t GmlIdx, int VecIdx1, int VecIdx2)
       return(-4);
    }
 
+   if( (vec1->NmbLin != vec4->NmbLin) || (vec1->BlkSiz != vec4->BlkSiz) )
+   {
+      printf(  "vector sizes differ: ID %d (%d x %d) and ID %d (%d x %d)\n",
+               VecIdx1, vec1->NmbLin, vec1->BlkSiz,
+               VecIdx4, vec4->NmbLin, vec4->BlkSiz );
+
+      return(-5);
+   }
+
    // Store information usefull to the kernel: loop indices and arguments list
    krn = &gml->krn[ vec1->AddKrnIdx ];
-   krn->NmbDat = 2;
+   krn->NmbDat = 4;
    krn->NmbLin[0] = vec1->NmbLin;
    krn->DatTab[0] = vec1->idx;
    krn->DatTab[1] = vec2->idx;
+   krn->DatTab[2] = vec3->idx;
+   krn->DatTab[3] = vec4->idx;
 
    // Launch the vector kernel on the GPU
    res = RunOclKrn(gml, krn);
@@ -3499,17 +3580,17 @@ int GmlNormVec(size_t GmlIdx, int VecIdx, int RedIdx, double *nrm)
 /* Multiply a diagonal matrix by a vector                                     */
 /*----------------------------------------------------------------------------*/
 
-int GmlMultDiagMatVec(size_t GmlIdx, int VecIdx1, int VecIdx2)
+int GmlMultDiagMatVec(size_t GmlIdx, int VecIdx1, int VecIdx2, int VecIdx3)
 {
    int i, res;
    GETGMLPTR(gml, GmlIdx);
-   VecSct *vec1, *vec2;
+   VecSct *vec1, *vec2, *vec3;
    KrnSct *krn;
 
    if( (VecIdx1 < 1) || (VecIdx1 > GmlMaxDat) )
    {
       printf("Invalid data index: %d\n", VecIdx1);
-      return(-2);
+      return(-1);
    }
 
    vec1 = &gml->vec[ VecIdx1 ];
@@ -3517,26 +3598,35 @@ int GmlMultDiagMatVec(size_t GmlIdx, int VecIdx1, int VecIdx2)
    if( (VecIdx2 < 1) || (VecIdx2 > GmlMaxDat) )
    {
       printf("Invalid data index: %d\n", VecIdx2);
-      return(-3);
+      return(-2);
    }
 
    vec2 = &gml->vec[ VecIdx2 ];
 
-   if( (vec1->NmbLin != vec2->NmbLin) || (vec1->BlkSiz != POW(vec2->BlkSiz)) )
+   if( (VecIdx3 < 1) || (VecIdx3 > GmlMaxDat) )
+   {
+      printf("Invalid data index: %d\n", VecIdx3);
+      return(-3);
+   }
+
+   vec3 = &gml->vec[ VecIdx3 ];
+
+   if( (vec1->NmbLin != vec3->NmbLin) || (vec1->BlkSiz != POW(vec3->BlkSiz)) )
    {
       printf(  "vector sizes differ: ID %d (%d x %d) and ID %d (%d x %d)\n",
                VecIdx1, vec1->NmbLin, vec1->BlkSiz,
-               VecIdx2, vec2->NmbLin, vec2->BlkSiz );
+               VecIdx2, vec3->NmbLin, vec3->BlkSiz );
 
       return(-4);
    }
 
    // Store information usefull to the kernel: loop indices and arguments list
    krn = &gml->krn[ vec1->MulDiaKrnIdx ];
-   krn->NmbDat = 2;
+   krn->NmbDat = 3;
    krn->NmbLin[0] = vec1->NmbLin;
    krn->DatTab[0] = vec1->idx;
    krn->DatTab[1] = vec2->idx;
+   krn->DatTab[2] = vec3->idx;
 
    // Launch the vector kernel on the GPU
    res = RunOclKrn(gml, krn);
