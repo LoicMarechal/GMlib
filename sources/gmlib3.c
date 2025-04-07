@@ -3178,7 +3178,7 @@ static int RunOclKrn(GmlSct *gml, KrnSct *krn)
                krn->OptSiz = 1 << i;
             }
 
-         printf("Kernel %d: opt size = %zu\n", krn->idx, krn->OptSiz);
+         //printf("Kernel %d: opt size = %zu\n", krn->idx, krn->OptSiz);
          krn->GrpSiz = krn->OptSiz;
       }
 

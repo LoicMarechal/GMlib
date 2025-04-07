@@ -338,11 +338,6 @@ int main(int ArgCnt, char **ArgVec)
       TotRes += res;
       printf("\r iter = %4d, checksum = %g ", i, TotRes);
       fflush(stdout);
-
-      // Swap the odd and even iteration vectors
-      /*tmp = Xk0Idx;
-      Xk0Idx = Xk1Idx;
-      Xk1Idx = tmp;*/
    }
 
    // Get the total physical runtime
