@@ -2,14 +2,14 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.41                           */
+/*                         GPU Meshing Library 3.42                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 24 2024                                           */
+/*   Last modification: dec 15 2025                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -35,7 +35,7 @@
 #endif
 
 #ifdef WITH_LIBMESHB
-#include <libmeshb7.h>
+#include <libmeshb8.h>
 #endif
 
 

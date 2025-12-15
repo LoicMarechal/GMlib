@@ -72,7 +72,7 @@ endif()
 
 include_directories (${PROJECT_SOURCE_DIR}/sources)
 
-find_package(libMeshb 7.5)
+find_package(libMeshb)
 
 if(libMeshb_FOUND)
    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWITH_LIBMESHB")

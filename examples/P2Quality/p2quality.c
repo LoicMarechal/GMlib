@@ -23,7 +23,7 @@
 #include <math.h>
 #include <assert.h>
 #include <string.h>
-#include <libmeshb7.h>
+#include <libmeshb8.h>
 #include <gmlib3.h>
 #include "parameters.h"
 #include "quality.h"
