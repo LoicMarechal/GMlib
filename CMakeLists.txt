@@ -72,7 +72,7 @@ endif()
 
 include_directories (${PROJECT_SOURCE_DIR}/sources)
 
-find_package(libMeshb)
+find_package(libMeshb 8)
 
 if(libMeshb_FOUND)
    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWITH_LIBMESHB")
@@ -90,7 +90,7 @@ if(libMeshb_FOUND)
    message (STATUS "LibMeshb include directory: " ${libMeshb_INCLUDE_DIRS})
 else()
    message (WARNING "
-   libMeshb 7.5 could not be found (or you may have an older version installed).
+   libMeshb 8 could not be found (or you may have an older version installed).
    Consequently, examples and utilities will not be built.
    You can download it from GitHub at https://github.com/LoicMarechal/libMeshb")
 endif()
