@@ -40,8 +40,8 @@
 - Write a .solb to GMlib import module
 - Write a GMlib to .solb export module :heavy_check_mark:
 - Optional include of LPlib
-- Write a renumbering analyser preprocessor :heavy_check_mark:
-- Call the LPlib Hilbert renumbering and renumber the whole input data
+- Write a numbering analyser preprocessor :heavy_check_mark:
+- Call the LPlib Hilbert procedure to renumber the whole input mesh and data
 - Provide a plugin functions mechanism available on the GPU side :heavy_check_mark:
 - Develop basic geometric functions on tets, hexes, triangles, quads and edges :heavy_check_mark:
 - length, surface, volume and quality :heavy_check_mark:
@@ -50,7 +50,7 @@
 - Update the shell generation to handle hybrid meshes
 - Update the neighbours generation to handle hybrid meshes
 - Add a SetBlock() function for faster upload :heavy_check_mark:
-- Add a GetBlock() function for faster download
+- Add a GetBlock() function for faster download :heavy_check_mark:
 - Add a GetLinkInfo() function to get sizes of variable width topolinks :heavy_check_mark:
 - Include an optional user's toolkit before a user kernel :heavy_check_mark:
 - Create a dedicated preprocessing command from LPlib's Hilbert command
@@ -71,9 +71,16 @@
 
 ### Exposed GPU API
 
-- `CalLen();` :heavy_check_mark:
-- `CalSrf();` :heavy_check_mark:
-- `CalVol();` :heavy_check_mark:
+- `PrjVerLin();` :heavy_check_mark:
+- `PrjVerPla();` :heavy_check_mark:
+- `DisVerLin();` :heavy_check_mark:
+- `DisVerPla();` :heavy_check_mark:
+- `LinIntLin();` :heavy_check_mark:
+- `LinIntPla();` :heavy_check_mark:
+- `PlaIntPla();` :heavy_check_mark:
+- `CalLen();`    :heavy_check_mark:
+- `CalSrf();`    :heavy_check_mark:
+- `CalVol();`    :heavy_check_mark:
 - `GetEdgTng();` :heavy_check_mark:
 - `GetTriNrm();` :heavy_check_mark:
 - `CalEdgLen();` :heavy_check_mark:
@@ -89,6 +96,30 @@
 - `CalPyrQal();` :heavy_check_mark:
 - `CalPriQal();` :heavy_check_mark:
 - `CalHexQal();` :heavy_check_mark:
+- `VerInsEdg();`
+- `VerInsTri();`
+- `VerInsQad();`
+- `VerInsTet();`
+- `VerInsHex();`
+- `EdgIntEdg();`
+- `EdgIntTri();`
+- `EdgIntQad();`
+- `EdgIntTet();`
+- `EdgIntHex();`
+- `TriIntTri();`
+- `TriIntQad();`
+- `TriIntTet();`
+- `TriIntHex();`
+- `QadIntTet();`
+- `QadIntHex();`
+- `TetIntTet();`
+- `TetIntHex();`
+- `HexIntHex();`
+- `DisVerEdg();` :heavy_check_mark:
+- `DisVerTri();`
+- `DisVerQad();`
+- `DisVerTet();`
+- `DisVerHex();`
 
 ### Examples
 

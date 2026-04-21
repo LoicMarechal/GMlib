@@ -9,7 +9,7 @@
 /*   Description:       Compute a P2 tet mesh minimum and average quality     */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     feb 02 2022                                           */
-/*   Last modification: feb 21 2022                                           */
+/*   Last modification: nov 29 2023                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 
@@ -22,7 +22,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
-#include <libmeshb7.h>
+#include <string.h>
+#include <libmeshb8.h>
 #include <gmlib3.h>
 #include "parameters.h"
 #include "quality.h"
@@ -275,11 +276,15 @@ int main(int ArgCnt, char **ArgVec)
    QalTim = GmlGetKernelRunTime(GmlIdx, QalKrn);
    RedTim = GmlGetReduceRunTime(GmlIdx, GmlSum);
 
-   printf(  "%lld P2 tets qualities computed in: %gs (wall clock)\n",
-            (int64_t)NmbItr * (int64_t)NmbTet, WalTim );
+   printf(  "%g P2 tets qualities computed in: %gs (wall clock)\n",
+            (float)NmbItr * (float)NmbTet, WalTim );
 
    printf(  "Quality kernel: %gs (OpenCL timer)\n", QalTim);
    printf(  "Reduce kernels: %gs (OpenCL timer)\n", RedTim);
+
+   printf(  "%g TF/s and %g TB/s\n",
+            ((float)NmbItr * (float)NmbTet * 1612. * 1E-12) / (float)WalTim,
+            ((float)NmbItr * (float)NmbTet *  180. * 1E-12) / (float)WalTim );
 
    printf("%zd MB used, %zd MB transfered\n\n",
           GmlGetMemoryUsage   (GmlIdx) / 1048576,

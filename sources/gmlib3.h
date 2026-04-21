@@ -2,21 +2,27 @@
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
-/*                         GPU Meshing Library 3.30                           */
+/*                         GPU Meshing Library 3.42                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*   Description:       Easy mesh programing with OpenCL                      */
 /*   Author:            Loic MARECHAL                                         */
 /*   Creation date:     jul 02 2010                                           */
-/*   Last modification: jun 08 2020                                           */
+/*   Last modification: dec 15 2025                                           */
 /*                                                                            */
 /*----------------------------------------------------------------------------*/
+
+
+#ifndef GMLIB3_H
+#define GMLIB3_H
 
 
 /*----------------------------------------------------------------------------*/
 /* Includes                                                                   */
 /*----------------------------------------------------------------------------*/
+
+#define CL_TARGET_OPENCL_VERSION 120
 
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
@@ -29,7 +35,7 @@
 #endif
 
 #ifdef WITH_LIBMESHB
-#include <libmeshb7.h>
+#include <libmeshb8.h>
 #endif
 
 
@@ -38,6 +44,8 @@
 /*----------------------------------------------------------------------------*/
 
 #define GmlMaxDat    100
+#define GmlMaxMat    10
+#define GmlMaxVec    10
 #define GmlMaxKrn    100
 #define GmlMaxSrcSiz 50000
 #define GmlMaxStrSiz 200
@@ -46,6 +54,7 @@
 #define GmlReadMode  2
 #define GmlWriteMode 4
 #define GmlVoyeurs   8
+#define GmlManual    16
 #ifndef MAX_WORKGROUP_SIZE
 #define MAX_WORKGROUP_SIZE 1024
 #endif
@@ -72,14 +81,19 @@ void    *GmlNewParameters     (size_t, int, char *);
 int      GmlNewMeshData       (size_t, int, int);
 int      GmlNewSolutionData   (size_t, int, int, int, char *);
 int      GmlNewLinkData       (size_t, int, int, int, char *);
+int      GmlNewMatrix         (size_t, int, int, int, void *, int *, int *, int);
+int      GmlNewVector         (size_t, int, int, void *, int);
 int      GmlFreeData          (size_t, int);
 int      GmlSetDataLine       (size_t, int, int, ...);
 int      GmlGetDataLine       (size_t, int, int, ...);
+void     GmlSetCompilerOptions(size_t, char *);
 int      GmlCompileKernel     (size_t, char *, char *, int, int, ...);
 int      GmlLaunchKernel      (size_t, int);
 int      GmlReduceVector      (size_t, int, int, double *);
 size_t   GmlGetMemoryUsage    (size_t);
 size_t   GmlGetMemoryTransfer (size_t);
+float    GmlGetMemoryAccess   (size_t);
+float    GmlGetFlops          (size_t);
 void     GmlDebugOn           (size_t);
 void     GmlDebugOff          (size_t);
 int      GmlExtractEdges      (size_t);
@@ -89,6 +103,7 @@ int      GmlCheckFP64         (size_t);
 int      GmlGetMeshInfo       (size_t, int, int *, int *);
 int      GmlGetLinkInfo       (size_t, int, int, int *, int *, int *, int *);
 int      GmlSetDataBlock      (size_t, int, int, int, void *, void *, int *, int *);
+int      GmlGetDataBlock      (size_t, int, int, int, void *, void *, int *, int *);
 double   GmlGetKernelRunTime  (size_t, int);
 double   GmlGetReduceRunTime  (size_t, int);
 double   GmlGetWallClock      ();
@@ -96,8 +111,15 @@ int      GmlUploadParameters  (size_t);
 int      GmlDownloadParameters(size_t);
 float    GmlEvaluateNumbering (size_t);
 void     GmlIncludeUserToolkit(size_t, char *);
+int      GmlMultMatVec        (size_t, int, int, int);
+int      GmlMultDiagMatVec    (size_t, int, int, int);
+int      GmlAddVec3           (size_t, int, int, int, int);
+int      GmlScaleVec          (size_t, int, double *);
+int      GmlNormVec           (size_t, int, int, double *);
 
 #ifdef WITH_LIBMESHB
 int      GmlImportMesh        (size_t, char *, ...);
 int      GmlExportSolution    (size_t, char *, ...);
+#endif
+
 #endif

@@ -3,12 +3,13 @@
 # GLOBAL CONFIGURATION VARIABLES
 ################################
 
-cmake_minimum_required (VERSION 3.7.2)
+cmake_minimum_required (VERSION 3.18)
 set (GMlib_VERSION_MAJOR 3)
-set (GMlib_VERSION_MINOR 30)
+set (GMlib_VERSION_MINOR 41)
 project (GMlib VERSION ${GMlib_VERSION_MAJOR}.${GMlib_VERSION_MINOR} LANGUAGES C)
 
 option(WITH_CPACK "Enable cpack target to generate a zip file containing binaries" OFF)
+option(WITH_CTEST "Enable ctest ti run basic validation tests"                     OFF)
 
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -22,7 +23,11 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
    if (WIN32)
       set(CMAKE_INSTALL_PREFIX "$ENV{HOMEPATH}/cmakebuilds" CACHE PATH "..." FORCE)
    else ()
-      set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/cmakebuilds/$ENV{OSTYPE}-$ENV{MACHTYPE}" CACHE PATH "..." FORCE)
+      if (DEFINED ENV{OSTYPE} AND DEFINED ENV{MACHTYPE})
+         set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/cmakebuilds/$ENV{OSTYPE}-$ENV{MACHTYPE}" CACHE PATH "..." FORCE)
+      else ()
+         set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/cmakebuilds" CACHE PATH "..." FORCE)
+      endif ()
    endif()
 endif ()
 
@@ -48,10 +53,17 @@ endmacro(compile_cl)
 # SET FILES AND DIRECTORIES TO BE BUILT
 #######################################
 
+if(WITH_CTEST)
+   enable_testing()
+   include_directories(${PROJECT_SOURCE_DIR}/testing)
+   add_subdirectory(testing)
+endif()
+
 find_package(OpenCL)
 
 if (OpenCL_FOUND)
    include_directories (${OpenCL_INCLUDE_DIRS})
+   add_definitions(-DCL_TARGET_OPENCL_VERSION=120)
 else()
    message ("OpenCL could not be found, please set it with:")
    message ("cmake -DOpenCL_LIBRARIES=PATH_TO_OPENCL_LIB/libOpenCL.so -DOpenCL_INCLUDE_DIRS=PATH_TO_OPENCL_INC/include")
@@ -60,26 +72,42 @@ endif()
 
 include_directories (${PROJECT_SOURCE_DIR}/sources)
 
-find_package(libMeshb 7.5)
+find_package(libMeshb 8)
 
 if(libMeshb_FOUND)
    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWITH_LIBMESHB")
    include_directories (${libMeshb_INCLUDE_DIRS})
    include_directories (${PROJECT_SOURCE_DIR}/examples)
    add_subdirectory (utilities)
+   add_subdirectory (examples/GpuBandwidth)
+   add_subdirectory (examples/LinearSolver)
    add_subdirectory (examples/BallQuality)
    add_subdirectory (examples/HeatCellCentered)
    add_subdirectory (examples/MeshQuality)
-   add_subdirectory (examples/NodeSmoother)
+   add_subdirectory (examples/NodeSmoothing)
    add_subdirectory (examples/P2Quality)
    add_subdirectory (examples/TestFeatures)
    message (STATUS "LibMeshb include directory: " ${libMeshb_INCLUDE_DIRS})
 else()
    message (WARNING "
-   libMeshb 7.5 could not be found (or you may have an older version installed).
+   libMeshb 8 could not be found (or you may have an older version installed).
    Consequently, examples and utilities will not be built.
    You can download it from GitHub at https://github.com/LoicMarechal/libMeshb")
 endif()
+
+#find_package(PkgConfig)
+
+#if(PkgConfig_FOUND)
+#   pkg_check_modules(STARPU REQUIRED starpu-1.3)
+#   if (STARPU_FOUND)
+#       include_directories (${STARPU_INCLUDE_DIRS})
+#       link_directories    (${STARPU_STATIC_LIBRARY_DIRS})
+#   else (STARPU_FOUND)
+#       message(STATUS "StarPU not found")
+#   endif()
+#   add_subdirectory (examples/StarPU)
+#endif()
+
 
 add_subdirectory (sources)
 
@@ -130,4 +158,5 @@ install(FILES
 
 message("-- Build mode            : " ${CMAKE_BUILD_TYPE})
 message("-- cpack target enabled  : " ${WITH_CPACK})
+message("-- ctest target enabled  : " ${WITH_CTEST})
 message("-- Install directory     : " ${CMAKE_INSTALL_PREFIX})
