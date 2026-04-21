@@ -25,7 +25,6 @@
 #include <assert.h>
 #include <libmeshb8.h>
 #include <gmlib3.h>
-#include <lplib4.h>
 
 #include "parameters.h"
 
