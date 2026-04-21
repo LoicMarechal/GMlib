@@ -1404,7 +1404,6 @@ int GmlNewMatrix( size_t GmlIdx, int NmbLin, int NmbBlk, int BlkSiz,
       gml->MovSiz += UploadData(gml, mat->ValIdx[i]);
 
       sprintf(PrcNam, "MulMatVecSlc%d", mat->MatSlc[i][0]);
-      puts(PrcNam);
 
       if(FltTyp == GmlFlt)
          sprintf(OptStr, " -DBLKSIZ=%d -DREAL32 ", BlkSiz);
